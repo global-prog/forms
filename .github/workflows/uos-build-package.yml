@@ -1,0 +1,127 @@
+# UOS: build the Forms app into a deployable package.
+#
+# WHY THIS EXISTS: the app cannot be built on the maintainer's Windows workstation. Stock,
+# UNMODIFIED v5.3.6 OOMs there during rollup's "rendering chunks" phase and consumes whatever
+# heap limit it is given (4 GB, 8 GB, 12 GB), with sourcemaps off, with the minifier off, and
+# with manualChunks removed. Upstream builds its releases on ubuntu-latest in GitHub Actions
+# (see appstore-build-publish.yml), so we build where upstream builds.
+#
+# This mirrors upstream's release recipe, minus the publishing steps and the
+# `repository_owner == 'nextcloud-releases'` gate:
+#   * node/npm pinned from package.json engines, exactly as upstream does
+#     (upstream falls back to node ^24 / npm ^11.3 -- note npm 11, not 12)
+#   * composer install --no-dev  -> produces vendor/, which the app NEEDS at runtime
+#     (composer.json requires phpoffice/phpspreadsheet for spreadsheet export) and which is
+#     NOT tracked in git
+#   * npm ci && npm run build    -> produces js/
+#   * make appstore              -> tars exactly the release contents:
+#     appinfo COPYING css img js l10n lib templates vendor CHANGELOG.md
+#
+# The tarball is uploaded as a workflow artifact; download it, and deploy with
+# audit-2026-09-08/scripts/uos_forms_deploy.sh.
+name: UOS build package
+
+on:
+  push:
+    branches:
+      - 'uos-**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Read node/npm engines from package.json
+        id: versions
+        uses: skjnldsv/read-package-engines-version-actions@v3
+        with:
+          fallbackNode: '^24'
+          fallbackNpm: '^11.3'
+
+      - name: Set up node ${{ steps.versions.outputs.nodeVersion }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ steps.versions.outputs.nodeVersion }}
+
+      - name: Set up npm ${{ steps.versions.outputs.npmVersion }}
+        run: npm i -g 'npm@${{ steps.versions.outputs.npmVersion }}'
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          coverage: none
+
+      - name: Install composer dependencies (produces vendor/)
+        run: composer install --no-dev --prefer-dist --no-progress
+
+      - name: Build front end
+        env:
+          CYPRESS_INSTALL_BINARY: 0
+        run: |
+          npm ci
+          npm run build --if-present
+
+      - name: Verify the build actually produced something
+        run: |
+          set -e
+          echo "js/ files:      $(ls js | wc -l)"
+          echo "js/ size:       $(du -sh js | cut -f1)"
+          echo "vendor/ exists: $([ -d vendor ] && echo yes || echo NO)"
+          test -d js
+          test "$(ls js | wc -l)" -ge 5
+          test -d vendor
+          test -f lib/Migration/Version050300Date20260118000000.php \
+            && echo "conditional-logic migration present: yes" \
+            || echo "conditional-logic migration present: NO (building a non-conditional branch?)"
+
+      - name: PHP lint every file
+        run: |
+          set -e
+          find lib appinfo -name '*.php' -print0 | xargs -0 -n1 php -l > /dev/null
+          echo "PHP lint: all files OK"
+
+      - name: Package with make appstore
+        run: make appstore
+
+      - name: Show what was packaged
+        run: |
+          TARBALL=$(find build -name '*.tar.gz' | head -1)
+          echo "tarball: $TARBALL ($(du -h "$TARBALL" | cut -f1))"
+          echo "--- top-level entries ---"
+          tar -tzf "$TARBALL" | awk -F/ '{print $2}' | sort -u | head -20
+
+      - name: Upload package
+        uses: actions/upload-artifact@v4
+        with:
+          name: forms-app-package
+          path: build/artifacts/appstore/*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Also upload the raw built app (fallback if the tarball layout surprises us)
+        uses: actions/upload-artifact@v4
+        with:
+          name: forms-app-raw
+          path: |
+            appinfo/
+            css/
+            img/
+            js/
+            l10n/
+            lib/
+            templates/
+            vendor/
+            COPYING
+            CHANGELOG.md
+          if-no-files-found: error
+          retention-days: 30
