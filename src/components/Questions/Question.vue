@@ -98,6 +98,16 @@
 						<!-- TRANSLATORS Making this question necessary to be answered when submitting to a form -->
 						{{ t('forms', 'Required') }}
 					</NcActionCheckbox>
+					<!-- UOS: cross-question conditions and go-to-section branching -->
+					<NcActionButton
+						v-if="!readOnly"
+						closeAfterClick
+						@click="showLogicDialog = true">
+						<template #icon>
+							<NcIconSvgWrapper :svg="IconSourceBranch" />
+						</template>
+						{{ t('forms', 'Logic') }}
+					</NcActionButton>
 					<slot name="actions" />
 					<NcActionInput
 						:label="t('forms', 'Technical name of the question')"
@@ -164,10 +174,19 @@
 		<slot />
 		<!-- Insert question menu -->
 		<slot name="insert" />
+
+		<QuestionLogicDialog
+			v-if="!readOnly && showLogicDialog"
+			v-model:open="showLogicDialog"
+			:questionId="id"
+			:extraSettings="extraSettings"
+			:options="options"
+			@update:extraSettings="$emit('update:extraSettings', $event)" />
 	</li>
 </template>
 
 <script>
+import IconSourceBranch from '@material-symbols/svg-400/outlined/account_tree.svg?raw'
 import IconAsterisk from '@material-symbols/svg-400/outlined/asterisk.svg?raw'
 import IconIdentifier from '@material-symbols/svg-400/outlined/badge.svg?raw'
 import IconContentCopy from '@material-symbols/svg-400/outlined/content_copy.svg?raw'
@@ -185,6 +204,7 @@ import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import IconOverlay from '../Icons/IconOverlay.vue'
+import QuestionLogicDialog from './QuestionLogicDialog.vue'
 
 export default {
 	// eslint-disable-next-line vue/multi-word-component-names
@@ -196,6 +216,7 @@ export default {
 		NcActions,
 		NcActionButton,
 		NcActionCheckbox,
+		QuestionLogicDialog,
 		NcActionInput,
 		NcButton,
 		NcNoteCard,
@@ -222,6 +243,24 @@ export default {
 		description: {
 			type: String,
 			required: true,
+		},
+
+		// UOS: needed by the Logic dialog. Declared here so QuestionMixin's questionProps
+		// forwards them automatically -- it filters $props down to Question.props, so no
+		// concrete question component needs changing.
+		id: {
+			type: Number,
+			default: null,
+		},
+
+		extraSettings: {
+			type: Object,
+			default: () => ({}),
+		},
+
+		options: {
+			type: Array,
+			default: () => [],
 		},
 
 		// UOS: display-only question types (sections) cannot be answered, so offering a
@@ -294,6 +333,7 @@ export default {
 	},
 
 	emits: [
+		'update:extraSettings',
 		'update:text',
 		'update:description',
 		'update:name',
@@ -315,6 +355,14 @@ export default {
 			IconDotsHorizontal,
 			IconDragIndicator,
 			IconIdentifier,
+			IconSourceBranch,
+		}
+	},
+
+	data() {
+		return {
+			/** UOS: whether the Logic dialog is open */
+			showLogicDialog: false,
 		}
 	},
 
