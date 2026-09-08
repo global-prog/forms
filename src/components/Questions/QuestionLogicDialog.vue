@@ -4,7 +4,7 @@
 -->
 
 <!--
-  UOS: authoring UI for the two rules the engine supports.
+  authoring UI for the two rules the engine supports.
 
     displayCondition -- show this question only when an EARLIER question matches
     branching        -- send the respondent to a section (or straight to submit)

@@ -98,7 +98,7 @@
 						<!-- TRANSLATORS Making this question necessary to be answered when submitting to a form -->
 						{{ t('forms', 'Required') }}
 					</NcActionCheckbox>
-					<!-- UOS: cross-question conditions and go-to-section branching -->
+					<!-- cross-question conditions and go-to-section branching -->
 					<NcActionButton
 						v-if="!readOnly"
 						closeAfterClick
@@ -245,7 +245,7 @@ export default {
 			required: true,
 		},
 
-		// UOS: needed by the Logic dialog. Declared here so QuestionMixin's questionProps
+		// needed by the Logic dialog. Declared here so QuestionMixin's questionProps
 		// forwards them automatically -- it filters $props down to Question.props, so no
 		// concrete question component needs changing.
 		id: {
@@ -263,7 +263,7 @@ export default {
 			default: () => [],
 		},
 
-		// UOS: display-only question types (sections) cannot be answered, so offering a
+		// display-only question types (sections) cannot be answered, so offering a
 		// "Required" toggle on them would be meaningless. Phrased negatively so the default
 		// stays false, per the project's vue/no-boolean-default rule.
 		hideRequired: {
@@ -361,7 +361,7 @@ export default {
 
 	data() {
 		return {
-			/** UOS: whether the Logic dialog is open */
+			/** whether the Logic dialog is open */
 			showLogicDialog: false,
 		}
 	},

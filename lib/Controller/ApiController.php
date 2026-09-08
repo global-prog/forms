@@ -2091,7 +2091,7 @@ class ApiController extends OCSController {
 	 * @param array $answer The submitted answer, carrying uploadedFileId and uploadToken
 	 */
 	private function storeFileAnswer(Form $form, int $submissionId, array $question, array $answer, $answerEntity) {
-		// UOS: keep v5.3.6's access-control-scoped lookup. getByUploadedFileId() resolves by
+		// keep v5.3.6's access-control-scoped lookup. getByUploadedFileId() resolves by
 		// file id alone, which would let a submitter attach another form's upload.
 		$uploadedFile = $this->uploadedFileMapper->getForSubmission(
 			(int)$answer['uploadedFileId'],

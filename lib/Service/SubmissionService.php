@@ -229,7 +229,7 @@ class SubmissionService {
 		$submissionEntities = array_reverse($submissionEntities);
 
 		$questions = $this->questionMapper->findByForm($form->getId(), false, true);
-		// UOS: sections are display-only and hold no answers. Leaving them in would emit an
+		// sections are display-only and hold no answers. Leaving them in would emit an
 		// empty column per section in every CSV/spreadsheet export.
 		$questions = array_values(array_filter(
 			$questions,
@@ -480,7 +480,7 @@ class SubmissionService {
 	 * @throws \InvalidArgumentException if validation failed
 	 */
 	public function validateSubmission(array $questions, array $answers, string $formOwnerId, int $formId): void {
-		// UOS: re-derive, server-side, which questions the respondent actually saw. Both
+		// re-derive, server-side, which questions the respondent actually saw. Both
 		// checks below must happen here and not be taken on trust from the client: a required
 		// question that was legitimately hidden would otherwise block every submission, while
 		// a crafted request could otherwise claim any question was hidden to skip it.
@@ -495,18 +495,18 @@ class SubmissionService {
 			$questionId = $question['id'];
 			$questionAnswered = array_key_exists($questionId, $answers);
 
-			// UOS: sections are display-only. They carry no answer, can never be "required",
+			// sections are display-only. They carry no answer, can never be "required",
 			// and must not be treated as an unanswered mandatory question.
 			if ($question['type'] === Constants::ANSWER_TYPE_SECTION) {
 				continue;
 			}
 
-			// UOS: skipped by a "go to section" jump -- the respondent never saw this page.
+			// skipped by a "go to section" jump -- the respondent never saw this page.
 			if (!($reachableQuestions[$questionId] ?? true)) {
 				continue;
 			}
 
-			// UOS: hidden by a cross-question display condition.
+			// hidden by a cross-question display condition.
 			if (!$this->isQuestionVisible($question, $questionsById, $answers)) {
 				continue;
 			}
@@ -626,7 +626,7 @@ class SubmissionService {
 			}
 
 			// Handle custom validation of short answers
-			// UOS: a rating must be a whole star count within the configured range.
+			// a rating must be a whole star count within the configured range.
 			if ($question['type'] === Constants::ANSWER_TYPE_RATING) {
 				$rating = $answers[$questionId][0] ?? '';
 				$maxRating = $question['extraSettings']['maxRating'] ?? 5;
@@ -636,7 +636,7 @@ class SubmissionService {
 				}
 			}
 
-			// UOS: the first-class Number type reuses the short-text numeric validation, so
+			// the first-class Number type reuses the short-text numeric validation, so
 			// there is one implementation of "is this a number, and is it in range".
 			if ($question['type'] === Constants::ANSWER_TYPE_NUMBER) {
 				$numberQuestion = $question;
@@ -754,7 +754,7 @@ class SubmissionService {
 			case 'email':
 				return $this->emailValidator->isValid($data);
 			case 'number':
-				// UOS: enforce the optional numeric constraints. The frontend also applies
+				// enforce the optional numeric constraints. The frontend also applies
 				// these via native min/max/step, but a submission can be crafted to bypass
 				// the browser, so they must be re-checked here.
 				if (!is_numeric($data)) {
@@ -1162,7 +1162,7 @@ class SubmissionService {
 	}
 
 	/**
-	 * UOS: is this question shown, given the answers so far?
+	 * is this question shown, given the answers so far?
 	 *
 	 * Implements cross-question display conditions ("show Q7 only if Q3 = X"), which the
 	 * upstream conditional model cannot express because there a conditional question owns
@@ -1211,7 +1211,7 @@ class SubmissionService {
 	}
 
 	/**
-	 * UOS: which questions did the respondent actually reach?
+	 * which questions did the respondent actually reach?
 	 *
 	 * Replays the form's page navigation from the submitted answers, following any
 	 * "go to section" / "submit here" rules. Questions on pages that were never reached are

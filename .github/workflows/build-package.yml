@@ -1,6 +1,6 @@
-# UOS: build the Forms app into a deployable package.
+# build the Forms app into a deployable package.
 #
-# WHY THIS EXISTS: the app cannot be built on the maintainer's Windows workstation. Stock,
+# WHY THIS EXISTS: the app cannot be built on the maintainer's workstation. Stock,
 # UNMODIFIED v5.3.6 OOMs there during rollup's "rendering chunks" phase and consumes whatever
 # heap limit it is given (4 GB, 8 GB, 12 GB), with sourcemaps off, with the minifier off, and
 # with manualChunks removed. Upstream builds its releases on ubuntu-latest in GitHub Actions
@@ -18,13 +18,13 @@
 #     appinfo COPYING css img js l10n lib templates vendor CHANGELOG.md
 #
 # The tarball is uploaded as a workflow artifact; download it, and deploy with
-# audit-2026-09-08/scripts/uos_forms_deploy.sh.
-name: UOS build package
+# the deployment script.
+name: Build package
 
 on:
   push:
     branches:
-      - 'uos-**'
+      - 'feature/**'
   workflow_dispatch:
 
 permissions:

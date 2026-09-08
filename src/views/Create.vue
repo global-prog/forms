@@ -196,7 +196,7 @@ export default {
 
 	mixins: [ViewsMixin],
 
-	// UOS: the Logic dialog needs every question of the form, to offer condition sources and
+	// the Logic dialog needs every question of the form, to offer condition sources and
 	// jump targets. Provided as a getter rather than threaded through QuestionList as props;
 	// calling it inside the child's computed keeps it reactive.
 	provide() {

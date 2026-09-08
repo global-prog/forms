@@ -4,7 +4,7 @@
  */
 
 /**
- * UOS: client-side mirror of SubmissionService::evaluateBranchConditions() and
+ * client-side mirror of SubmissionService::evaluateBranchConditions() and
  * ::isQuestionVisible(), used to show and hide questions live as answers change.
  *
  * The SERVER remains authoritative -- it re-evaluates the same rules when validating a

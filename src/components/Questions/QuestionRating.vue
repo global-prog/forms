@@ -4,7 +4,7 @@
 -->
 
 <!--
-  UOS: star rating question (upstream issue #356).
+  star rating question (upstream issue #356).
 
   linearscale already covers 1..N, but as a row of radio buttons. This is the compact star
   widget people expect from Google Forms. The stored answer is just the number, so results

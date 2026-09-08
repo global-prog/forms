@@ -4,7 +4,7 @@
 -->
 
 <!--
-  UOS: a first-class Number question.
+  a first-class Number question.
 
   The numeric constraints already existed, but only as a validation mode buried in the
   short-text input-type menu, so nobody could pick "Number" when adding a question. The

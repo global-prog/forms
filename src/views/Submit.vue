@@ -359,9 +359,9 @@ export default {
 	data() {
 		return {
 			answerTypes,
-			/** UOS: index of the page currently shown, when the form has section breaks */
+			/** index of the page currently shown, when the form has section breaks */
 			currentPage: 0,
-			/** UOS: pages actually visited, so Back retraces jumps rather than assuming -1 */
+			/** pages actually visited, so Back retraces jumps rather than assuming -1 */
 			pageHistory: [],
 			/**
 			 * Mapping of questionId => answers
@@ -383,7 +383,7 @@ export default {
 
 	computed: {
 		/**
-		 * UOS: the answers actually submitted.
+		 * the answers actually submitted.
 		 *
 		 * Drops answers belonging to questions that are currently hidden or were skipped by a
 		 * jump. Without this, answering a question and then changing an earlier answer so it
@@ -410,7 +410,7 @@ export default {
 		},
 
 		/**
-		 * UOS: pages the respondent actually visited, including the one they are on.
+		 * pages the respondent actually visited, including the one they are on.
 		 *
 		 * @return {Set<number>} visited page indexes
 		 */
@@ -419,7 +419,7 @@ export default {
 		},
 
 		/**
-		 * UOS: questions keyed by id, for resolving displayCondition references.
+		 * questions keyed by id, for resolving displayCondition references.
 		 *
 		 * @return {Record<number, object>} question id => question
 		 */
@@ -430,7 +430,7 @@ export default {
 		},
 
 		/**
-		 * UOS: which questions are currently shown, per their cross-question conditions.
+		 * which questions are currently shown, per their cross-question conditions.
 		 *
 		 * Recomputes as answers change, so a question appears or disappears live. The server
 		 * re-evaluates the same rules when validating, so this is presentation only.
@@ -450,7 +450,7 @@ export default {
 		},
 
 		/**
-		 * UOS: map of questionId => page index, split at section breaks.
+		 * map of questionId => page index, split at section breaks.
 		 *
 		 * A form with no sections yields page 0 for everything, so pageCount is 1 and the
 		 * view behaves exactly as it did before sections existed.
@@ -708,7 +708,7 @@ export default {
 
 	methods: {
 		/**
-		 * UOS: validate only the questions on the page being left, so a respondent is not
+		 * validate only the questions on the page being left, so a respondent is not
 		 * told about problems on pages they have not reached yet.
 		 *
 		 * Matches by the component's own id rather than by array position, so it does not
@@ -731,14 +731,14 @@ export default {
 		},
 
 		/**
-		 * UOS: advance a page, but only if the current one validates.
+		 * advance a page, but only if the current one validates.
 		 */
 		async goToNextPage() {
 			if (!(await this.validateCurrentPage())) {
 				return
 			}
 
-			// UOS: honour any "go to section" / "submit" rule on this page's answers.
+			// honour any "go to section" / "submit" rule on this page's answers.
 			const onThisPage = this.validQuestions.filter(
 				(question) =>
 					this.questionPages[question.id] === this.currentPage
@@ -765,10 +765,10 @@ export default {
 		},
 
 		/**
-		 * UOS: go back a page. Never validates -- going back must always be possible.
+		 * go back a page. Never validates -- going back must always be possible.
 		 */
 		goToPreviousPage() {
-			// UOS: retrace the path actually taken. With jumps, currentPage - 1 could land on
+			// retrace the path actually taken. With jumps, currentPage - 1 could land on
 			// a page the respondent skipped and never saw.
 			const previous = this.pageHistory.pop()
 			this.currentPage =
@@ -1316,7 +1316,7 @@ export default {
 	}
 }
 
-/* UOS: page indicator, shown only when the form has section breaks */
+/* page indicator, shown only when the form has section breaks */
 .form-pagination {
 	align-items: center;
 	display: flex;

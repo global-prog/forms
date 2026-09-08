@@ -291,7 +291,7 @@ export default {
 	},
 
 	/**
-	 * UOS: a first-class Number question. Previously "number" was only a validation mode
+	 * a first-class Number question. Previously "number" was only a validation mode
 	 * hidden inside the short-text input-type menu, so it could not be picked when adding
 	 * a question.
 	 */
@@ -309,7 +309,7 @@ export default {
 	},
 
 	/**
-	 * UOS: star rating (upstream issue #356). linearscale covers 1..N as radio buttons;
+	 * star rating (upstream issue #356). linearscale covers 1..N as radio buttons;
 	 * this is the compact star widget people expect.
 	 */
 	rating: {
@@ -326,7 +326,7 @@ export default {
 	},
 
 	/**
-	 * UOS: display-only section break. Groups the questions that follow it and, by default,
+	 * display-only section break. Groups the questions that follow it and, by default,
 	 * starts a new page in the submit view. Produces no answer.
 	 */
 	section: {

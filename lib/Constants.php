@@ -95,16 +95,16 @@ class Constants {
 	public const ANSWER_TYPE_MULTIPLE = 'multiple';
 	public const ANSWER_TYPE_MULTIPLEUNIQUE = 'multiple_unique';
 	public const ANSWER_TYPE_RANKING = 'ranking';
-	// UOS: a display-only "question" that groups the ones after it. Deliberately modelled as
+	// a display-only "question" that groups the ones after it. Deliberately modelled as
 	// an answer type rather than a new table: it lives in oc_forms_v2_questions using the
 	// existing `order` column, so it needs NO migration and cannot collide with whatever
 	// schema upstream eventually ships for issue #624.
 	public const ANSWER_TYPE_SECTION = 'section';
-	// UOS: a first-class Number question. The numeric constraints already existed, but only
+	// a first-class Number question. The numeric constraints already existed, but only
 	// as a validation mode hidden inside the short-text input-type menu, so nobody could pick
 	// "Number" when adding a question.
 	public const ANSWER_TYPE_NUMBER = 'number';
-	// UOS: star rating (upstream issue #356). linearscale covers 1..N as radio buttons; this
+	// star rating (upstream issue #356). linearscale covers 1..N as radio buttons; this
 	// is the compact star widget people expect from Google Forms.
 	public const ANSWER_TYPE_RATING = 'rating';
 	public const ANSWER_TYPE_SHORT = 'short';
@@ -187,7 +187,7 @@ class Constants {
 	public const EXTRA_SETTINGS_SHORT = [
 		'validationType' => ['string'],
 		'validationRegex' => ['string'],
-		// UOS: numeric constraints for validationType='number'. Upstream only checks
+		// numeric constraints for validationType='number'. Upstream only checks
 		// is_numeric(), so "a number between 1 and 10" or "a whole number" was not
 		// expressible. JSON numbers decode as int or float, hence integer+double.
 		'numberMin' => ['integer', 'double', 'NULL'],
@@ -235,10 +235,10 @@ class Constants {
 		'rows' => ['array'],
 	];
 
-	// UOS: a section can either just print a heading, or additionally start a new page in the
+	// a section can either just print a heading, or additionally start a new page in the
 	// submit view. pageBreak defaults to true -- "section break" is what people ask for.
 	/**
-	 * UOS: extra settings permitted on EVERY question type, whatever its answer type.
+	 * extra settings permitted on EVERY question type, whatever its answer type.
 	 *
 	 * displayCondition -- show this question only when an earlier question matches:
 	 *   { match: "all"|"any", rules: [ { questionId: int, conditions: [...] } ] }
@@ -256,12 +256,12 @@ class Constants {
 		'branching' => ['array', 'NULL'],
 	];
 
-	// UOS: how many stars a rating question offers (defaults to 5).
+	// how many stars a rating question offers (defaults to 5).
 	public const EXTRA_SETTINGS_RATING = [
 		'maxRating' => ['integer', 'NULL'],
 	];
 
-	// UOS: same constraints the short-text number validation uses.
+	// same constraints the short-text number validation uses.
 	public const EXTRA_SETTINGS_NUMBER = [
 		'numberMin' => ['integer', 'double', 'NULL'],
 		'numberMax' => ['integer', 'double', 'NULL'],

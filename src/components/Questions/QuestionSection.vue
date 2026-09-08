@@ -4,7 +4,7 @@
 -->
 
 <!--
-  UOS: a display-only "question" that groups the questions after it.
+  a display-only "question" that groups the questions after it.
 
   Modelled as an answer type rather than a new table on purpose: it is an ordinary row in
   oc_forms_v2_questions using the existing `order` column, so it needs no migration and cannot

@@ -73,7 +73,7 @@
 					/^[a-z]{3}$/i
 					<!-- ^ Some example RegExp for the placeholder text -->
 				</NcActionInput>
-				<!-- UOS: numeric constraints, shown only for the number input type -->
+				<!-- numeric constraints, shown only for the number input type -->
 				<NcActionInput
 					v-if="isNumber"
 					type="number"
@@ -198,7 +198,7 @@ export default {
 			return this.extraSettings?.validationRegex || ''
 		},
 
-		/** UOS: numeric-constraint helpers (only meaningful for the number input type) */
+		/** numeric-constraint helpers (only meaningful for the number input type) */
 		isNumber() {
 			return this.validationType === 'number'
 		},
@@ -246,7 +246,7 @@ export default {
 
 	methods: {
 		/**
-		 * UOS: store a numeric bound, or clear it when the field is emptied.
+		 * store a numeric bound, or clear it when the field is emptied.
 		 *
 		 * @param {string} key either 'numberMin' or 'numberMax'
 		 * @param {Event} event the input/submit event
@@ -259,7 +259,7 @@ export default {
 		},
 
 		/**
-		 * UOS: toggle whole-numbers-only.
+		 * toggle whole-numbers-only.
 		 *
 		 * @param {boolean} checked new state
 		 */
@@ -290,7 +290,7 @@ export default {
 				)
 
 			if (!input.validity.valid || !isCustomValid) {
-				// UOS: for numbers, say what the allowed range actually is. The browser
+				// for numbers, say what the allowed range actually is. The browser
 				// already enforces min/max/step via the native attributes, so an out-of-range
 				// value lands here with validity.valid === false.
 				const message = this.isNumber

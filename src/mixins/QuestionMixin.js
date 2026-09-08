@@ -255,7 +255,7 @@ export default {
 				'update:text': this.onTitleChange,
 				'update:description': this.onDescriptionChange,
 				'update:isRequired': this.onRequiredChange,
-				// UOS: the Logic dialog lives in Question.vue, which has no save path of its
+				// the Logic dialog lives in Question.vue, which has no save path of its
 				// own; route its changes through the mixin's normal extraSettings save.
 				'update:extraSettings': this.onExtraSettingsChange,
 				'update:name': this.onNameChange,
