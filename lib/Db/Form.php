@@ -91,6 +91,12 @@ class Form extends Entity {
 	protected $allowComments;
 
 	/**
+	 * Optional form-level settings, stored as JSON so new options need no schema change.
+	 * See getSettings()/setSettings().
+	 */
+	protected $settingsJson;
+
+	/**
 	 * Form constructor.
 	 */
 	public function __construct() {
@@ -189,6 +195,33 @@ class Form extends Entity {
 	 *   allowComments: bool,
 	 *  }
 	 */
+	/**
+	 * Decoded form-level settings. Always an array, even when the column is NULL.
+	 *
+	 * Recognised keys:
+	 *   notifyOwner       bool   email the owner on every new submission
+	 *   notifyEmails      string extra recipients, comma separated
+	 *
+	 * @return array the decoded settings
+	 */
+	public function getSettings(): array {
+		return json_decode($this->getSettingsJson() ?: '{}', true, 512, JSON_THROW_ON_ERROR);
+	}
+
+	/**
+	 * @param array $settings the settings to store
+	 */
+	public function setSettings(array $settings): void {
+		// Drop empty values so the column stays small and an unset option reads as absent
+		// rather than as an explicit false.
+		foreach ($settings as $key => $value) {
+			if ($value === null || $value === '' || $value === false) {
+				unset($settings[$key]);
+			}
+		}
+		$this->setSettingsJson(json_encode($settings, JSON_THROW_ON_ERROR | JSON_FORCE_OBJECT));
+	}
+
 	public function read() {
 		return [
 			'id' => $this->getId(),
@@ -216,6 +249,7 @@ class Form extends Entity {
 			'confirmationEmailBody' => $this->getConfirmationEmailBody(),
 			'confirmationEmailQuestionId' => $this->getConfirmationEmailQuestionId(),
 			'allowComments' => (bool)$this->getAllowComments(),
+			'settings' => $this->getSettings(),
 		];
 	}
 }

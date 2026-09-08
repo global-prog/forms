@@ -58,6 +58,21 @@
 			{{ t('forms', 'Allow comments') }}
 		</NcCheckboxRadioSwitch>
 		<NcCheckboxRadioSwitch
+			:modelValue="notifyOwner"
+			:disabled="formArchived || locked"
+			type="switch"
+			@update:modelValue="onNotifyOwnerChange">
+			{{ t('forms', 'Email me on every response') }}
+		</NcCheckboxRadioSwitch>
+		<div v-show="notifyOwner && !formArchived" class="settings-div--indent">
+			<NcTextField
+				:label="t('forms', 'Also notify these addresses')"
+				:placeholder="t('forms', 'name@example.com, other@example.com')"
+				:disabled="formArchived || locked"
+				:modelValue="notifyEmails"
+				@update:modelValue="onNotifyEmailsChange" />
+		</div>
+		<NcCheckboxRadioSwitch
 			:modelValue="formExpires"
 			:disabled="formArchived || locked"
 			type="switch"
@@ -286,6 +301,7 @@ import NcInputField from '@nextcloud/vue/components/NcInputField'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextArea from '@nextcloud/vue/components/NcTextArea'
+import NcTextField from '@nextcloud/vue/components/NcTextField'
 import TransferOwnership from './TransferOwnership.vue'
 import svgLockOpen from '../../../img/lock_open.svg?raw'
 import ShareTypes from '../../mixins/ShareTypes.js'
@@ -294,13 +310,14 @@ import { FormState } from '../../models/Constants.ts'
 export default {
 	components: {
 		NcButton,
-		NcInputField,
 		NcCheckboxRadioSwitch,
 		NcDateTimePicker,
 		NcIconSvgWrapper,
+		NcInputField,
 		NcNoteCard,
 		NcSelect,
 		NcTextArea,
+		NcTextField,
 		TransferOwnership,
 	},
 
@@ -349,6 +366,25 @@ export default {
 	},
 
 	computed: {
+		/**
+		 * Form-level settings, stored as one JSON column so new options need no schema change.
+		 *
+		 * @return {object} the form's settings, never null
+		 */
+		formSettings() {
+			return this.form.settings || {}
+		},
+
+		/** @return {boolean} whether the owner wants an email per response */
+		notifyOwner() {
+			return this.formSettings.notifyOwner === true
+		},
+
+		/** @return {string} additional recipients, comma separated */
+		notifyEmails() {
+			return this.formSettings.notifyEmails || ''
+		},
+
 		isCurrentUserOwner() {
 			return getCurrentUser().uid === this.form.ownerId
 		},
@@ -608,6 +644,33 @@ export default {
 
 		onAllowEditSubmissionsChange(checked) {
 			this.$emit('update:formProp', 'allowEditSubmissions', checked)
+		},
+
+		/**
+		 * Settings are one JSON object, so every write merges rather than replaces -
+		 * otherwise toggling one option would silently clear the others.
+		 *
+		 * @param {object} patch the keys to change
+		 */
+		updateSettings(patch) {
+			this.$emit('update:formProp', 'settings', {
+				...this.formSettings,
+				...patch,
+			})
+		},
+
+		/**
+		 * @param {boolean} checked email the owner on each response
+		 */
+		onNotifyOwnerChange(checked) {
+			this.updateSettings({ notifyOwner: checked })
+		},
+
+		/**
+		 * @param {string} value comma separated additional recipients
+		 */
+		onNotifyEmailsChange(value) {
+			this.updateSettings({ notifyEmails: value })
 		},
 
 		onAllowCommentsChange(checked) {

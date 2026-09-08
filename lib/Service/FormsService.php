@@ -70,6 +70,7 @@ class FormsService {
 		private readonly LoggerInterface $logger,
 		private readonly IEventDispatcher $eventDispatcher,
 		private readonly ConfirmationEmailService $confirmationEmailService,
+		private readonly OwnerNotificationService $ownerNotificationService,
 	) {
 		$this->currentUser = $userSession->getUser();
 	}
@@ -844,6 +845,11 @@ class FormsService {
 		$this->eventDispatcher->dispatchTyped(new FormSubmittedEvent($form, $submission));
 
 		$this->confirmationEmailService->send($form, $submission);
+
+		// Notify the owner (and any extra recipients) if the form asks for it. Queued and
+		// failure-tolerant: the response is already stored, so a mail problem must never
+		// surface to the respondent as a failed submission.
+		$this->ownerNotificationService->send($form, $submission);
 	}
 
 	/**
