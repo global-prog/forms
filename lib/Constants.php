@@ -100,6 +100,13 @@ class Constants {
 	// existing `order` column, so it needs NO migration and cannot collide with whatever
 	// schema upstream eventually ships for issue #624.
 	public const ANSWER_TYPE_SECTION = 'section';
+	// UOS: a first-class Number question. The numeric constraints already existed, but only
+	// as a validation mode hidden inside the short-text input-type menu, so nobody could pick
+	// "Number" when adding a question.
+	public const ANSWER_TYPE_NUMBER = 'number';
+	// UOS: star rating (upstream issue #356). linearscale covers 1..N as radio buttons; this
+	// is the compact star widget people expect from Google Forms.
+	public const ANSWER_TYPE_RATING = 'rating';
 	public const ANSWER_TYPE_SHORT = 'short';
 	public const ANSWER_TYPE_TIME = 'time';
 
@@ -122,6 +129,8 @@ class Constants {
 		self::ANSWER_TYPE_MULTIPLEUNIQUE,
 		self::ANSWER_TYPE_RANKING,
 		self::ANSWER_TYPE_SECTION,
+		self::ANSWER_TYPE_NUMBER,
+		self::ANSWER_TYPE_RATING,
 		self::ANSWER_TYPE_SHORT,
 		self::ANSWER_TYPE_TIME,
 	];
@@ -245,6 +254,18 @@ class Constants {
 	public const EXTRA_SETTINGS_UNIVERSAL = [
 		'displayCondition' => ['array', 'NULL'],
 		'branching' => ['array', 'NULL'],
+	];
+
+	// UOS: how many stars a rating question offers (defaults to 5).
+	public const EXTRA_SETTINGS_RATING = [
+		'maxRating' => ['integer', 'NULL'],
+	];
+
+	// UOS: same constraints the short-text number validation uses.
+	public const EXTRA_SETTINGS_NUMBER = [
+		'numberMin' => ['integer', 'double', 'NULL'],
+		'numberMax' => ['integer', 'double', 'NULL'],
+		'numberInteger' => ['boolean', 'NULL'],
 	];
 
 	public const EXTRA_SETTINGS_SECTION = [

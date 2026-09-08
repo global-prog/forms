@@ -16,6 +16,7 @@ import IconPalette from '@material-symbols/svg-400/outlined/palette.svg?raw'
 import IconRadioboxMarked from '@material-symbols/svg-400/outlined/radio_button_checked.svg?raw'
 import IconClockOutline from '@material-symbols/svg-400/outlined/schedule.svg?raw'
 import IconTextShort from '@material-symbols/svg-400/outlined/short_text.svg?raw'
+import IconStar from '@material-symbols/svg-400/outlined/star.svg?raw'
 import IconTextLong from '@material-symbols/svg-400/outlined/subject.svg?raw'
 import IconSwapVertical from '@material-symbols/svg-400/outlined/swap_vert.svg?raw'
 import { markRaw } from 'vue'
@@ -28,7 +29,9 @@ import QuestionGrid from '../components/Questions/QuestionGrid.vue'
 import QuestionLinearScale from '../components/Questions/QuestionLinearScale.vue'
 import QuestionLong from '../components/Questions/QuestionLong.vue'
 import QuestionMultiple from '../components/Questions/QuestionMultiple.vue'
+import QuestionNumber from '../components/Questions/QuestionNumber.vue'
 import QuestionRanking from '../components/Questions/QuestionRanking.vue'
+import QuestionRating from '../components/Questions/QuestionRating.vue'
 import QuestionSection from '../components/Questions/QuestionSection.vue'
 import QuestionShort from '../components/Questions/QuestionShort.vue'
 import { OptionType } from './Constants.ts'
@@ -285,6 +288,41 @@ export default {
 			'forms',
 			'This question needs a title and at least one answer!',
 		),
+	},
+
+	/**
+	 * UOS: a first-class Number question. Previously "number" was only a validation mode
+	 * hidden inside the short-text input-type menu, so it could not be picked when adding
+	 * a question.
+	 */
+	number: {
+		component: markRaw(QuestionNumber),
+		icon: IconNumeric,
+		label: t('forms', 'Number'),
+		predefined: false,
+		validate: () => true,
+
+		titlePlaceholder: t('forms', 'Number question title'),
+		createPlaceholder: t('forms', 'People can enter a number'),
+		submitPlaceholder: t('forms', 'Enter a number'),
+		warningInvalid: t('forms', 'This question needs a title!'),
+	},
+
+	/**
+	 * UOS: star rating (upstream issue #356). linearscale covers 1..N as radio buttons;
+	 * this is the compact star widget people expect.
+	 */
+	rating: {
+		component: markRaw(QuestionRating),
+		icon: IconStar,
+		label: t('forms', 'Rating'),
+		predefined: false,
+		validate: () => true,
+
+		titlePlaceholder: t('forms', 'Rating question title'),
+		createPlaceholder: t('forms', 'People can give a star rating'),
+		submitPlaceholder: t('forms', 'Pick a rating'),
+		warningInvalid: t('forms', 'This question needs a title!'),
 	},
 
 	/**

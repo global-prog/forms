@@ -626,6 +626,26 @@ class SubmissionService {
 			}
 
 			// Handle custom validation of short answers
+			// UOS: a rating must be a whole star count within the configured range.
+			if ($question['type'] === Constants::ANSWER_TYPE_RATING) {
+				$rating = $answers[$questionId][0] ?? '';
+				$maxRating = $question['extraSettings']['maxRating'] ?? 5;
+				if ($rating !== '' && (!ctype_digit((string)$rating)
+					|| (int)$rating < 1 || (int)$rating > $maxRating)) {
+					throw new \InvalidArgumentException(sprintf('Invalid rating for question "%s".', $question['text']));
+				}
+			}
+
+			// UOS: the first-class Number type reuses the short-text numeric validation, so
+			// there is one implementation of "is this a number, and is it in range".
+			if ($question['type'] === Constants::ANSWER_TYPE_NUMBER) {
+				$numberQuestion = $question;
+				$numberQuestion['extraSettings']['validationType'] = 'number';
+				if (!$this->validateShortQuestion($numberQuestion, $answers[$questionId][0])) {
+					throw new \InvalidArgumentException(sprintf('Invalid number for question "%s".', $question['text']));
+				}
+			}
+
 			if ($question['type'] === Constants::ANSWER_TYPE_SHORT && !$this->validateShortQuestion($question, $answers[$questionId][0])) {
 				throw new \InvalidArgumentException(sprintf('Invalid input for question "%s".', $question['text']));
 			}
