@@ -7,12 +7,15 @@ import IconNumeric from '@material-symbols/svg-400/outlined/123.svg?raw'
 import IconSourceBranch from '@material-symbols/svg-400/outlined/account_tree.svg?raw'
 import IconArrowDownDropCircleOutline from '@material-symbols/svg-400/outlined/arrow_drop_down_circle.svg?raw'
 import IconCalendar from '@material-symbols/svg-400/outlined/calendar_today.svg?raw'
+import IconPhone from '@material-symbols/svg-400/outlined/call.svg?raw'
 import IconCheckboxOutline from '@material-symbols/svg-400/outlined/check_box.svg?raw'
 import IconFile from '@material-symbols/svg-400/outlined/draft.svg?raw'
 import IconGrid from '@material-symbols/svg-400/outlined/grid_view.svg?raw'
 import IconSection from '@material-symbols/svg-400/outlined/horizontal_rule.svg?raw'
 import IconImage from '@material-symbols/svg-400/outlined/image.svg?raw'
 import IconLinearScale from '@material-symbols/svg-400/outlined/linear_scale.svg?raw'
+import IconLink from '@material-symbols/svg-400/outlined/link.svg?raw'
+import IconEMail from '@material-symbols/svg-400/outlined/mail.svg?raw'
 import IconPalette from '@material-symbols/svg-400/outlined/palette.svg?raw'
 import IconRadioboxMarked from '@material-symbols/svg-400/outlined/radio_button_checked.svg?raw'
 import IconClockOutline from '@material-symbols/svg-400/outlined/schedule.svg?raw'
@@ -325,6 +328,76 @@ export default {
 		titlePlaceholder: t('forms', 'Rating question title'),
 		createPlaceholder: t('forms', 'People can give a star rating'),
 		submitPlaceholder: t('forms', 'Pick a rating'),
+		warningInvalid: t('forms', 'This question needs a title!'),
+	},
+
+	/**
+	 * Phone number. A preset over short text with phone validation, which previously could
+	 * only be reached from the input-type menu inside an existing short-text question - so
+	 * nobody could pick it when adding a question.
+	 */
+	phone: {
+		component: markRaw(QuestionShort),
+		icon: IconPhone,
+		label: t('forms', 'Phone number'),
+		predefined: false,
+		validate: () => true,
+		preset: {
+			type: 'short',
+			extraSettings: { validationType: 'phone' },
+		},
+
+		titlePlaceholder: t('forms', 'Phone number question title'),
+		createPlaceholder: t('forms', 'People can enter a telephone number'),
+		submitPlaceholder: t('forms', 'Enter a telephone number'),
+		warningInvalid: t('forms', 'This question needs a title!'),
+	},
+
+	/**
+	 * Email address. Deliberately a preset over short text rather than its own type:
+	 * Question::checkEmailType() recognises a question as an email question only when it is
+	 * short text with email validation, and the confirmation-email recipient picker depends
+	 * on that. A new type would have quietly broken it.
+	 */
+	email: {
+		component: markRaw(QuestionShort),
+		icon: IconEMail,
+		label: t('forms', 'Email address'),
+		predefined: false,
+		validate: () => true,
+		preset: {
+			type: 'short',
+			extraSettings: { validationType: 'email' },
+		},
+
+		titlePlaceholder: t('forms', 'Email question title'),
+		createPlaceholder: t('forms', 'People can enter an email address'),
+		submitPlaceholder: t('forms', 'Enter an email address'),
+		warningInvalid: t('forms', 'This question needs a title!'),
+	},
+
+	/**
+	 * Web address. Built on the regex validation that already exists, since there is no
+	 * dedicated URL validator. The pattern is kept simple on purpose: it must be valid in
+	 * both JavaScript and PCRE, because the browser and the server both apply it.
+	 */
+	link: {
+		component: markRaw(QuestionShort),
+		icon: IconLink,
+		label: t('forms', 'Web address'),
+		predefined: false,
+		validate: () => true,
+		preset: {
+			type: 'short',
+			extraSettings: {
+				validationType: 'regex',
+				validationRegex: '/^https?:\\/\\/\\S+$/i',
+			},
+		},
+
+		titlePlaceholder: t('forms', 'Web address question title'),
+		createPlaceholder: t('forms', 'People can enter a web address'),
+		submitPlaceholder: t('forms', 'https://'),
 		warningInvalid: t('forms', 'This question needs a title!'),
 	},
 
