@@ -202,6 +202,8 @@ export default {
 	provide() {
 		return {
 			formQuestions: () => this.form.questions,
+			// The Logic dialog only offers answer-key fields when the form is a quiz.
+			formSettings: () => this.form.settings ?? {},
 		}
 	},
 
@@ -444,6 +446,35 @@ export default {
 					body,
 				)
 				const question = OcsResponse2Data(response)
+
+				// Seed the preset's options (a Likert scale's columns, and a starter row),
+				// then its settings. Options are created in one call per type rather than
+				// one per option.
+				if (preset?.options) {
+					for (const [optionType, optionTexts] of Object.entries(
+						preset.options,
+					)) {
+						try {
+							const optionResponse = await axios.post(
+								generateOcsUrl(
+									'apps/forms/api/v3/forms/{id}/questions/{questionId}/options',
+									{ id: this.form.id, questionId: question.id },
+								),
+								{ optionTexts, optionType },
+							)
+							question.options = [
+								...(question.options ?? []),
+								...OcsResponse2Data(optionResponse),
+							]
+						} catch (error) {
+							// The question exists and can be filled in by hand; only the
+							// preconfiguration failed.
+							logger.error('Could not apply question preset options', {
+								error,
+							})
+						}
+					}
+				}
 
 				// Seed the preset's settings, then carry them into the local copy so the
 				// question renders configured straight away rather than after a reload.

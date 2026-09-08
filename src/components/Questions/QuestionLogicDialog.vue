@@ -170,6 +170,77 @@
 				</template>
 			</template>
 
+			<!-- ------------------------------------------------ answer key -->
+			<template v-if="isQuiz">
+				<h4 class="logic__heading">{{ t('forms', 'Answer key') }}</h4>
+				<p class="logic__empty">
+					{{
+						t(
+							'forms',
+							'Leave blank to exclude this question from scoring.',
+						)
+					}}
+				</p>
+
+				<label class="logic__row">
+					<span>{{ t('forms', 'Points') }}</span>
+					<input
+						type="number"
+						min="0"
+						step="1"
+						:value="points"
+						:aria-label="t('forms', 'Points for a correct answer')"
+						@input="onPointsChange" />
+				</label>
+
+				<!-- choice questions: tick the correct options -->
+				<template v-if="options.length > 0">
+					<NcCheckboxRadioSwitch
+						v-for="option in options"
+						:key="option.id"
+						:modelValue="isCorrectOption(option.id)"
+						@update:modelValue="
+							onToggleCorrectOption(option.id, $event)
+						">
+						{{ option.text }}
+					</NcCheckboxRadioSwitch>
+				</template>
+
+				<!-- everything else: type the expected answer -->
+				<template v-else>
+					<label class="logic__row">
+						<span>{{ t('forms', 'Correct answer') }}</span>
+						<input
+							type="text"
+							:value="correctAnswer"
+							:aria-label="t('forms', 'The expected answer')"
+							@input="onCorrectAnswerChange" />
+					</label>
+					<NcCheckboxRadioSwitch
+						:modelValue="caseSensitive"
+						@update:modelValue="onCaseSensitiveChange">
+						{{ t('forms', 'Match upper and lower case exactly') }}
+					</NcCheckboxRadioSwitch>
+				</template>
+
+				<label class="logic__row">
+					<span>{{ t('forms', 'Feedback if correct') }}</span>
+					<input
+						type="text"
+						:value="feedbackCorrect"
+						:aria-label="t('forms', 'Shown when the answer is right')"
+						@input="onFeedbackChange('feedbackCorrect', $event)" />
+				</label>
+				<label class="logic__row">
+					<span>{{ t('forms', 'Feedback if incorrect') }}</span>
+					<input
+						type="text"
+						:value="feedbackIncorrect"
+						:aria-label="t('forms', 'Shown when the answer is wrong')"
+						@input="onFeedbackChange('feedbackIncorrect', $event)" />
+				</label>
+			</template>
+
 			<!-- ------------------------------------------------ branching -->
 			<template v-if="options.length > 0">
 				<h4 class="logic__heading">
@@ -208,6 +279,7 @@
 <script>
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
 
 /** Source types the condition engine understands, grouped by the input they need */
@@ -226,6 +298,7 @@ export default {
 
 	inject: {
 		formQuestions: { default: () => [] },
+		formSettings: { default: () => ({}) },
 	},
 
 	props: {
@@ -296,6 +369,40 @@ export default {
 				.filter((q) => q.type === 'section')
 		},
 
+		/** @return {boolean} whether this form grades responses */
+		isQuiz() {
+			const settings =
+				typeof this.formSettings === 'function'
+					? this.formSettings()
+					: this.formSettings
+			return settings?.quizMode === true
+		},
+
+		/** @return {number} points awarded for a correct answer */
+		points() {
+			return this.extraSettings?.points ?? 1
+		},
+
+		/** @return {string} the expected answer for a non-choice question */
+		correctAnswer() {
+			return this.extraSettings?.correctAnswer || ''
+		},
+
+		/** @return {boolean} whether case must match */
+		caseSensitive() {
+			return this.extraSettings?.caseSensitive === true
+		},
+
+		/** @return {string} feedback shown for a correct answer */
+		feedbackCorrect() {
+			return this.extraSettings?.feedbackCorrect || ''
+		},
+
+		/** @return {string} feedback shown for an incorrect answer */
+		feedbackIncorrect() {
+			return this.extraSettings?.feedbackIncorrect || ''
+		},
+
 		/** @return {object|null} the stored displayCondition */
 		condition() {
 			return this.extraSettings?.displayCondition ?? null
@@ -318,6 +425,60 @@ export default {
 	},
 
 	methods: {
+		/**
+		 * @param {number} optionId the option to test
+		 * @return {boolean} whether it is part of the answer key
+		 */
+		isCorrectOption(optionId) {
+			return (this.extraSettings?.correctOptions ?? []).includes(optionId)
+		},
+
+		/**
+		 * @param {number} optionId the option toggled
+		 * @param {boolean} correct whether it is now part of the key
+		 */
+		onToggleCorrectOption(optionId, correct) {
+			const current = this.extraSettings?.correctOptions ?? []
+			const next = correct
+				? [...current, optionId]
+				: current.filter((id) => id !== optionId)
+			this.$emit('update:extraSettings', {
+				correctOptions: next.length ? next : undefined,
+			})
+		},
+
+		/** @param {Event} event the input event */
+		onPointsChange(event) {
+			const value = parseInt(event.target.value)
+			this.$emit('update:extraSettings', {
+				points: isNaN(value) || value < 0 ? undefined : value,
+			})
+		},
+
+		/** @param {Event} event the input event */
+		onCorrectAnswerChange(event) {
+			this.$emit('update:extraSettings', {
+				correctAnswer: event.target.value || undefined,
+			})
+		},
+
+		/** @param {boolean} checked whether case must match */
+		onCaseSensitiveChange(checked) {
+			this.$emit('update:extraSettings', {
+				caseSensitive: checked || undefined,
+			})
+		},
+
+		/**
+		 * @param {string} key which feedback field
+		 * @param {Event} event the input event
+		 */
+		onFeedbackChange(key, event) {
+			this.$emit('update:extraSettings', {
+				[key]: event.target.value || undefined,
+			})
+		},
+
 		/**
 		 * @param {object} rule the rule to classify
 		 * @return {string} which input the rule's source question needs

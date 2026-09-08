@@ -58,6 +58,54 @@
 			{{ t('forms', 'Allow comments') }}
 		</NcCheckboxRadioSwitch>
 		<NcCheckboxRadioSwitch
+			:modelValue="quizMode"
+			:disabled="formArchived || locked"
+			type="switch"
+			@update:modelValue="onQuizModeChange">
+			{{ t('forms', 'Quiz mode') }}
+		</NcCheckboxRadioSwitch>
+		<p v-show="quizMode" class="settings-hint">
+			{{
+				t(
+					'forms',
+					'Set an answer key on each question from its Logic menu. Questions without a key are not scored.',
+				)
+			}}
+		</p>
+		<NcCheckboxRadioSwitch
+			:modelValue="shuffleQuestions"
+			:disabled="formArchived || locked"
+			type="switch"
+			@update:modelValue="onShuffleQuestionsChange">
+			{{ t('forms', 'Shuffle question order') }}
+		</NcCheckboxRadioSwitch>
+		<p v-show="shuffleQuestions" class="settings-hint">
+			{{
+				t(
+					'forms',
+					'Section breaks, media and any question used in a condition stay where you put them.',
+				)
+			}}
+		</p>
+		<NcTextField
+			:label="t('forms', 'Header image address')"
+			placeholder="https://"
+			:disabled="formArchived || locked"
+			:modelValue="headerImage"
+			@update:modelValue="onHeaderImageChange" />
+		<NcColorPicker
+			class="settings-colour"
+			:modelValue="accentColor || '#0082c9'"
+			@update:modelValue="onAccentColorChange">
+			<NcButton :disabled="formArchived || locked" variant="secondary">
+				{{
+					accentColor
+						? t('forms', 'Change accent colour')
+						: t('forms', 'Set an accent colour')
+				}}
+			</NcButton>
+		</NcColorPicker>
+		<NcCheckboxRadioSwitch
 			:modelValue="notifyOwner"
 			:disabled="formArchived || locked"
 			type="switch"
@@ -295,6 +343,7 @@ import moment from '@nextcloud/moment'
 import { vOnClickOutside as ClickOutside } from '@vueuse/components'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import NcColorPicker from '@nextcloud/vue/components/NcColorPicker'
 import NcDateTimePicker from '@nextcloud/vue/components/NcDateTimePicker'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcInputField from '@nextcloud/vue/components/NcInputField'
@@ -317,6 +366,7 @@ export default {
 		NcNoteCard,
 		NcSelect,
 		NcTextArea,
+		NcColorPicker,
 		NcTextField,
 		TransferOwnership,
 	},
@@ -373,6 +423,26 @@ export default {
 		 */
 		formSettings() {
 			return this.form.settings || {}
+		},
+
+		/** @return {boolean} whether responses are graded against an answer key */
+		quizMode() {
+			return this.formSettings.quizMode === true
+		},
+
+		/** @return {boolean} whether questions are shown in a random order */
+		shuffleQuestions() {
+			return this.formSettings.shuffleQuestions === true
+		},
+
+		/** @return {string} optional banner image address */
+		headerImage() {
+			return this.formSettings.headerImage || ''
+		},
+
+		/** @return {string} optional accent colour */
+		accentColor() {
+			return this.formSettings.accentColor || ''
 		},
 
 		/** @return {boolean} whether the owner wants an email per response */
@@ -657,6 +727,34 @@ export default {
 				...this.formSettings,
 				...patch,
 			})
+		},
+
+		/**
+		 * @param {boolean} checked grade responses against an answer key
+		 */
+		onQuizModeChange(checked) {
+			this.updateSettings({ quizMode: checked })
+		},
+
+		/**
+		 * @param {boolean} checked randomise question order
+		 */
+		onShuffleQuestionsChange(checked) {
+			this.updateSettings({ shuffleQuestions: checked })
+		},
+
+		/**
+		 * @param {string} value banner image address
+		 */
+		onHeaderImageChange(value) {
+			this.updateSettings({ headerImage: value })
+		},
+
+		/**
+		 * @param {string} value the chosen colour
+		 */
+		onAccentColorChange(value) {
+			this.updateSettings({ accentColor: value })
 		},
 
 		/**

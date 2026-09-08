@@ -329,6 +329,40 @@ export default {
 	},
 
 	/**
+	 * Likert scale: a radio grid with the agreement scale already set up, so the author
+	 * only types the statements. A preset over the existing grid type, so no backend
+	 * support and no risk of colliding with anything upstream introduces.
+	 */
+	likert: {
+		component: markRaw(QuestionGrid),
+		icon: IconGrid,
+		label: t('forms', 'Likert scale'),
+		predefined: true,
+		validate: (question) => question.options.length > 0,
+		preset: {
+			type: 'grid',
+			subtype: 'radio',
+			options: {
+				column: [
+					t('forms', 'Strongly disagree'),
+					t('forms', 'Disagree'),
+					t('forms', 'Neither agree nor disagree'),
+					t('forms', 'Agree'),
+					t('forms', 'Strongly agree'),
+				],
+				row: [t('forms', 'First statement')],
+			},
+		},
+
+		titlePlaceholder: t('forms', 'Likert question title'),
+		createPlaceholder: t('forms', 'People rate each statement on a scale'),
+		warningInvalid: t(
+			'forms',
+			'This question needs a title and at least one statement!',
+		),
+	},
+
+	/**
 	 * Net Promoter Score: a 0-10 linear scale with the standard anchor labels.
 	 * A preset rather than a new answer type, so it needs no backend support.
 	 */

@@ -27,6 +27,7 @@ use OCA\Forms\ResponseDefinitions;
 use OCA\Forms\Service\ConfigService;
 use OCA\Forms\Service\ConfirmationEmailService;
 use OCA\Forms\Service\FormsService;
+use OCA\Forms\Service\QuizService;
 use OCA\Forms\Service\SubmissionService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\AppFramework\Db\IMapperException;
@@ -81,6 +82,7 @@ class ApiController extends OCSController {
 		private readonly QuestionMapper $questionMapper,
 		private readonly SubmissionMapper $submissionMapper,
 		private readonly ConfirmationEmailService $confirmationEmailService,
+		private readonly QuizService $quizService,
 		private readonly ConfigService $configService,
 		private readonly FormsService $formsService,
 		private readonly SubmissionService $submissionService,
@@ -1630,7 +1632,7 @@ class ApiController extends OCSController {
 	 * @throws OCSForbiddenException This form is not owned by the current user and user has no `results_delete` permission
 	 * @throws OCSNotFoundException Could not find form
 	 *
-	 * 201: empty response
+	 * 201: the quiz result when the form is a quiz, otherwise an empty response
 	 */
 	#[CORS()]
 	#[NoAdminRequired()]
@@ -1709,7 +1711,22 @@ class ApiController extends OCSController {
 			$this->jobList->add(SyncSubmissionsWithLinkedFileJob::class, ['form_id' => $form->getId()]);
 		}
 
-		return new DataResponse(null, Http::STATUS_CREATED);
+		// A quiz returns the respondent's result so it can be shown immediately. Grading is
+		// done here, server-side, from the stored answer key - the client never sees the key.
+		$quizResult = null;
+		if ($this->quizService->isQuiz($form)) {
+			try {
+				$quizResult = $this->quizService->grade($questions, $answers);
+			} catch (\Throwable $e) {
+				// A grading problem must not fail a response that is already stored.
+				$this->logger->warning('Could not grade submission', [
+					'exception' => $e,
+					'formId' => $form->getId(),
+				]);
+			}
+		}
+
+		return new DataResponse($quizResult, Http::STATUS_CREATED);
 	}
 
 	/**

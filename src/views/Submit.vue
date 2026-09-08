@@ -29,6 +29,23 @@
 		<template v-else>
 			<!-- Forms title & description-->
 			<header>
+				<!-- Optional per-form banner. Decorative, so it carries an empty alt and is
+				     hidden from screen readers; the form title conveys the meaning. -->
+				<img
+					v-if="headerImage"
+					:src="headerImage"
+					class="form-header-image"
+					alt=""
+					aria-hidden="true"
+					referrerpolicy="no-referrer"
+					loading="lazy" />
+				<!-- Accent is applied to a band rather than to Nextcloud's primary colour:
+				     overriding that would restyle every button and can silently break
+				     contrast against text. -->
+				<div
+					v-if="accentColor"
+					class="form-accent"
+					:style="{ backgroundColor: accentColor }" />
 				<!-- eslint-disable-next-line vue/no-unused-refs -->
 				<h2 ref="title" class="form-title" dir="auto">
 					{{ formTitle }}
@@ -81,6 +98,21 @@
 					<!-- eslint-disable-next-line vue/no-v-html -->
 					<p class="submission-message" v-html="submissionMessageHTML" />
 				</template>
+				<!-- Quiz result. Graded server-side, so the answer key is never sent to the
+				     browser and cannot be read off the page before submitting. -->
+				<template v-if="quizScore" #action>
+					<div class="quiz-result" role="status" aria-live="polite">
+						<p class="quiz-result__score">
+							{{
+								t('forms', 'You scored {score} out of {max}', {
+									score: quizScore.score,
+									max: quizScore.max,
+								})
+							}}
+						</p>
+						<p class="quiz-result__percent">{{ quizScore.percent }}%</p>
+					</div>
+				</template>
 			</NcEmptyContent>
 			<NcEmptyContent
 				v-else-if="isMaxSubmissionsReached && !submissionId"
@@ -130,7 +162,7 @@
 				<ul>
 					<component
 						:is="answerTypes[question.type].component"
-						v-for="(question, index) in validQuestions"
+						v-for="(question, index) in orderedQuestions"
 						v-show="
 							questionPages[question.id] === currentPage
 							&& visibleQuestions[question.id]
@@ -368,6 +400,10 @@ export default {
 			currentPage: 0,
 			/** pages actually visited, so Back retraces jumps rather than assuming -1 */
 			pageHistory: [],
+			/** the graded result of a quiz, returned by the server on submit */
+			quizResult: null,
+			/** fixed for this page load, so the order does not change while answering */
+			shuffleSeed: Math.floor(Math.random() * 0x7fffffff) || 1,
 			/**
 			 * Mapping of questionId => answers
 			 *
@@ -424,6 +460,93 @@ export default {
 		},
 
 		/**
+		 * The quiz result to show, or null when this was not a quiz.
+		 *
+		 * Numbers are tidied for display: whole scores should not read as "3.0 out of 5".
+		 *
+		 * @return {?object} score, max and percentage
+		 */
+		quizScore() {
+			const result = this.quizResult
+			if (!result || typeof result.max !== 'number' || result.max <= 0) {
+				return null
+			}
+			const tidy = (value) => Math.round(value * 100) / 100
+			return {
+				score: tidy(result.score),
+				max: tidy(result.max),
+				percent: Math.round((result.score / result.max) * 100),
+			}
+		},
+
+		/** @return {string} optional banner image address for this form */
+		headerImage() {
+			return this.form.settings?.headerImage || ''
+		},
+
+		/**
+		 * Optional accent colour, accepted only as a hex value so a stylesheet cannot be
+		 * injected through the style binding.
+		 *
+		 * @return {string} a validated colour, or empty
+		 */
+		accentColor() {
+			const colour = this.form.settings?.accentColor || ''
+			return /^#[0-9a-f]{3,8}$/i.test(colour) ? colour : ''
+		},
+
+		/**
+		 * Questions in the order they should be shown.
+		 *
+		 * When the form asks for shuffling, questions are randomised WITHIN each page, so a
+		 * section break still anchors its own page. Two kinds of question are deliberately
+		 * left where the author put them:
+		 *   - sections and media blocks, which define the page structure;
+		 *   - anything involved in a display condition, either as the source or the
+		 *     dependent, since showing a follow-up before the question it depends on would
+		 *     be nonsense.
+		 * The order is computed once per page load, so answering a question does not
+		 * reshuffle the form under the respondent.
+		 *
+		 * @return {Array} questions in display order
+		 */
+		orderedQuestions() {
+			if (!this.form.settings?.shuffleQuestions || !this.shuffleSeed) {
+				return this.validQuestions
+			}
+
+			const anchored = new Set()
+			for (const question of this.validQuestions) {
+				if (['section', 'image', 'video'].includes(question.type)) {
+					anchored.add(question.id)
+				}
+				const rules = question.extraSettings?.displayCondition?.rules ?? []
+				if (rules.length) {
+					anchored.add(question.id)
+					for (const rule of rules) {
+						anchored.add(rule.questionId)
+					}
+				}
+			}
+
+			// Shuffle the movable questions, then drop them back into the non-anchored slots.
+			const movable = this.validQuestions.filter((q) => !anchored.has(q.id))
+			const shuffled = [...movable]
+			let seed = this.shuffleSeed
+			for (let i = shuffled.length - 1; i > 0; i--) {
+				// Small deterministic PRNG: the order must stay stable for this page load.
+				seed = (seed * 1103515245 + 12345) & 0x7fffffff
+				const j = seed % (i + 1)
+				;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+			}
+
+			let next = 0
+			return this.validQuestions.map((question) =>
+				anchored.has(question.id) ? question : shuffled[next++],
+			)
+		},
+
+		/**
 		 * questions keyed by id, for resolving displayCondition references.
 		 *
 		 * @return {Record<number, object>} question id => question
@@ -466,7 +589,7 @@ export default {
 			const pages = {}
 			let page = 0
 			let placedOnPage = 0
-			for (const question of this.validQuestions) {
+			for (const question of this.orderedQuestions) {
 				const isBreak =
 					question.type === 'section'
 					&& question.extraSettings?.pageBreak !== false
@@ -1186,7 +1309,7 @@ export default {
 						},
 					)
 				} else {
-					await axios.post(
+					const submitResponse = await axios.post(
 						generateOcsUrl('apps/forms/api/v3/forms/{id}/submissions', {
 							id: this.form.id,
 						}),
@@ -1195,6 +1318,9 @@ export default {
 							shareHash: this.shareHash,
 						},
 					)
+					// A quiz grades server-side and returns the result; the answer key never
+					// reaches the browser, so a respondent cannot read the answers off the page.
+					this.quizResult = submitResponse?.data?.ocs?.data ?? null
 				}
 				this.submitForm = true
 				this.success = true
@@ -1347,6 +1473,34 @@ export default {
 }
 
 /* page indicator, shown only when the form has section breaks */
+.quiz-result {
+	text-align: center;
+
+	&__score {
+		font-size: 1.1em;
+		font-weight: bold;
+	}
+
+	&__percent {
+		color: var(--color-text-maxcontrast);
+		font-size: 2em;
+	}
+}
+
+.form-header-image {
+	border-radius: var(--border-radius-large);
+	max-height: 220px;
+	object-fit: cover;
+	width: 100%;
+}
+
+.form-accent {
+	border-radius: 2px;
+	height: 4px;
+	margin-block: 8px;
+	width: 72px;
+}
+
 .form-pagination {
 	align-items: center;
 	display: flex;

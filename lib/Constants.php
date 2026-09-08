@@ -260,6 +260,20 @@ class Constants {
 	public const EXTRA_SETTINGS_UNIVERSAL = [
 		'displayCondition' => ['array', 'NULL'],
 		'branching' => ['array', 'NULL'],
+		// Quiz answer key. Kept per question rather than in a table of its own, so quiz
+		// mode needs no schema change:
+		//   points            how much a correct answer is worth (default 1)
+		//   correctOptions    option ids that make a choice question correct
+		//   correctAnswer     the expected value for text and number questions
+		//   caseSensitive     whether a text answer must match case (default false)
+		//   feedbackCorrect   shown to the respondent when they got it right
+		//   feedbackIncorrect shown when they did not
+		'points' => ['integer', 'double', 'NULL'],
+		'correctOptions' => ['array', 'NULL'],
+		'correctAnswer' => ['string', 'NULL'],
+		'caseSensitive' => ['boolean', 'NULL'],
+		'feedbackCorrect' => ['string', 'NULL'],
+		'feedbackIncorrect' => ['string', 'NULL'],
 	];
 
 	/**
