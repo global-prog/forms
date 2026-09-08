@@ -36,6 +36,11 @@
 						class="hidden-visually"
 						type="radio"
 						:name="`rating_${id}`"
+						:aria-label="
+							n('forms', '%n out of {max}', '%n out of {max}', star, {
+								max: maxRating,
+							})
+						"
 						:value="star"
 						:checked="star === currentValue"
 						:required="isRequired && !currentValue"
@@ -224,16 +229,37 @@ export default {
 	align-items: center;
 	border: none;
 	display: flex;
+	// Ten stars plus a Clear button will not fit one line on a phone.
+	flex-wrap: wrap;
 	gap: 2px;
 	margin: 0;
 	padding: 0;
 
 	&__star {
+		align-items: center;
 		border-radius: var(--border-radius);
 		color: var(--color-text-maxcontrast);
 		cursor: pointer;
 		display: inline-flex;
-		padding: 2px;
+		justify-content: center;
+		// Comfortable pointer target. The icon itself stays small; the hit area does not.
+		min-height: 44px;
+		min-width: 44px;
+		transition:
+			color 0.1s ease-in-out,
+			transform 0.1s ease-in-out;
+
+		&:hover {
+			transform: scale(1.1);
+		}
+
+		@media (prefers-reduced-motion: reduce) {
+			transition: none;
+
+			&:hover {
+				transform: none;
+			}
+		}
 
 		&--on {
 			color: var(--color-favorite, var(--color-warning));
@@ -241,6 +267,7 @@ export default {
 
 		&:focus-within {
 			outline: 2px solid var(--color-primary-element);
+			outline-offset: -2px;
 		}
 	}
 

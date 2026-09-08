@@ -148,7 +148,11 @@
 						@update:values="(values) => onUpdate(question, values)" />
 				</ul>
 				<div v-if="pageCount > 1" class="form-pagination">
-					<span class="form-pagination__label">
+					<!-- role=status so moving between pages is announced, not silent -->
+					<span
+						class="form-pagination__label"
+						role="status"
+						aria-live="polite">
 						{{
 							t('forms', 'Page {page} of {total}', {
 								page: currentPage + 1,
@@ -158,6 +162,7 @@
 					</span>
 					<progress
 						class="form-pagination__progress"
+						:aria-label="t('forms', 'Progress through the form')"
 						:value="currentPage + 1"
 						:max="pageCount" />
 				</div>
@@ -708,6 +713,27 @@ export default {
 
 	methods: {
 		/**
+		 * Move to the top of the newly shown page and put focus there.
+		 *
+		 * Scrolling alone is not enough: a keyboard or screen-reader user would still be
+		 * positioned at the bottom of the page they just left, and would have to tab back
+		 * through everything to reach the new content.
+		 */
+		focusPageStart() {
+			window.scrollTo({ top: 0, behavior: 'smooth' })
+			this.$nextTick(() => {
+				const first = (this.$refs.questions ?? []).find(
+					(component) =>
+						this.questionPages[component.id] === this.currentPage
+						&& this.visibleQuestions[component.id],
+				)
+				first?.$el
+					?.querySelector?.('h2, h3, input, textarea, select, button')
+					?.focus?.()
+			})
+		},
+
+		/**
 		 * validate only the questions on the page being left, so a respondent is not
 		 * told about problems on pages they have not reached yet.
 		 *
@@ -761,7 +787,7 @@ export default {
 
 			this.pageHistory.push(this.currentPage)
 			this.currentPage = Math.min(target, this.pageCount - 1)
-			window.scrollTo({ top: 0, behavior: 'smooth' })
+			this.focusPageStart()
 		},
 
 		/**
@@ -773,7 +799,7 @@ export default {
 			const previous = this.pageHistory.pop()
 			this.currentPage =
 				previous !== undefined ? previous : Math.max(this.currentPage - 1, 0)
-			window.scrollTo({ top: 0, behavior: 'smooth' })
+			this.focusPageStart()
 		},
 
 		/**
@@ -1305,6 +1331,10 @@ export default {
 
 		.form-buttons {
 			display: flex;
+			// Paginated forms add Back and Next, so there can now be four buttons here.
+			// Without wrapping they overflow the viewport on a phone.
+			flex-wrap: wrap;
+			gap: 4px;
 			justify-content: flex-end;
 		}
 
@@ -1320,6 +1350,7 @@ export default {
 .form-pagination {
 	align-items: center;
 	display: flex;
+	flex-wrap: wrap;
 	gap: 12px;
 	margin: 8px 0 4px;
 }

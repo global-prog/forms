@@ -237,16 +237,16 @@ export default {
 
 		.first-column {
 			min-width: 200px;
-			text-align: left;
+			text-align: start;
 			position: sticky;
-			left: 0;
+			inset-inline-start: 0;
 		}
 	}
 
 	&__subquestion {
 		margin-top: 16px;
-		padding-left: 16px;
-		border-left: 3px solid var(--color-primary-element);
+		padding-inline-start: 16px;
+		border-inline-start: 3px solid var(--color-primary-element);
 	}
 }
 </style>

@@ -871,6 +871,7 @@ export default {
 	display: flex;
 	flex-direction: column;
 }
+
 .submission-message {
 	&__description {
 		color: var(--color-text-maxcontrast);
@@ -886,7 +887,6 @@ export default {
 
 	&__output {
 		@include markdown-output;
-
 		padding: 12px;
 		margin-block: 3px;
 		border: 2px solid var(--color-border-maxcontrast);

@@ -204,3 +204,11 @@ export default {
 	},
 }
 </script>
+
+<style lang="scss" scoped>
+.question__input {
+	// Comfortable pointer target, and stops a number field rendering tiny on mobile Safari.
+	min-height: 44px;
+	width: 100%;
+}
+</style>

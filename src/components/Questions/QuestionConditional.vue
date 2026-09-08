@@ -1224,15 +1224,15 @@ export default {
 	}
 
 	&__subquestions {
-		padding-left: 16px;
-		border-left: 3px solid var(--color-primary-element-light);
+		padding-inline-start: 16px;
+		border-inline-start: 3px solid var(--color-primary-element-light);
 	}
 }
 
 .active-subquestions {
 	margin-top: 16px;
-	padding-left: 16px;
-	border-left: 3px solid var(--color-primary-element);
+	padding-inline-start: 16px;
+	border-inline-start: 3px solid var(--color-primary-element);
 }
 
 .branch-list-move,

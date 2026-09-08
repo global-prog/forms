@@ -45,7 +45,15 @@
 				<template v-else>
 					<label class="logic__row">
 						<span>{{ t('forms', 'Match') }}</span>
-						<select :value="match" @change="onMatchChange">
+						<select
+							:value="match"
+							:aria-label="
+								t(
+									'forms',
+									'Whether all rules or any rule must match',
+								)
+							"
+							@change="onMatchChange">
 							<option value="all">
 								{{ t('forms', 'all rules') }}
 							</option>
@@ -59,6 +67,7 @@
 						class="logic__rule">
 						<select
 							:value="rule.questionId"
+							:aria-label="t('forms', 'Question this rule looks at')"
 							@change="onRuleQuestion(index, $event)">
 							<option disabled value="">
 								{{ t('forms', 'Choose a question') }}
@@ -77,6 +86,7 @@
 						<select
 							v-if="ruleKind(rule) === 'choice'"
 							:value="rule.conditions?.[0]?.optionId ?? ''"
+							:aria-label="t('forms', 'Answer that must be chosen')"
 							@change="onRuleOption(index, $event)">
 							<option disabled value="">
 								{{ t('forms', 'Choose an answer') }}
@@ -95,6 +105,7 @@
 								:value="
 									rule.conditions?.[0]?.type ?? 'string_contains'
 								"
+								:aria-label="t('forms', 'How the text is compared')"
 								@change="onRuleType(index, $event)">
 								<option value="string_contains">
 									{{ t('forms', 'contains') }}
@@ -110,6 +121,7 @@
 								type="text"
 								:value="rule.conditions?.[0]?.value ?? ''"
 								:placeholder="t('forms', 'Value')"
+								:aria-label="t('forms', 'Value to compare against')"
 								@input="onRuleValue(index, $event)" />
 						</template>
 
@@ -134,6 +146,7 @@
 							<input
 								type="number"
 								:value="rule.conditions?.[0]?.value ?? ''"
+								:aria-label="t('forms', 'Number to compare against')"
 								@input="onRuleValue(index, $event, true)" />
 						</template>
 
@@ -480,6 +493,34 @@ export default {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 8px;
+	}
+
+	&__rule {
+		border-inline-start: 3px solid var(--color-border);
+		padding-inline-start: 8px;
+	}
+
+	// Controls default to shrinking below their content in a flex row, which squashes the
+	// question picker to an unreadable sliver once a couple of rules are on one line.
+	select,
+	input {
+		flex: 1 1 12ch;
+		min-height: 44px;
+		min-width: 0;
+	}
+
+	// On a phone each control takes its own line instead of competing for width.
+	@media (max-width: 512px) {
+		&__row,
+		&__rule {
+			align-items: stretch;
+			flex-direction: column;
+		}
+
+		select,
+		input {
+			width: 100%;
+		}
 	}
 
 	&__option {
