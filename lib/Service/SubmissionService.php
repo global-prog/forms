@@ -480,6 +480,16 @@ class SubmissionService {
 	 * @throws \InvalidArgumentException if validation failed
 	 */
 	public function validateSubmission(array $questions, array $answers, string $formOwnerId, int $formId): void {
+		// UOS: re-derive, server-side, which questions the respondent actually saw. Both
+		// checks below must happen here and not be taken on trust from the client: a required
+		// question that was legitimately hidden would otherwise block every submission, while
+		// a crafted request could otherwise claim any question was hidden to skip it.
+		$questionsById = [];
+		foreach ($questions as $indexedQuestion) {
+			$questionsById[$indexedQuestion['id']] = $indexedQuestion;
+		}
+		$reachableQuestions = $this->getReachableQuestions($questions, $answers);
+
 		// Check by questions
 		foreach ($questions as $question) {
 			$questionId = $question['id'];
@@ -488,6 +498,16 @@ class SubmissionService {
 			// UOS: sections are display-only. They carry no answer, can never be "required",
 			// and must not be treated as an unanswered mandatory question.
 			if ($question['type'] === Constants::ANSWER_TYPE_SECTION) {
+				continue;
+			}
+
+			// UOS: skipped by a "go to section" jump -- the respondent never saw this page.
+			if (!($reachableQuestions[$questionId] ?? true)) {
+				continue;
+			}
+
+			// UOS: hidden by a cross-question display condition.
+			if (!$this->isQuestionVisible($question, $questionsById, $answers)) {
 				continue;
 			}
 
@@ -956,7 +976,7 @@ class SubmissionService {
 	 * @param array $conditions The conditions to evaluate
 	 * @return bool True if conditions match
 	 */
-	private function evaluateBranchConditions(string $triggerType, array $triggerAnswer, array $conditions): bool {
+	public function evaluateBranchConditions(string $triggerType, array $triggerAnswer, array $conditions): bool {
 		switch ($triggerType) {
 			case Constants::ANSWER_TYPE_MULTIPLEUNIQUE:
 			case Constants::ANSWER_TYPE_DROPDOWN:
@@ -1119,5 +1139,133 @@ class SubmissionService {
 		} finally {
 			ini_set('pcre.backtrack_limit', $previousLimit);
 		}
+	}
+
+	/**
+	 * UOS: is this question shown, given the answers so far?
+	 *
+	 * Implements cross-question display conditions ("show Q7 only if Q3 = X"), which the
+	 * upstream conditional model cannot express because there a conditional question owns
+	 * its own trigger. The rules reuse the exact condition shapes branches already use, so
+	 * there is only ever one condition engine.
+	 *
+	 * Stored in extra_settings_json, so this needs no schema change:
+	 *   displayCondition: { match: "all"|"any", rules: [ { questionId, conditions[] } ] }
+	 *
+	 * This MUST be evaluated server-side and not merely trusted from the client: a hidden
+	 * question that is marked required would otherwise block every submission, and a client
+	 * could equally claim a question was hidden to skip a mandatory answer.
+	 *
+	 * @param array $question the question being tested
+	 * @param array $questionsById every question of the form, keyed by id
+	 * @param array $answers the submitted answers, keyed by question id
+	 * @return bool true when the question should be shown (and therefore validated)
+	 */
+	public function isQuestionVisible(array $question, array $questionsById, array $answers): bool {
+		$displayCondition = $question['extraSettings']['displayCondition'] ?? null;
+		if (!is_array($displayCondition) || empty($displayCondition['rules'])) {
+			return true;
+		}
+
+		$matchAny = ($displayCondition['match'] ?? 'all') === 'any';
+		$results = [];
+		foreach ($displayCondition['rules'] as $rule) {
+			$sourceId = $rule['questionId'] ?? null;
+			$source = $sourceId !== null ? ($questionsById[$sourceId] ?? null) : null;
+			if ($source === null) {
+				// Referenced question was deleted -- treat the rule as unmet rather than
+				// silently showing the question.
+				$results[] = false;
+				continue;
+			}
+			$results[] = $this->evaluateBranchConditions(
+				$source['type'],
+				$answers[$sourceId] ?? [],
+				$rule['conditions'] ?? [],
+			);
+		}
+
+		return $matchAny
+			? in_array(true, $results, true)
+			: !in_array(false, $results, true);
+	}
+
+	/**
+	 * UOS: which questions did the respondent actually reach?
+	 *
+	 * Replays the form's page navigation from the submitted answers, following any
+	 * "go to section" / "submit here" rules. Questions on pages that were never reached are
+	 * exempt from the required-answer check -- otherwise a required question on a skipped
+	 * branch would make the form impossible to submit.
+	 *
+	 * Pages are delimited by section questions (see ANSWER_TYPE_SECTION). Branching lives in
+	 * extra_settings_json as:
+	 *   branching: { byOption: { "<optionId>": { target: "section", questionId: N }
+	 *                                         | { target: "submit" } } }
+	 *
+	 * @param list<array> $questions the form's questions, in order
+	 * @param array $answers the submitted answers, keyed by question id
+	 * @return array<int, bool> question id => whether it was reachable
+	 */
+	public function getReachableQuestions(array $questions, array $answers): array {
+		// Split into pages at section breaks, mirroring the submit view.
+		$pages = [];
+		$page = 0;
+		$placed = 0;
+		$pageOfQuestion = [];
+		foreach ($questions as $question) {
+			$isBreak = $question['type'] === Constants::ANSWER_TYPE_SECTION
+				&& (($question['extraSettings']['pageBreak'] ?? true) !== false);
+			if ($isBreak && $placed > 0) {
+				$page++;
+				$placed = 0;
+			}
+			$pages[$page][] = $question;
+			$pageOfQuestion[$question['id']] = $page;
+			$placed++;
+		}
+
+		$reachable = [];
+		$current = 0;
+		$guard = 0;
+		$lastPage = count($pages) - 1;
+		while ($current >= 0 && $current <= $lastPage) {
+			// A malformed set of jumps must not loop forever.
+			if (++$guard > count($pages) + 1) {
+				break;
+			}
+			foreach ($pages[$current] as $question) {
+				$reachable[$question['id']] = true;
+			}
+
+			$next = $current + 1;
+			foreach ($pages[$current] as $question) {
+				$byOption = $question['extraSettings']['branching']['byOption'] ?? null;
+				if (!is_array($byOption)) {
+					continue;
+				}
+				foreach (($answers[$question['id']] ?? []) as $value) {
+					if (!is_string($value) && !is_int($value)) {
+						continue;
+					}
+					$rule = $byOption[(string)$value] ?? null;
+					if (!is_array($rule)) {
+						continue;
+					}
+					if (($rule['target'] ?? '') === 'submit') {
+						return $reachable;
+					}
+					if (($rule['target'] ?? '') === 'section'
+						&& isset($pageOfQuestion[$rule['questionId'] ?? -1])) {
+						$next = $pageOfQuestion[$rule['questionId']];
+					}
+					break 2;
+				}
+			}
+			// Never jump backwards: that is how an infinite loop is built.
+			$current = $next > $current ? $next : $current + 1;
+		}
+
+		return $reachable;
 	}
 }

@@ -228,6 +228,25 @@ class Constants {
 
 	// UOS: a section can either just print a heading, or additionally start a new page in the
 	// submit view. pageBreak defaults to true -- "section break" is what people ask for.
+	/**
+	 * UOS: extra settings permitted on EVERY question type, whatever its answer type.
+	 *
+	 * displayCondition -- show this question only when an earlier question matches:
+	 *   { match: "all"|"any", rules: [ { questionId: int, conditions: [...] } ] }
+	 *   The conditions reuse the exact shapes branches already use, so there is only one
+	 *   condition engine (SubmissionService::evaluateBranchConditions).
+	 *
+	 * branching -- where each answer sends the respondent ("go to section" / "submit"):
+	 *   { byOption: { "<optionId>": { target: "section", questionId: int }
+	 *                              | { target: "submit" } } }
+	 *
+	 * Both live in extra_settings_json, so neither needs a schema change.
+	 */
+	public const EXTRA_SETTINGS_UNIVERSAL = [
+		'displayCondition' => ['array', 'NULL'],
+		'branching' => ['array', 'NULL'],
+	];
+
 	public const EXTRA_SETTINGS_SECTION = [
 		'pageBreak' => ['boolean', 'NULL'],
 	];

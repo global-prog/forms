@@ -915,8 +915,10 @@ class FormsService {
 		if (is_string($triggerType) && isset($extraSettingsMap[$triggerType])) {
 			$extraSettingsMap[Constants::ANSWER_TYPE_CONDITIONAL] += $extraSettingsMap[$triggerType];
 		}
-		// Ensure only allowed keys are set
-		$allowed = $extraSettingsMap[$questionType] ?? [];
+		// Ensure only allowed keys are set.
+		// UOS: displayCondition and branching are valid on every question type, so they are
+		// merged in rather than repeated in each per-type list.
+		$allowed = ($extraSettingsMap[$questionType] ?? []) + Constants::EXTRA_SETTINGS_UNIVERSAL;
 		// Number of keys in extraSettings but not in allowed (but not the other way round)
 		$diff = array_diff(array_keys($extraSettings), array_keys($allowed));
 		if (count($diff) > 0) {

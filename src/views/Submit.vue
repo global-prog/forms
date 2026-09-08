@@ -131,7 +131,10 @@
 					<component
 						:is="answerTypes[question.type].component"
 						v-for="(question, index) in validQuestions"
-						v-show="questionPages[question.id] === currentPage"
+						v-show="
+							questionPages[question.id] === currentPage
+							&& visibleQuestions[question.id]
+						"
 						ref="questions"
 						:key="question.id"
 						v-bind="question"
@@ -277,6 +280,7 @@ import {
 	FormState,
 	QUESTION_EXTRASETTINGS_OTHER_PREFIX,
 } from '../models/Constants.ts'
+import { isQuestionVisible, resolveBranching } from '../utils/DisplayConditions.js'
 import logger from '../utils/Logger.js'
 import OcsResponse2Data from '../utils/OcsResponse2Data.js'
 import SetWindowTitle from '../utils/SetWindowTitle.js'
@@ -357,6 +361,8 @@ export default {
 			answerTypes,
 			/** UOS: index of the page currently shown, when the form has section breaks */
 			currentPage: 0,
+			/** UOS: pages actually visited, so Back retraces jumps rather than assuming -1 */
+			pageHistory: [],
 			/**
 			 * Mapping of questionId => answers
 			 *
@@ -376,6 +382,73 @@ export default {
 	},
 
 	computed: {
+		/**
+		 * UOS: the answers actually submitted.
+		 *
+		 * Drops answers belonging to questions that are currently hidden or were skipped by a
+		 * jump. Without this, answering a question and then changing an earlier answer so it
+		 * hides would still store the stale answer -- a data-quality problem, and arguably a
+		 * privacy one, since it records a reply the respondent could no longer see or retract.
+		 *
+		 * @return {Record<number, Array>} answers keyed by question id
+		 */
+		submittedAnswers() {
+			const shown = new Set(
+				this.validQuestions
+					.filter(
+						(question) =>
+							this.visibleQuestions[question.id]
+							&& this.reachablePages.has(
+								this.questionPages[question.id],
+							),
+					)
+					.map((question) => question.id),
+			)
+			return Object.fromEntries(
+				Object.entries(this.answers).filter(([id]) => shown.has(Number(id))),
+			)
+		},
+
+		/**
+		 * UOS: pages the respondent actually visited, including the one they are on.
+		 *
+		 * @return {Set<number>} visited page indexes
+		 */
+		reachablePages() {
+			return new Set([...this.pageHistory, this.currentPage])
+		},
+
+		/**
+		 * UOS: questions keyed by id, for resolving displayCondition references.
+		 *
+		 * @return {Record<number, object>} question id => question
+		 */
+		questionsById() {
+			return Object.fromEntries(
+				this.validQuestions.map((question) => [question.id, question]),
+			)
+		},
+
+		/**
+		 * UOS: which questions are currently shown, per their cross-question conditions.
+		 *
+		 * Recomputes as answers change, so a question appears or disappears live. The server
+		 * re-evaluates the same rules when validating, so this is presentation only.
+		 *
+		 * @return {Record<number, boolean>} question id => visible
+		 */
+		visibleQuestions() {
+			const visible = {}
+			for (const question of this.validQuestions) {
+				visible[question.id] = isQuestionVisible(
+					question,
+					this.questionsById,
+					this.answers,
+				)
+			}
+			return visible
+		},
+
 		/**
 		 * UOS: map of questionId => page index, split at section breaks.
 		 *
@@ -664,7 +737,30 @@ export default {
 			if (!(await this.validateCurrentPage())) {
 				return
 			}
-			this.currentPage = Math.min(this.currentPage + 1, this.pageCount - 1)
+
+			// UOS: honour any "go to section" / "submit" rule on this page's answers.
+			const onThisPage = this.validQuestions.filter(
+				(question) =>
+					this.questionPages[question.id] === this.currentPage
+					&& this.visibleQuestions[question.id],
+			)
+			const jump = resolveBranching(onThisPage, this.answers)
+
+			let target = this.currentPage + 1
+			if (jump?.target === 'submit') {
+				// "Submit form" on this answer: go straight to the last page, which is where
+				// the submit button lives.
+				target = this.pageCount - 1
+			} else if (jump?.target === 'section' && jump.questionId !== undefined) {
+				const jumpTo = this.questionPages[jump.questionId]
+				// Never jump backwards -- that is how an infinite loop gets built.
+				if (jumpTo !== undefined && jumpTo > this.currentPage) {
+					target = jumpTo
+				}
+			}
+
+			this.pageHistory.push(this.currentPage)
+			this.currentPage = Math.min(target, this.pageCount - 1)
 			window.scrollTo({ top: 0, behavior: 'smooth' })
 		},
 
@@ -672,7 +768,11 @@ export default {
 		 * UOS: go back a page. Never validates -- going back must always be possible.
 		 */
 		goToPreviousPage() {
-			this.currentPage = Math.max(this.currentPage - 1, 0)
+			// UOS: retrace the path actually taken. With jumps, currentPage - 1 could land on
+			// a page the respondent skipped and never saw.
+			const previous = this.pageHistory.pop()
+			this.currentPage =
+				previous !== undefined ? previous : Math.max(this.currentPage - 1, 0)
 			window.scrollTo({ top: 0, behavior: 'smooth' })
 		},
 
@@ -1056,7 +1156,7 @@ export default {
 							},
 						),
 						{
-							answers: this.answers,
+							answers: this.submittedAnswers,
 						},
 					)
 				} else {
@@ -1065,7 +1165,7 @@ export default {
 							id: this.form.id,
 						}),
 						{
-							answers: this.answers,
+							answers: this.submittedAnswers,
 							shareHash: this.shareHash,
 						},
 					)
