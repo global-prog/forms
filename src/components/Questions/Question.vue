@@ -92,6 +92,7 @@
 						</IconOverlay>
 					</template>
 					<NcActionCheckbox
+						v-if="!hideRequired"
 						:modelValue="isRequired"
 						@update:modelValue="onRequiredChange">
 						<!-- TRANSLATORS Making this question necessary to be answered when submitting to a form -->
@@ -221,6 +222,14 @@ export default {
 		description: {
 			type: String,
 			required: true,
+		},
+
+		// UOS: display-only question types (sections) cannot be answered, so offering a
+		// "Required" toggle on them would be meaningless. Phrased negatively so the default
+		// stays false, per the project's vue/no-boolean-default rule.
+		hideRequired: {
+			type: Boolean,
+			default: false,
 		},
 
 		isRequired: {

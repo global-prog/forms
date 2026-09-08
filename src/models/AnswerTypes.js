@@ -10,6 +10,7 @@ import IconCalendar from '@material-symbols/svg-400/outlined/calendar_today.svg?
 import IconCheckboxOutline from '@material-symbols/svg-400/outlined/check_box.svg?raw'
 import IconFile from '@material-symbols/svg-400/outlined/draft.svg?raw'
 import IconGrid from '@material-symbols/svg-400/outlined/grid_view.svg?raw'
+import IconSection from '@material-symbols/svg-400/outlined/horizontal_rule.svg?raw'
 import IconLinearScale from '@material-symbols/svg-400/outlined/linear_scale.svg?raw'
 import IconPalette from '@material-symbols/svg-400/outlined/palette.svg?raw'
 import IconRadioboxMarked from '@material-symbols/svg-400/outlined/radio_button_checked.svg?raw'
@@ -28,6 +29,7 @@ import QuestionLinearScale from '../components/Questions/QuestionLinearScale.vue
 import QuestionLong from '../components/Questions/QuestionLong.vue'
 import QuestionMultiple from '../components/Questions/QuestionMultiple.vue'
 import QuestionRanking from '../components/Questions/QuestionRanking.vue'
+import QuestionSection from '../components/Questions/QuestionSection.vue'
 import QuestionShort from '../components/Questions/QuestionShort.vue'
 import { OptionType } from './Constants.ts'
 
@@ -283,6 +285,23 @@ export default {
 			'forms',
 			'This question needs a title and at least one answer!',
 		),
+	},
+
+	/**
+	 * UOS: display-only section break. Groups the questions that follow it and, by default,
+	 * starts a new page in the submit view. Produces no answer.
+	 */
+	section: {
+		component: markRaw(QuestionSection),
+		icon: IconSection,
+		label: t('forms', 'Section break'),
+		predefined: false,
+		// A section only ever needs a title, which Question.vue already enforces.
+		validate: () => true,
+
+		titlePlaceholder: t('forms', 'Section title'),
+		createPlaceholder: t('forms', 'Groups the questions that follow'),
+		warningInvalid: t('forms', 'This section needs a title!'),
 	},
 
 	conditional: {

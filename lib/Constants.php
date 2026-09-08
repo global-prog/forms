@@ -95,6 +95,11 @@ class Constants {
 	public const ANSWER_TYPE_MULTIPLE = 'multiple';
 	public const ANSWER_TYPE_MULTIPLEUNIQUE = 'multiple_unique';
 	public const ANSWER_TYPE_RANKING = 'ranking';
+	// UOS: a display-only "question" that groups the ones after it. Deliberately modelled as
+	// an answer type rather than a new table: it lives in oc_forms_v2_questions using the
+	// existing `order` column, so it needs NO migration and cannot collide with whatever
+	// schema upstream eventually ships for issue #624.
+	public const ANSWER_TYPE_SECTION = 'section';
 	public const ANSWER_TYPE_SHORT = 'short';
 	public const ANSWER_TYPE_TIME = 'time';
 
@@ -116,6 +121,7 @@ class Constants {
 		self::ANSWER_TYPE_MULTIPLE,
 		self::ANSWER_TYPE_MULTIPLEUNIQUE,
 		self::ANSWER_TYPE_RANKING,
+		self::ANSWER_TYPE_SECTION,
 		self::ANSWER_TYPE_SHORT,
 		self::ANSWER_TYPE_TIME,
 	];
@@ -218,6 +224,12 @@ class Constants {
 		'columns' => ['array'],
 		'questionType' => ['string'],
 		'rows' => ['array'],
+	];
+
+	// UOS: a section can either just print a heading, or additionally start a new page in the
+	// submit view. pageBreak defaults to true -- "section break" is what people ask for.
+	public const EXTRA_SETTINGS_SECTION = [
+		'pageBreak' => ['boolean', 'NULL'],
 	];
 
 	public const EXTRA_SETTINGS_RANKING = [

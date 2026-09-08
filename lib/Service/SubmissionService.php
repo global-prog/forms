@@ -229,6 +229,12 @@ class SubmissionService {
 		$submissionEntities = array_reverse($submissionEntities);
 
 		$questions = $this->questionMapper->findByForm($form->getId(), false, true);
+		// UOS: sections are display-only and hold no answers. Leaving them in would emit an
+		// empty column per section in every CSV/spreadsheet export.
+		$questions = array_values(array_filter(
+			$questions,
+			static fn ($question): bool => $question->getType() !== Constants::ANSWER_TYPE_SECTION,
+		));
 		$defaultTimeZone = $this->config->getSystemValueString('default_timezone', 'UTC');
 
 		if (!$this->currentUser) {
@@ -478,6 +484,12 @@ class SubmissionService {
 		foreach ($questions as $question) {
 			$questionId = $question['id'];
 			$questionAnswered = array_key_exists($questionId, $answers);
+
+			// UOS: sections are display-only. They carry no answer, can never be "required",
+			// and must not be treated as an unanswered mandatory question.
+			if ($question['type'] === Constants::ANSWER_TYPE_SECTION) {
+				continue;
+			}
 
 			// Special handling for conditional questions
 			if ($question['type'] === Constants::ANSWER_TYPE_CONDITIONAL) {

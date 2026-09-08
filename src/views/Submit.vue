@@ -131,6 +131,7 @@
 					<component
 						:is="answerTypes[question.type].component"
 						v-for="(question, index) in validQuestions"
+						v-show="questionPages[question.id] === currentPage"
 						ref="questions"
 						:key="question.id"
 						v-bind="question"
@@ -143,7 +144,37 @@
 						@keydown.ctrl.enter="onKeydownCtrlEnter"
 						@update:values="(values) => onUpdate(question, values)" />
 				</ul>
+				<div v-if="pageCount > 1" class="form-pagination">
+					<span class="form-pagination__label">
+						{{
+							t('forms', 'Page {page} of {total}', {
+								page: currentPage + 1,
+								total: pageCount,
+							})
+						}}
+					</span>
+					<progress
+						class="form-pagination__progress"
+						:value="currentPage + 1"
+						:max="pageCount" />
+				</div>
 				<div class="form-buttons">
+					<NcButton
+						v-if="pageCount > 1 && currentPage > 0"
+						alignment="center-reverse"
+						class="submit-button"
+						variant="secondary"
+						@click.prevent="goToPreviousPage">
+						{{ t('forms', 'Back') }}
+					</NcButton>
+					<NcButton
+						v-if="pageCount > 1 && currentPage < pageCount - 1"
+						alignment="center-reverse"
+						class="submit-button"
+						variant="primary"
+						@click.prevent="goToNextPage">
+						{{ t('forms', 'Next') }}
+					</NcButton>
 					<NcButton
 						alignment="center-reverse"
 						class="submit-button"
@@ -157,6 +188,7 @@
 						{{ t('forms', 'Clear form') }}
 					</NcButton>
 					<NcButton
+						v-if="currentPage >= pageCount - 1"
 						alignment="center-reverse"
 						class="submit-button"
 						:disabled="loading"
@@ -323,6 +355,8 @@ export default {
 	data() {
 		return {
 			answerTypes,
+			/** UOS: index of the page currently shown, when the form has section breaks */
+			currentPage: 0,
 			/**
 			 * Mapping of questionId => answers
 			 *
@@ -342,6 +376,42 @@ export default {
 	},
 
 	computed: {
+		/**
+		 * UOS: map of questionId => page index, split at section breaks.
+		 *
+		 * A form with no sections yields page 0 for everything, so pageCount is 1 and the
+		 * view behaves exactly as it did before sections existed.
+		 *
+		 * @return {Record<number, number>} page index per question id
+		 */
+		questionPages() {
+			const pages = {}
+			let page = 0
+			let placedOnPage = 0
+			for (const question of this.validQuestions) {
+				const isBreak =
+					question.type === 'section'
+					&& question.extraSettings?.pageBreak !== false
+				// Only break if something is already on this page, otherwise a section as the
+				// very first question would leave an empty page in front of it.
+				if (isBreak && placedOnPage > 0) {
+					page += 1
+					placedOnPage = 0
+				}
+				pages[question.id] = page
+				placedOnPage += 1
+			}
+			return pages
+		},
+
+		/**
+		 * @return {number} how many pages the form has (1 when there are no section breaks)
+		 */
+		pageCount() {
+			const pages = Object.values(this.questionPages)
+			return pages.length ? Math.max(...pages) + 1 : 1
+		},
+
 		validQuestions() {
 			return this.form.questions.filter((question) => {
 				// All questions must have a valid title
@@ -564,6 +634,48 @@ export default {
 	},
 
 	methods: {
+		/**
+		 * UOS: validate only the questions on the page being left, so a respondent is not
+		 * told about problems on pages they have not reached yet.
+		 *
+		 * Matches by the component's own id rather than by array position, so it does not
+		 * depend on $refs ordering.
+		 *
+		 * @return {Promise<boolean>} true when every question on this page is valid
+		 */
+		async validateCurrentPage() {
+			const onThisPage = (this.$refs.questions ?? []).filter(
+				(component) => this.questionPages[component.id] === this.currentPage,
+			)
+			const results = await Promise.all(
+				onThisPage.map(async (component) =>
+					typeof component.validate === 'function'
+						? await component.validate()
+						: true,
+				),
+			)
+			return results.every(Boolean)
+		},
+
+		/**
+		 * UOS: advance a page, but only if the current one validates.
+		 */
+		async goToNextPage() {
+			if (!(await this.validateCurrentPage())) {
+				return
+			}
+			this.currentPage = Math.min(this.currentPage + 1, this.pageCount - 1)
+			window.scrollTo({ top: 0, behavior: 'smooth' })
+		},
+
+		/**
+		 * UOS: go back a page. Never validates -- going back must always be possible.
+		 */
+		goToPreviousPage() {
+			this.currentPage = Math.max(this.currentPage - 1, 0)
+			window.scrollTo({ top: 0, behavior: 'smooth' })
+		},
+
 		/**
 		 * Load saved values for current form from LocalStorage
 		 *
@@ -1102,5 +1214,23 @@ export default {
 			padding-inline-start: 20px;
 		}
 	}
+}
+
+/* UOS: page indicator, shown only when the form has section breaks */
+.form-pagination {
+	align-items: center;
+	display: flex;
+	gap: 12px;
+	margin: 8px 0 4px;
+}
+
+.form-pagination__label {
+	color: var(--color-text-maxcontrast);
+	white-space: nowrap;
+}
+
+.form-pagination__progress {
+	flex: 1 1 auto;
+	height: 4px;
 }
 </style>
