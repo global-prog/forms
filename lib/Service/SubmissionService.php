@@ -233,7 +233,11 @@ class SubmissionService {
 		// empty column per section in every CSV/spreadsheet export.
 		$questions = array_values(array_filter(
 			$questions,
-			static fn ($question): bool => $question->getType() !== Constants::ANSWER_TYPE_SECTION,
+			static fn ($question): bool => !in_array($question->getType(), [
+				Constants::ANSWER_TYPE_SECTION,
+				Constants::ANSWER_TYPE_IMAGE,
+				Constants::ANSWER_TYPE_VIDEO,
+			], true),
 		));
 		$defaultTimeZone = $this->config->getSystemValueString('default_timezone', 'UTC');
 
@@ -497,7 +501,11 @@ class SubmissionService {
 
 			// sections are display-only. They carry no answer, can never be "required",
 			// and must not be treated as an unanswered mandatory question.
-			if ($question['type'] === Constants::ANSWER_TYPE_SECTION) {
+			if (in_array($question['type'], [
+				Constants::ANSWER_TYPE_SECTION,
+				Constants::ANSWER_TYPE_IMAGE,
+				Constants::ANSWER_TYPE_VIDEO,
+			], true)) {
 				continue;
 			}
 

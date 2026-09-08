@@ -422,7 +422,16 @@ export default {
 			this.isLoadingQuestions = true
 
 			try {
-				const body = { type, text, subtype }
+				// A preset is a normal question type created with settings already filled in
+				// (Net Promoter Score is a 0-10 linear scale with the standard labels). Doing
+				// it client-side means presets need no new backend type, and therefore cannot
+				// collide with anything upstream later introduces.
+				const preset = answerTypes[type]?.preset
+				const body = {
+					type: preset?.type ?? type,
+					text,
+					subtype: preset?.subtype ?? subtype,
+				}
 				if (position !== null) {
 					// position: current question position + 2 (0-based index: +1, next position: +1)
 					body.position = position + 2
@@ -435,6 +444,31 @@ export default {
 					body,
 				)
 				const question = OcsResponse2Data(response)
+
+				// Seed the preset's settings, then carry them into the local copy so the
+				// question renders configured straight away rather than after a reload.
+				if (preset?.extraSettings) {
+					try {
+						await axios.patch(
+							generateOcsUrl(
+								'apps/forms/api/v3/forms/{id}/questions/{questionId}',
+								{ id: this.form.id, questionId: question.id },
+							),
+							{
+								keyValuePairs: {
+									extraSettings: preset.extraSettings,
+								},
+							},
+						)
+						question.extraSettings = {
+							...(question.extraSettings ?? {}),
+							...preset.extraSettings,
+						}
+					} catch (error) {
+						// The question exists and is usable; only the preconfiguration failed.
+						logger.error('Could not apply question preset', { error })
+					}
+				}
 
 				// Delegate insertion & focus handling to helper
 				this.insertQuestion(question, { text, type, answers: [] }, position)

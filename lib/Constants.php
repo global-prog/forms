@@ -107,6 +107,10 @@ class Constants {
 	// star rating (upstream issue #356). linearscale covers 1..N as radio buttons; this
 	// is the compact star widget people expect from Google Forms.
 	public const ANSWER_TYPE_RATING = 'rating';
+	// Display-only media blocks, modelled like sections: ordinary question rows that carry
+	// no answer, so they need no schema change and add no column to an export.
+	public const ANSWER_TYPE_IMAGE = 'image';
+	public const ANSWER_TYPE_VIDEO = 'video';
 	public const ANSWER_TYPE_SHORT = 'short';
 	public const ANSWER_TYPE_TIME = 'time';
 
@@ -131,6 +135,8 @@ class Constants {
 		self::ANSWER_TYPE_SECTION,
 		self::ANSWER_TYPE_NUMBER,
 		self::ANSWER_TYPE_RATING,
+		self::ANSWER_TYPE_IMAGE,
+		self::ANSWER_TYPE_VIDEO,
 		self::ANSWER_TYPE_SHORT,
 		self::ANSWER_TYPE_TIME,
 	];
@@ -256,9 +262,23 @@ class Constants {
 		'branching' => ['array', 'NULL'],
 	];
 
+	/**
+	 * Media blocks reference a URL.
+	 *
+	 * Note for anyone extending this: an externally hosted image or video means the
+	 * respondent's browser contacts that third party, disclosing their IP address. Prefer
+	 * URLs on this instance.
+	 */
+	public const EXTRA_SETTINGS_MEDIA = [
+		'url' => ['string', 'NULL'],
+		'alt' => ['string', 'NULL'],
+	];
+
 	// how many stars a rating question offers (defaults to 5).
 	public const EXTRA_SETTINGS_RATING = [
 		'maxRating' => ['integer', 'NULL'],
+		// 'star' (default), 'heart' or 'thumb'
+		'ratingIcon' => ['string', 'NULL'],
 	];
 
 	// same constraints the short-text number validation uses.

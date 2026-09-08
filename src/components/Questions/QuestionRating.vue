@@ -41,7 +41,7 @@
 						:required="isRequired && !currentValue"
 						@change="onPick(star)" />
 					<NcIconSvgWrapper
-						:svg="star <= currentValue ? IconStarFilled : IconStar" />
+						:svg="star <= currentValue ? iconFull : iconEmpty" />
 				</label>
 				<NcButton
 					v-if="readOnly && currentValue"
@@ -55,7 +55,7 @@
 				:aria-label="t('forms', 'Rating settings')"
 				variant="tertiary-no-background">
 				<template #icon>
-					<NcIconSvgWrapper :svg="IconStar" />
+					<NcIconSvgWrapper :svg="iconEmpty" />
 				</template>
 				<NcActionInput
 					type="number"
@@ -65,6 +65,15 @@
 					:modelValue="String(maxRating)"
 					@submit="onChangeMax"
 					@input="onChangeMax" />
+				<NcActionRadio
+					v-for="option in ['star', 'heart', 'thumb']"
+					:key="option"
+					:modelValue="ratingIcon"
+					:name="`ratingIcon_${id}`"
+					:value="option"
+					@update:modelValue="onChangeIcon(option)">
+					{{ iconLabel(option) }}
+				</NcActionRadio>
 			</NcActions>
 		</div>
 		<template #insert>
@@ -74,9 +83,14 @@
 </template>
 
 <script>
+import IconHeartFilled from '@material-symbols/svg-400/outlined/favorite-fill.svg?raw'
+import IconHeart from '@material-symbols/svg-400/outlined/favorite.svg?raw'
 import IconStarFilled from '@material-symbols/svg-400/outlined/star-fill.svg?raw'
 import IconStar from '@material-symbols/svg-400/outlined/star.svg?raw'
+import IconThumbFilled from '@material-symbols/svg-400/outlined/thumb_up-fill.svg?raw'
+import IconThumb from '@material-symbols/svg-400/outlined/thumb_up.svg?raw'
 import NcActionInput from '@nextcloud/vue/components/NcActionInput'
+import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -91,6 +105,7 @@ export default {
 
 	components: {
 		NcActionInput,
+		NcActionRadio,
 		NcActions,
 		NcButton,
 		NcIconSvgWrapper,
@@ -101,7 +116,14 @@ export default {
 	emits: ['update:values'],
 
 	setup() {
-		return { IconStar, IconStarFilled }
+		return {
+			IconStar,
+			IconStarFilled,
+			IconHeart,
+			IconHeartFilled,
+			IconThumb,
+			IconThumbFilled,
+		}
 	},
 
 	computed: {
@@ -113,6 +135,30 @@ export default {
 				&& configured <= 10
 				? configured
 				: DEFAULT_MAX_RATING
+		},
+
+		/** @return {string} which icon set to draw */
+		ratingIcon() {
+			const icon = this.extraSettings?.ratingIcon
+			return ['star', 'heart', 'thumb'].includes(icon) ? icon : 'star'
+		},
+
+		/** @return {string} the outline icon for the chosen set */
+		iconEmpty() {
+			return {
+				star: this.IconStar,
+				heart: this.IconHeart,
+				thumb: this.IconThumb,
+			}[this.ratingIcon]
+		},
+
+		/** @return {string} the filled icon for the chosen set */
+		iconFull() {
+			return {
+				star: this.IconStarFilled,
+				heart: this.IconHeartFilled,
+				thumb: this.IconThumbFilled,
+			}[this.ratingIcon]
 		},
 
 		/** @return {number} the currently selected star count, 0 when unanswered */
@@ -138,6 +184,27 @@ export default {
 			if (!isNaN(value) && value >= 2 && value <= 10) {
 				this.onExtraSettingsChange({ maxRating: value })
 			}
+		},
+
+		/**
+		 * @param {string} option 'star', 'heart' or 'thumb'
+		 * @return {string} the human label for that icon
+		 */
+		iconLabel(option) {
+			return {
+				star: t('forms', 'Stars'),
+				heart: t('forms', 'Hearts'),
+				thumb: t('forms', 'Thumbs up'),
+			}[option]
+		},
+
+		/**
+		 * @param {string} option the chosen icon set
+		 */
+		onChangeIcon(option) {
+			this.onExtraSettingsChange({
+				ratingIcon: option === 'star' ? undefined : option,
+			})
 		},
 
 		async validate() {

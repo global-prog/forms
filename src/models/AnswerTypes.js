@@ -11,11 +11,13 @@ import IconCheckboxOutline from '@material-symbols/svg-400/outlined/check_box.sv
 import IconFile from '@material-symbols/svg-400/outlined/draft.svg?raw'
 import IconGrid from '@material-symbols/svg-400/outlined/grid_view.svg?raw'
 import IconSection from '@material-symbols/svg-400/outlined/horizontal_rule.svg?raw'
+import IconImage from '@material-symbols/svg-400/outlined/image.svg?raw'
 import IconLinearScale from '@material-symbols/svg-400/outlined/linear_scale.svg?raw'
 import IconPalette from '@material-symbols/svg-400/outlined/palette.svg?raw'
 import IconRadioboxMarked from '@material-symbols/svg-400/outlined/radio_button_checked.svg?raw'
 import IconClockOutline from '@material-symbols/svg-400/outlined/schedule.svg?raw'
 import IconTextShort from '@material-symbols/svg-400/outlined/short_text.svg?raw'
+import IconVideo from '@material-symbols/svg-400/outlined/smart_display.svg?raw'
 import IconStar from '@material-symbols/svg-400/outlined/star.svg?raw'
 import IconTextLong from '@material-symbols/svg-400/outlined/subject.svg?raw'
 import IconSwapVertical from '@material-symbols/svg-400/outlined/swap_vert.svg?raw'
@@ -28,6 +30,7 @@ import QuestionFile from '../components/Questions/QuestionFile.vue'
 import QuestionGrid from '../components/Questions/QuestionGrid.vue'
 import QuestionLinearScale from '../components/Questions/QuestionLinearScale.vue'
 import QuestionLong from '../components/Questions/QuestionLong.vue'
+import QuestionMedia from '../components/Questions/QuestionMedia.vue'
 import QuestionMultiple from '../components/Questions/QuestionMultiple.vue'
 import QuestionNumber from '../components/Questions/QuestionNumber.vue'
 import QuestionRanking from '../components/Questions/QuestionRanking.vue'
@@ -323,6 +326,64 @@ export default {
 		createPlaceholder: t('forms', 'People can give a star rating'),
 		submitPlaceholder: t('forms', 'Pick a rating'),
 		warningInvalid: t('forms', 'This question needs a title!'),
+	},
+
+	/**
+	 * Net Promoter Score: a 0-10 linear scale with the standard anchor labels.
+	 * A preset rather than a new answer type, so it needs no backend support.
+	 */
+	nps: {
+		component: markRaw(QuestionLinearScale),
+		icon: IconLinearScale,
+		label: t('forms', 'Net Promoter Score'),
+		predefined: false,
+		validate: () => true,
+		preset: {
+			type: 'linearscale',
+			extraSettings: {
+				optionsLowest: 0,
+				optionsHighest: 10,
+				optionsLabelLowest: t('forms', 'Not at all likely'),
+				optionsLabelHighest: t('forms', 'Extremely likely'),
+			},
+		},
+
+		titlePlaceholder: t('forms', 'How likely are you to recommend us?'),
+		createPlaceholder: t('forms', 'People rate from 0 to 10'),
+		warningInvalid: t('forms', 'This question needs a title!'),
+	},
+
+	/**
+	 * Display-only image block. Carries no answer, like a section.
+	 */
+	image: {
+		component: markRaw(QuestionMedia),
+		icon: IconImage,
+		label: t('forms', 'Image'),
+		predefined: false,
+		mediaKind: 'image',
+		validate: () => true,
+
+		titlePlaceholder: t('forms', 'Image caption'),
+		createPlaceholder: t('forms', 'Shows an image on the form'),
+		warningInvalid: t('forms', 'This block needs a caption!'),
+	},
+
+	/**
+	 * Display-only video block. Rendered as a link rather than an embed, so opening the
+	 * form does not disclose the respondent to a third-party video host.
+	 */
+	video: {
+		component: markRaw(QuestionMedia),
+		icon: IconVideo,
+		label: t('forms', 'Video'),
+		predefined: false,
+		mediaKind: 'video',
+		validate: () => true,
+
+		titlePlaceholder: t('forms', 'Video caption'),
+		createPlaceholder: t('forms', 'Links to a video from the form'),
+		warningInvalid: t('forms', 'This block needs a caption!'),
 	},
 
 	/**
