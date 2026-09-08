@@ -702,7 +702,26 @@ class SubmissionService {
 			case 'email':
 				return $this->emailValidator->isValid($data);
 			case 'number':
-				return is_numeric($data);
+				// UOS: enforce the optional numeric constraints. The frontend also applies
+				// these via native min/max/step, but a submission can be crafted to bypass
+				// the browser, so they must be re-checked here.
+				if (!is_numeric($data)) {
+					return false;
+				}
+				$number = $data + 0;
+				$extra = $question['extraSettings'];
+				if (!empty($extra['numberInteger']) && floor((float)$number) !== (float)$number) {
+					return false;
+				}
+				if (isset($extra['numberMin']) && $extra['numberMin'] !== null
+					&& $number < $extra['numberMin']) {
+					return false;
+				}
+				if (isset($extra['numberMax']) && $extra['numberMax'] !== null
+					&& $number > $extra['numberMax']) {
+					return false;
+				}
+				return true;
 			case 'phone':
 				// some special characters are used (depending on the locale)
 				$sanitized = str_replace([' ', '(', ')', '.', '/', '-', 'x'], '', $data);

@@ -28,7 +28,9 @@
 				:maxlength="maxStringLengths.answerText"
 				minlength="1"
 				:type="validationObject.inputType"
-				:step="validationObject.inputType === 'number' ? 'any' : undefined"
+				:min="isNumber ? numberMin : undefined"
+				:max="isNumber ? numberMax : undefined"
+				:step="isNumber ? (numberInteger ? 1 : 'any') : undefined"
 				@invalid.prevent="validate"
 				@input="onInput"
 				@keydown.enter.exact.prevent="onKeydownEnter" />
@@ -71,6 +73,37 @@
 					/^[a-z]{3}$/i
 					<!-- ^ Some example RegExp for the placeholder text -->
 				</NcActionInput>
+				<!-- UOS: numeric constraints, shown only for the number input type -->
+				<NcActionInput
+					v-if="isNumber"
+					type="number"
+					:label="t('forms', 'Minimum value')"
+					:modelValue="numberMin ?? ''"
+					@submit="onChangeNumberBound('numberMin', $event)"
+					@input="onChangeNumberBound('numberMin', $event)">
+					<template #icon>
+						<NcIconSvgWrapper :svg="IconNumeric" />
+					</template>
+					{{ t('forms', 'No minimum') }}
+				</NcActionInput>
+				<NcActionInput
+					v-if="isNumber"
+					type="number"
+					:label="t('forms', 'Maximum value')"
+					:modelValue="numberMax ?? ''"
+					@submit="onChangeNumberBound('numberMax', $event)"
+					@input="onChangeNumberBound('numberMax', $event)">
+					<template #icon>
+						<NcIconSvgWrapper :svg="IconNumeric" />
+					</template>
+					{{ t('forms', 'No maximum') }}
+				</NcActionInput>
+				<NcActionCheckbox
+					v-if="isNumber"
+					:modelValue="numberInteger"
+					@update:modelValue="onChangeNumberInteger">
+					{{ t('forms', 'Whole numbers only') }}
+				</NcActionCheckbox>
 			</NcActions>
 		</div>
 		<template #insert>
@@ -80,8 +113,10 @@
 </template>
 
 <script>
+import IconNumeric from '@material-symbols/svg-400/outlined/123.svg?raw'
 import IconRegex from '@material-symbols/svg-400/outlined/regular_expression.svg?raw'
 import debounce from 'debounce'
+import NcActionCheckbox from '@nextcloud/vue/components/NcActionCheckbox'
 import NcActionInput from '@nextcloud/vue/components/NcActionInput'
 import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
 import NcActions from '@nextcloud/vue/components/NcActions'
@@ -98,6 +133,7 @@ export default {
 	components: {
 		NcIconSvgWrapper,
 		NcActions,
+		NcActionCheckbox,
 		NcActionInput,
 		NcActionRadio,
 		Question,
@@ -109,6 +145,7 @@ export default {
 	setup() {
 		return {
 			IconRegex,
+			IconNumeric,
 		}
 	},
 
@@ -160,9 +197,78 @@ export default {
 		validationRegex() {
 			return this.extraSettings?.validationRegex || ''
 		},
+
+		/** UOS: numeric-constraint helpers (only meaningful for the number input type) */
+		isNumber() {
+			return this.validationType === 'number'
+		},
+
+		numberMin() {
+			const v = this.extraSettings?.numberMin
+			return typeof v === 'number' ? v : undefined
+		},
+
+		numberMax() {
+			const v = this.extraSettings?.numberMax
+			return typeof v === 'number' ? v : undefined
+		},
+
+		numberInteger() {
+			return this.extraSettings?.numberInteger === true
+		},
+
+		/**
+		 * A message that states the actual constraint, rather than just
+		 * "the input is not a valid number".
+		 */
+		numberErrorMessage() {
+			const min = this.numberMin
+			const max = this.numberMax
+			let msg
+			if (min !== undefined && max !== undefined) {
+				msg = t('forms', 'Enter a number between {min} and {max}', {
+					min,
+					max,
+				})
+			} else if (min !== undefined) {
+				msg = t('forms', 'Enter a number of at least {min}', { min })
+			} else if (max !== undefined) {
+				msg = t('forms', 'Enter a number of at most {max}', { max })
+			} else {
+				msg = this.validationObject.errorMessage
+			}
+			if (this.numberInteger) {
+				msg += ' ' + t('forms', 'Whole numbers only.')
+			}
+			return msg
+		},
 	},
 
 	methods: {
+		/**
+		 * UOS: store a numeric bound, or clear it when the field is emptied.
+		 *
+		 * @param {string} key either 'numberMin' or 'numberMax'
+		 * @param {Event} event the input/submit event
+		 */
+		onChangeNumberBound(key, event) {
+			const raw = event?.target?.value ?? ''
+			const value =
+				raw === '' || isNaN(parseFloat(raw)) ? undefined : parseFloat(raw)
+			this.onExtraSettingsChange({ [key]: value })
+		},
+
+		/**
+		 * UOS: toggle whole-numbers-only.
+		 *
+		 * @param {boolean} checked new state
+		 */
+		onChangeNumberInteger(checked) {
+			this.onExtraSettingsChange({
+				numberInteger: checked === true ? true : undefined,
+			})
+		},
+
 		async validate() {
 			/** @type {HTMLInputElement} */
 			const input = this.$refs.input
@@ -184,8 +290,14 @@ export default {
 				)
 
 			if (!input.validity.valid || !isCustomValid) {
-				input.setCustomValidity(this.validationObject.errorMessage)
-				this.errorMessage = this.validationObject.errorMessage
+				// UOS: for numbers, say what the allowed range actually is. The browser
+				// already enforces min/max/step via the native attributes, so an out-of-range
+				// value lands here with validity.valid === false.
+				const message = this.isNumber
+					? this.numberErrorMessage
+					: this.validationObject.errorMessage
+				input.setCustomValidity(message)
+				this.errorMessage = message
 				return false
 			}
 

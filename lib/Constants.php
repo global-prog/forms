@@ -172,6 +172,12 @@ class Constants {
 	public const EXTRA_SETTINGS_SHORT = [
 		'validationType' => ['string'],
 		'validationRegex' => ['string'],
+		// UOS: numeric constraints for validationType='number'. Upstream only checks
+		// is_numeric(), so "a number between 1 and 10" or "a whole number" was not
+		// expressible. JSON numbers decode as int or float, hence integer+double.
+		'numberMin' => ['integer', 'double', 'NULL'],
+		'numberMax' => ['integer', 'double', 'NULL'],
+		'numberInteger' => ['boolean', 'NULL'],
 	];
 
 	public const EXTRA_SETTINGS_FILE = [
