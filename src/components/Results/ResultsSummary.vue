@@ -26,30 +26,7 @@
 					)
 				}}
 			</p>
-			<ol>
-				<li v-for="option in rankingStats" :key="option.id">
-					<label>
-						<span class="question-summary__statistic-score">
-							{{ option.bordaTotal }}
-						</span>
-						<span class="question-summary__statistic-percentage">
-							({{
-								t('forms', 'avg. rank {average}', {
-									average: option.avgRank,
-								})
-							}}):
-						</span>
-						<span
-							:class="{
-								'question-summary__statistic-text--best':
-									option.best,
-							}">
-							{{ option.text }}
-						</span>
-					</label>
-					<meter min="0" :max="maxBordaScore" :value="option.bordaTotal" />
-				</li>
-			</ol>
+			<ChartBars :items="rankingBars" :max="maxBordaScore" hidePercentage />
 		</div>
 
 		<!-- Numeric summary. Number and rating questions previously showed no summary at
@@ -78,21 +55,12 @@
 				</div>
 			</dl>
 
-			<ol v-if="numericStats.buckets.length" class="numeric-summary__bars">
-				<li v-for="bucket in numericStats.buckets" :key="bucket.value">
-					<label :for="`bucket-${question.id}-${bucket.value}`">
-						{{ bucket.value }}
-						<span class="question-summary__statistic-percentage">
-							({{ bucket.count }})
-						</span>
-					</label>
-					<meter
-						:id="`bucket-${question.id}-${bucket.value}`"
-						min="0"
-						:max="numericStats.busiest"
-						:value="bucket.count" />
-				</li>
-			</ol>
+			<ChartBars
+				v-if="numericStats.buckets.length"
+				class="numeric-summary__bars"
+				:items="bucketBars"
+				:max="numericStats.busiest"
+				hidePercentage />
 
 			<p v-if="npsScore !== null" class="numeric-summary__nps">
 				{{ t('forms', 'Net Promoter Score') }}:
@@ -112,76 +80,39 @@
 			</p>
 		</div>
 
-		<!-- Answers with countable results for visualization -->
-		<ol
+		<!-- Answers with countable results for visualization. A single-choice question can
+		     also be shown as a ring; a checkbox question cannot, because one respondent may
+		     tick several boxes, so the shares sum past 100% and there is no whole to divide. -->
+		<div
 			v-else-if="answerTypes[question.type].predefined"
 			class="question-summary__statistic">
-			<li v-for="option in questionOptions" :key="option.id">
-				<label :for="`option-${option.questionId}-${option.id}`">
-					{{ option.count }}
-					<span class="question-summary__statistic-percentage">
-						({{ option.percentage }}%):
-					</span>
-					<span
-						:class="{
-							'question-summary__statistic-text--best': option.best,
-						}">
-						{{ option.text }}
-					</span>
-				</label>
-				<meter
-					:id="`option-${option.questionId}-${option.id}`"
-					min="0"
-					:max="submissions.length"
-					:value="option.count" />
-			</li>
-		</ol>
-
-		<div v-else-if="question.type === 'grid'">
-			<table class="answer-grid">
-				<thead>
-					<tr>
-						<th class="first-column"></th>
-
-						<th v-for="column of gridColumns" :key="column.id">
-							{{ column.text }}
-						</th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr v-for="row of gridRows" :key="row.id">
-						<td class="first-column">{{ row.text }}</td>
-						<td v-for="column of gridColumns" :key="column.id">
-							<template
-								v-if="
-									question.extraSettings.questionType === 'radio'
-								">
-								{{ gridValue[row.id][column.id].answersCount }} ({{
-									gridValue[row.id][column.id].percentage
-								}}%)
-							</template>
-
-							<template
-								v-if="
-									question.extraSettings.questionType
-									=== 'checkbox'
-								">
-								{{ gridValue[row.id][column.id].answersCount }} ({{
-									gridValue[row.id][column.id].percentage
-								}}%)
-							</template>
-
-							<template
-								v-if="
-									question.extraSettings.questionType === 'number'
-								">
-								{{ gridValue[row.id][column.id].averageValue }}
-							</template>
-						</td>
-					</tr>
-				</tbody>
-			</table>
+			<div v-if="canShowRing" class="question-summary__chart-form">
+				<NcCheckboxRadioSwitch
+					v-model="chartForm"
+					type="button"
+					value="bars"
+					:name="`chartForm_${question.id}`">
+					{{ t('forms', 'Bars') }}
+				</NcCheckboxRadioSwitch>
+				<NcCheckboxRadioSwitch
+					v-model="chartForm"
+					type="button"
+					value="ring"
+					:name="`chartForm_${question.id}`">
+					{{ t('forms', 'Ring') }}
+				</NcCheckboxRadioSwitch>
+			</div>
+			<ChartDonut
+				v-if="canShowRing && chartForm === 'ring'"
+				:items="optionBars" />
+			<ChartBars v-else :items="optionBars" :max="submissions.length" />
 		</div>
+
+		<ChartHeatmap
+			v-else-if="question.type === 'grid'"
+			:rows="gridHeatmap.rows"
+			:columns="gridHeatmap.columns"
+			:cells="gridHeatmap.cells" />
 
 		<!-- Text answers are simply listed for now, could be automatically grouped in the future -->
 		<ul v-else class="question-summary__text">
@@ -218,7 +149,11 @@
 <script>
 import IconFile from '@material-symbols/svg-400/outlined/draft.svg?raw'
 import { generateUrl } from '@nextcloud/router'
+import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import ChartBars from './Charts/ChartBars.vue'
+import ChartDonut from './Charts/ChartDonut.vue'
+import ChartHeatmap from './Charts/ChartHeatmap.vue'
 import answerTypes from '../../models/AnswerTypes.js'
 import { GridCellType, OptionType } from '../../models/Constants.ts'
 
@@ -226,6 +161,10 @@ export default {
 	name: 'ResultsSummary',
 
 	components: {
+		ChartBars,
+		ChartDonut,
+		ChartHeatmap,
+		NcCheckboxRadioSwitch,
 		NcIconSvgWrapper,
 	},
 
@@ -250,6 +189,9 @@ export default {
 	data() {
 		return {
 			answerTypes,
+			// Bars by default even where a ring is allowed: bar labels are ordinary text
+			// that wraps, which long option text and right-to-left scripts both need.
+			chartForm: 'bars',
 		}
 	},
 
@@ -440,6 +382,7 @@ export default {
 					text: t('forms', 'Other'),
 					count: 0,
 					percentage: 0,
+					isOther: true,
 				})
 			}
 
@@ -449,6 +392,9 @@ export default {
 				text: t('forms', 'No response'),
 				count: 0,
 				percentage: 0,
+				// Flagged at the point it is created rather than recognised later by its
+				// translated text, which would break in every language but English.
+				isNoResponse: true,
 			})
 
 			// Go through submissions to check which options have how many responses
@@ -510,6 +456,104 @@ export default {
 		/**
 		 * Borda count ranking statistics
 		 */
+		/**
+		 * Ranking options as magnitude bars.
+		 *
+		 * @return {object[]} one bar per option, its Borda total as the value
+		 */
+		rankingBars() {
+			return this.rankingStats.map((option) => ({
+				key: option.id,
+				label: option.text,
+				value: option.bordaTotal,
+				best: option.best,
+				note: t('forms', 'avg. rank {average}', {
+					average: option.avgRank,
+				}),
+			}))
+		},
+
+		/**
+		 * The distribution of a numeric question as bars.
+		 *
+		 * @return {object[]} one bar per distinct value that was answered
+		 */
+		bucketBars() {
+			return (this.numericStats?.buckets ?? []).map((bucket) => ({
+				key: bucket.value,
+				label: bucket.value,
+				value: bucket.count,
+			}))
+		},
+
+		/**
+		 * Option counts as chart rows.
+		 *
+		 * 'No response' is drawn grey: it is the absence of a choice rather than one of
+		 * the choices, and giving it a choice's colour would overstate it.
+		 *
+		 * @return {object[]} one row per option
+		 */
+		optionBars() {
+			return this.questionOptions.map((option, index) => ({
+				key: option.id ?? `synthetic-${index}`,
+				label: option.text,
+				value: option.count,
+				percentage: option.percentage,
+				best: option.best,
+				muted: option.isNoResponse === true,
+			}))
+		},
+
+		/**
+		 * Whether a ring would be a truthful depiction of this question.
+		 *
+		 * Single choice only. A checkbox question lets one respondent tick several boxes,
+		 * so its shares sum past 100% and there is no whole for a ring to divide.
+		 *
+		 * @return {boolean} true when the ring form may be offered
+		 */
+		canShowRing() {
+			return ['multiple_unique', 'dropdown'].includes(this.question.type)
+		},
+
+		/**
+		 * The grid matrix arranged for the heatmap.
+		 *
+		 * @return {object} rows, columns and cells, in the shape ChartHeatmap expects
+		 */
+		gridHeatmap() {
+			const isNumber =
+				this.question.extraSettings?.questionType === GridCellType.Number
+			const cells = this.gridRows.map((row) =>
+				this.gridColumns.map((column) => {
+					const cell = this.gridValue[row.id]?.[column.id] ?? {}
+					if (isNumber) {
+						const average = cell.averageValue ?? 0
+						return { value: average, display: average }
+					}
+					const count = cell.answersCount ?? 0
+					return {
+						value: count,
+						display: `${count} (${cell.percentage ?? 0}%)`,
+					}
+				}),
+			)
+			return {
+				rows: this.gridRows.map((row) => ({
+					key: row.id,
+					label: row.text,
+				})),
+
+				columns: this.gridColumns.map((column) => ({
+					key: column.id,
+					label: column.text,
+				})),
+
+				cells,
+			}
+		},
+
 		rankingStats() {
 			const n = this.question.options.length
 			const stats = {}
@@ -754,6 +798,62 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+/*
+  Chart palette.
+
+  Fixed hexes, not Nextcloud's theme variables, and deliberately so. A categorical palette
+  has to hold guarantees that can be checked -- a lightness band, a chroma floor, and enough
+  separation between neighbouring slots to survive colour-blind vision -- and a user-chosen
+  `--color-primary-element` is unknowable here, so nothing about it can be guaranteed. Chart
+  *chrome* does use the theme variables (ink, track, surface, border), so a chart still sits
+  correctly in whatever theme the instance wears; only the series hues are pinned.
+
+  Both columns were checked with a colour-separation validator against the two surfaces these
+  charts actually render on -- #ffffff and #171717 -- rather than against generic defaults.
+  Seven slots clear every gate for neighbouring pairs, which is the case that applies to bars
+  and to ring segments. Three of the light slots fall below 3:1 against white, which is
+  allowed only because every chart here prints its label and its count as ordinary text: no
+  value is ever carried by colour alone, so the palette is a wayfinding aid, not the data.
+
+  The slot ORDER is load-bearing, not cosmetic -- it is what keeps neighbouring hues apart.
+  Adding an eighth colour, or reordering these, needs re-validating; a generated extra hue
+  is indistinguishable from one already present. Past seven the charts fold the tail into a
+  single grey "Other" instead.
+*/
+@mixin chart-series-dark {
+	--chart-series-1: #3987e5;
+	--chart-series-2: #d95926;
+	--chart-series-3: #199e70;
+	--chart-series-4: #c98500;
+	--chart-series-5: #d55181;
+	--chart-series-6: #008300;
+	--chart-series-7: #9085e9;
+}
+
+.question-summary {
+	--chart-series-1: #2a78d6;
+	--chart-series-2: #eb6834;
+	--chart-series-3: #1baf7a;
+	--chart-series-4: #eda100;
+	--chart-series-5: #e87ba4;
+	--chart-series-6: #008300;
+	--chart-series-7: #4a3aa7;
+	// Grey carries "not a choice": an unanswered question, or a folded tail.
+	--chart-muted: #898781;
+}
+
+// An explicitly chosen dark theme wins outright; the default theme follows the OS.
+[data-theme-dark] .question-summary,
+[data-theme-dark-highcontrast] .question-summary {
+	@include chart-series-dark;
+}
+
+@media (prefers-color-scheme: dark) {
+	[data-theme-default] .question-summary {
+		@include chart-series-dark;
+	}
+}
+
 .question-summary {
 	padding-inline: var(--default-clickable-area) 16px;
 
@@ -771,6 +871,26 @@ export default {
 		margin-block-start: 8px;
 	}
 
+	// The following three were nested inside a `li` that the charts no longer render --
+	// and in the numeric summary's case never had one, so they had silently stopped
+	// matching anything. Lifted out so they apply again.
+	&__ranking-description {
+		color: var(--color-text-maxcontrast);
+		font-style: italic;
+		margin-block-end: 8px;
+	}
+
+	&__statistic-percentage {
+		color: var(--color-text-maxcontrast);
+	}
+
+	&__chart-form {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px;
+		margin-block-end: 8px;
+	}
+
 	&__text {
 		list-style-type: initial;
 
@@ -786,57 +906,10 @@ export default {
 	}
 
 	&__statistic {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
 		list-style-type: none;
-
-		li {
-			position: relative;
-			padding-block: 8px;
-			padding-inline: 0;
-
-			label {
-				cursor: default;
-			}
-
-			.question-summary__ranking-description {
-				color: var(--color-text-maxcontrast);
-				font-style: italic;
-				margin-block-end: 8px;
-			}
-
-			.question-summary__statistic-text--best {
-				font-weight: bold;
-			}
-
-			.question-summary__statistic-percentage {
-				color: var(--color-text-maxcontrast);
-			}
-
-			meter {
-				display: block;
-				width: 100%;
-				margin-block-start: 4px;
-				background: var(--color-background-dark);
-				height: calc(var(--border-radius) * 2);
-				border-radius: var(--border-radius);
-
-				&::-webkit-meter-bar {
-					height: calc(var(--border-radius) * 2);
-				}
-
-				// The pseudo-classes of -moz and -webkit have to stay separated even with SCSS, otherwise they don’t work
-				&::-webkit-meter-optimum-value {
-					// TODO switch to old gradient if it becomes available in server
-					background: var(--gradient-primary-background);
-					border-radius: var(--border-radius);
-				}
-
-				&::-moz-meter-bar {
-					// TODO switch to old gradient if it becomes available in server
-					background: var(--gradient-primary-background);
-					border-radius: var(--border-radius);
-				}
-			}
-		}
 	}
 
 	.color__field {
@@ -855,40 +928,6 @@ export default {
 		align-items: baseline;
 		display: flex;
 		gap: calc(var(--clickable-area-small) / 2);
-	}
-
-	.answer-grid {
-		border-collapse: collapse;
-		width: 100%;
-
-		thead tr {
-			border-bottom: 2px solid var(--color-border);
-		}
-
-		td {
-			min-height: 34px;
-			min-width: 64px;
-			text-align: center;
-			padding: 8px 4px;
-
-			.checkbox-radio-switch {
-				display: flex;
-				justify-content: center;
-			}
-		}
-
-		th {
-			min-height: 44px;
-			padding: 8px 4px;
-			text-align: center;
-		}
-
-		.first-column {
-			min-width: 200px;
-			text-align: start;
-			position: sticky;
-			inset-inline-start: 0;
-		}
 	}
 }
 
@@ -916,19 +955,6 @@ export default {
 			font-size: 1.3em;
 			font-weight: bold;
 			margin: 0;
-		}
-	}
-
-	&__bars {
-		li {
-			align-items: center;
-			display: grid;
-			gap: 8px;
-			grid-template-columns: minmax(64px, auto) 1fr;
-		}
-
-		meter {
-			width: 100%;
 		}
 	}
 

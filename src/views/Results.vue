@@ -39,6 +39,16 @@
 				}}
 			</p>
 
+			<!-- Paper only. On screen the heading above is enough; a printed report also
+			     has to say when it was taken, since it outlives the page it came from. -->
+			<p v-if="printedAt" class="results-print-meta">
+				{{
+					t('forms', 'Summary generated {datetime}', {
+						datetime: printedAt,
+					})
+				}}
+			</p>
+
 			<!-- View switcher between Summary and Responses -->
 			<div class="response-actions">
 				<PillMenu
@@ -100,6 +110,15 @@
 								<NcIconSvgWrapper :svg="IconFolder" />
 							</template>
 							{{ t('forms', 'Save copy to Files') }}
+						</NcActionButton>
+						<NcActionButton
+							v-if="!noSubmissions"
+							closeAfterClick
+							@click="onPrintSummary">
+							<template #icon>
+								<NcIconSvgWrapper :svg="IconPrint" />
+							</template>
+							{{ t('forms', 'Print summary or save as PDF') }}
 						</NcActionButton>
 						<NcActionButton
 							v-if="!noSubmissions"
@@ -274,6 +293,7 @@ import IconDownload from '@material-symbols/svg-400/outlined/download.svg?raw'
 import IconFolder from '@material-symbols/svg-400/outlined/folder.svg?raw'
 import IconLink from '@material-symbols/svg-400/outlined/link.svg?raw'
 import IconLinkVariantOff from '@material-symbols/svg-400/outlined/link_off.svg?raw'
+import IconPrint from '@material-symbols/svg-400/outlined/print.svg?raw'
 import IconRefresh from '@material-symbols/svg-400/outlined/refresh.svg?raw'
 import IconMagnify from '@material-symbols/svg-400/outlined/search.svg?raw'
 import IconShareVariant from '@material-symbols/svg-400/outlined/share.svg?raw'
@@ -365,6 +385,7 @@ export default {
 			IconDelete,
 			IconDownload,
 			IconFileDelimited,
+			IconPrint,
 			IconFileExcelOutline,
 			IconFolder,
 			IconLink,
@@ -386,6 +407,7 @@ export default {
 			filteredSubmissionsCount: 0,
 
 			isDownloadActionOpened: false,
+			printedAt: '',
 			loadingResults: true,
 			skipReloadOnOffsetChange: false,
 
@@ -593,6 +615,29 @@ export default {
 			} finally {
 				this.loadingResults = false
 			}
+		},
+
+		/**
+		 * Print the summary, which is also how a PDF is produced: every browser print
+		 * dialog offers "Save as PDF", so this needs no PDF library, no extra dependency
+		 * and no server round trip.
+		 *
+		 * The summary view is switched on first, and deliberately. The responses view is
+		 * paginated twenty rows at a time, so printing from it would produce a report of
+		 * whichever page happened to be on screen while claiming to be the whole form.
+		 */
+		async onPrintSummary() {
+			if (this.activeResponseView.id !== 'summary') {
+				this.activeResponseView = responseViews.find(
+					(view) => view.id === 'summary',
+				)
+				// Reloads without limit/offset, so the charts summarise every response.
+				await this.loadFormResults()
+			}
+			this.printedAt = new Date().toLocaleString()
+			// Let the charts paint before the print dialog freezes the page.
+			await this.$nextTick()
+			window.print()
 		},
 
 		async onDownloadFile(fileFormat) {
@@ -976,5 +1021,73 @@ export default {
 
 .bottom-pagination {
 	margin-bottom: 24px;
+}
+</style>
+
+<!--
+  Print / Save as PDF. Not scoped: it has to reach the application furniture that Nextcloud
+  itself renders outside this component.
+-->
+<style lang="scss">
+/*
+  The report is the page itself with the application removed -- no PDF library, no extra
+  dependency, no server round trip, because every browser print dialog can save to PDF.
+
+  Two things it quietly depends on, both easy to lose later:
+    * the summary charts are HTML and SVG and never a `<meter>`. Browsers draw that native
+      widget as a platform control and routinely print it blank, which is the main reason
+      the summary stopped using one.
+    * every chart fill declares `print-color-adjust: exact`. Without it a browser treats
+      those fills as decorative backgrounds and drops them, printing an empty report.
+*/
+@media print {
+	// None of the furniture belongs on paper. Both the id and class forms are listed
+	// because which one Nextcloud renders has moved between versions.
+	#header,
+	#app-navigation,
+	#app-navigation-vue,
+	#app-sidebar,
+	#app-sidebar-vue,
+	.app-navigation,
+	.app-sidebar,
+	.top-bar,
+	.response-actions,
+	.search-wrapper,
+	.bottom-pagination,
+	.action-item,
+	.button-vue {
+		display: none !important;
+	}
+
+	// Let the content occupy the sheet instead of the app's scroll pane.
+	#content-vue,
+	#app-content-vue,
+	.app-content,
+	.app-content-wrapper {
+		display: block !important;
+		inline-size: 100% !important;
+		margin: 0 !important;
+		overflow: visible !important;
+	}
+
+	body {
+		background: #fff !important;
+	}
+
+	.results-print-meta {
+		color: #555;
+		display: block !important;
+	}
+
+	// A chart broken across a page turn cannot be read as one chart.
+	.question-summary {
+		break-inside: avoid;
+		padding-inline: 0 !important;
+	}
+}
+
+// Hidden on screen; the print block above reveals it.
+.results-print-meta {
+	display: none;
 }
 </style>
