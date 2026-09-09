@@ -148,13 +148,28 @@
 						:hasSubtypes="hasSubtypes"
 						primary
 						@addQuestion="addQuestion" />
+					<NcButton
+						:disabled="isLoadingQuestions"
+						variant="secondary"
+						@click="showImportDialog = true">
+						<template #icon>
+							<NcIconSvgWrapper :svg="IconImport" />
+						</template>
+						{{ t('forms', 'Import questions') }}
+					</NcButton>
 				</div>
+				<ImportQuestionsDialog
+					v-if="showImportDialog"
+					v-model:open="showImportDialog"
+					:formId="form.id"
+					@imported="onQuestionsImported" />
 			</section>
 		</template>
 	</NcAppContent>
 </template>
 
 <script>
+import IconImport from '@material-symbols/svg-400/outlined/library_add.svg?raw'
 import IconLock from '@material-symbols/svg-400/outlined/lock.svg?raw'
 import axios from '@nextcloud/axios'
 import { showError } from '@nextcloud/dialogs'
@@ -165,10 +180,12 @@ import { generateOcsUrl } from '@nextcloud/router'
 import { useIsMobile } from '@nextcloud/vue'
 import debounce from 'debounce'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
+import NcButton from '@nextcloud/vue/components/NcButton'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import AddQuestionMenu from '../components/AddQuestionMenu.vue'
+import ImportQuestionsDialog from '../components/ImportQuestionsDialog.vue'
 import QuestionList from '../components/Questions/QuestionList.vue'
 import TopBar from '../components/TopBar.vue'
 import ViewsMixin from '../mixins/ViewsMixin.js'
@@ -185,6 +202,8 @@ export default {
 	name: 'Create',
 
 	components: {
+		ImportQuestionsDialog,
+		NcButton,
 		NcIconSvgWrapper,
 		AddQuestionMenu,
 		NcAppContent,
@@ -210,6 +229,7 @@ export default {
 	setup() {
 		return {
 			IconLock,
+			IconImport,
 			isMobile: useIsMobile(),
 		}
 	},
@@ -220,6 +240,7 @@ export default {
 
 			// Various states
 			isLoadingQuestions: false,
+			showImportDialog: false,
 
 			maxStringLengths: loadState('forms', 'maxStringLengths'),
 			questionMenuOpened: false,
@@ -418,6 +439,20 @@ export default {
 		 * @param {string|null} subtype the question subtype, see AnswerTypes.subtypes
 		 * @param {number|null} position where the new question should be added
 		 */
+		/**
+		 * Append questions copied from another form.
+		 *
+		 * The server has already created them, so this only reflects them in the open editor
+		 * rather than re-fetching the whole form.
+		 *
+		 * @param {Array} created the questions the server returned
+		 */
+		onQuestionsImported(created) {
+			for (const question of created) {
+				this.form.questions.push({ ...question, answers: [] })
+			}
+		},
+
 		async addQuestion(type, subtype = null, position = null) {
 			this.activeQuestionType = null
 			const text = ''

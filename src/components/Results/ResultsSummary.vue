@@ -52,6 +52,66 @@
 			</ol>
 		</div>
 
+		<!-- Numeric summary. Number and rating questions previously showed no summary at
+		     all, because the option-bar view only covers types with predefined options. -->
+		<div v-if="numericStats" class="question-summary__statistic numeric-summary">
+			<dl class="numeric-summary__figures">
+				<div>
+					<dt>{{ t('forms', 'Average') }}</dt>
+					<dd>{{ numericStats.mean }}</dd>
+				</div>
+				<div>
+					<dt>{{ t('forms', 'Median') }}</dt>
+					<dd>{{ numericStats.median }}</dd>
+				</div>
+				<div>
+					<dt>{{ t('forms', 'Lowest') }}</dt>
+					<dd>{{ numericStats.min }}</dd>
+				</div>
+				<div>
+					<dt>{{ t('forms', 'Highest') }}</dt>
+					<dd>{{ numericStats.max }}</dd>
+				</div>
+				<div>
+					<dt>{{ t('forms', 'Responses') }}</dt>
+					<dd>{{ numericStats.count }}</dd>
+				</div>
+			</dl>
+
+			<ol v-if="numericStats.buckets.length" class="numeric-summary__bars">
+				<li v-for="bucket in numericStats.buckets" :key="bucket.value">
+					<label :for="`bucket-${question.id}-${bucket.value}`">
+						{{ bucket.value }}
+						<span class="question-summary__statistic-percentage">
+							({{ bucket.count }})
+						</span>
+					</label>
+					<meter
+						:id="`bucket-${question.id}-${bucket.value}`"
+						min="0"
+						:max="numericStats.busiest"
+						:value="bucket.count" />
+				</li>
+			</ol>
+
+			<p v-if="npsScore !== null" class="numeric-summary__nps">
+				{{ t('forms', 'Net Promoter Score') }}:
+				<strong>{{ npsScore }}</strong>
+				<span class="question-summary__statistic-percentage">
+					{{
+						t(
+							'forms',
+							'{promoters}% promoters, {detractors}% detractors',
+							{
+								promoters: npsBreakdown.promoters,
+								detractors: npsBreakdown.detractors,
+							},
+						)
+					}}
+				</span>
+			</p>
+		</div>
+
 		<!-- Answers with countable results for visualization -->
 		<ol
 			v-else-if="answerTypes[question.type].predefined"
@@ -194,6 +254,110 @@ export default {
 	},
 
 	computed: {
+		/**
+		 * Every numeric answer given to this question.
+		 *
+		 * @return {number[]} the parsed values, unanswered and non-numeric entries dropped
+		 */
+		numericValues() {
+			if (!['number', 'rating', 'linearscale'].includes(this.question.type)) {
+				return []
+			}
+			const values = []
+			for (const submission of this.submissions) {
+				for (const answer of submission.answers ?? []) {
+					if (answer.questionId !== this.question.id) {
+						continue
+					}
+					const value = parseFloat(answer.text)
+					if (!isNaN(value)) {
+						values.push(value)
+					}
+				}
+			}
+			return values
+		},
+
+		/**
+		 * Summary statistics for a numeric question.
+		 *
+		 * Median is reported alongside the average because a single extreme answer drags an
+		 * average badly on the small response counts these forms usually see.
+		 *
+		 * @return {?object} the statistics, or null when there is nothing to summarise
+		 */
+		numericStats() {
+			const values = this.numericValues
+			if (values.length === 0) {
+				return null
+			}
+			const sorted = [...values].sort((a, b) => a - b)
+			const middle = Math.floor(sorted.length / 2)
+			const median =
+				sorted.length % 2
+					? sorted[middle]
+					: (sorted[middle - 1] + sorted[middle]) / 2
+			const round = (n) => Math.round(n * 100) / 100
+
+			// Bucket by distinct value, but only when the spread is small enough for a bar
+			// per value to be readable - a free-form number question can hold anything.
+			const distinct = [...new Set(sorted)]
+			const buckets =
+				distinct.length <= 20
+					? distinct.map((value) => ({
+							value,
+							count: values.filter((v) => v === value).length,
+						}))
+					: []
+
+			return {
+				count: values.length,
+				mean: round(values.reduce((a, b) => a + b, 0) / values.length),
+				median: round(median),
+				min: round(sorted[0]),
+				max: round(sorted[sorted.length - 1]),
+				buckets,
+				busiest: buckets.reduce((m, b) => Math.max(m, b.count), 1),
+			}
+		},
+
+		/**
+		 * Promoter and detractor shares, for a question shaped like a Net Promoter Score
+		 * question: a 0-10 scale.
+		 *
+		 * @return {?object} the percentage breakdown, or null when not applicable
+		 */
+		npsBreakdown() {
+			if (this.question.type !== 'linearscale') {
+				return null
+			}
+			const low = this.question.extraSettings?.optionsLowest
+			const high = this.question.extraSettings?.optionsHighest
+			if (low !== 0 || high !== 10) {
+				return null
+			}
+			const values = this.numericValues
+			if (values.length === 0) {
+				return null
+			}
+			const share = (n) => Math.round((n / values.length) * 100)
+			return {
+				promoters: share(values.filter((v) => v >= 9).length),
+				passives: share(values.filter((v) => v >= 7 && v <= 8).length),
+				detractors: share(values.filter((v) => v <= 6).length),
+			}
+		},
+
+		/**
+		 * The Net Promoter Score itself: promoters minus detractors, as whole percentages.
+		 *
+		 * @return {?number} the score from -100 to 100, or null when not applicable
+		 */
+		npsScore() {
+			const breakdown = this.npsBreakdown
+			return breakdown ? breakdown.promoters - breakdown.detractors : null
+		},
+
 		questionTypeLabel() {
 			const label = this.answerTypes[this.question.type].label
 
@@ -725,6 +889,52 @@ export default {
 			position: sticky;
 			inset-inline-start: 0;
 		}
+	}
+}
+
+.numeric-summary {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+
+	&__figures {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 16px;
+		margin: 0;
+
+		div {
+			min-width: 72px;
+		}
+
+		dt {
+			color: var(--color-text-maxcontrast);
+			font-size: 0.9em;
+		}
+
+		dd {
+			font-size: 1.3em;
+			font-weight: bold;
+			margin: 0;
+		}
+	}
+
+	&__bars {
+		li {
+			align-items: center;
+			display: grid;
+			gap: 8px;
+			grid-template-columns: minmax(64px, auto) 1fr;
+		}
+
+		meter {
+			width: 100%;
+		}
+	}
+
+	&__nps strong {
+		font-size: 1.2em;
+		margin-inline: 4px;
 	}
 }
 </style>

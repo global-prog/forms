@@ -663,9 +663,14 @@ class ApiController extends OCSController {
 
 			try {
 				$sourceQuestion = $this->questionMapper->findById($fromId);
-				// Only allow cloning questions that belong to the same form
+				// A question may be copied from ANOTHER form, but only one the user is allowed
+				// to edit. Without that check any question could be read out of any form by
+				// guessing ids, leaking the contents of private forms.
 				if ($sourceQuestion->getFormId() !== $formId) {
-					throw new OCSBadRequestException('Question doesn\'t belong to given form');
+					$this->formsService->getFormIfAllowed(
+						$sourceQuestion->getFormId(),
+						Constants::PERMISSION_EDIT,
+					);
 				}
 				$sourceOptions = $this->optionMapper->findByQuestion($fromId);
 			} catch (IMapperException) {
@@ -677,6 +682,20 @@ class ApiController extends OCSController {
 
 			$questionData = $sourceQuestion->read();
 			unset($questionData['id']);
+			$questionData['formId'] = $formId;
+
+			// Anything pointing at the source form's question ids is meaningless here. Left
+			// alone, an imported display condition would reference a question that does not
+			// exist in this form - and an unmet rule hides its question, so the import would
+			// arrive permanently invisible. A subquestion would likewise be orphaned from
+			// the conditional parent it belonged to.
+			if ($sourceQuestion->getFormId() !== $formId) {
+				$questionData['parentQuestionId'] = null;
+				$questionData['branchId'] = null;
+				$importedSettings = $questionData['extraSettings'] ?? [];
+				unset($importedSettings['displayCondition'], $importedSettings['branching']);
+				$questionData['extraSettings'] = $importedSettings;
+			}
 
 			if ($position !== null) {
 				$position = $this->shiftQuestionsForInsert($allQuestions, $position);
