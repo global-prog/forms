@@ -4,53 +4,22 @@
 -->
 
 <!--
-  part-to-whole donut, for single-choice questions only.
+  part-to-whole ring, for single-choice questions only.
 
-  Only single-choice. A checkbox question must never be drawn as a ring: a respondent may tick
-  several boxes, so the shares sum past 100% and a ring would depict a whole that does not
-  exist. Those questions get ChartBars instead, and the caller enforces that.
+  Only single choice. A checkbox question must never be drawn as a ring: a respondent may
+  tick several boxes, so the shares sum past 100% and the ring would depict a whole that
+  does not exist. Those questions get ChartBars instead, and the caller enforces it.
 
-  The ring is built from one SVG circle per slice using stroke-dasharray, so there is no path
-  arithmetic and no dependency -- the chosen radius makes the circumference exactly 100, which
-  lets a slice's dash length be its percentage directly.
-
-  Identity is carried by the legend, which always lists every slice with its label, count and
-  share as real text. That is what lets the ring stay uncluttered: no leader lines to collide
-  with long option text, and a reader who cannot separate two hues still has the numbers.
+  The legend is HTML rather than the chart library's own, on purpose. It is then ordinary
+  selectable text that wraps and mirrors with the rest of the page, it keeps every count
+  and share readable when a slice is too thin to label, and it means identity is never
+  carried by colour alone -- which is what lets the ring itself stay free of leader lines
+  that would collide with long option text.
 -->
 <template>
 	<div class="chart-donut">
-		<svg
-			class="chart-donut__ring"
-			viewBox="0 0 36 36"
-			role="img"
-			:aria-label="summary">
-			<!-- Track behind the slices, so a rounding shortfall reads as a gap not a hole -->
-			<circle
-				class="chart-donut__track"
-				cx="18"
-				cy="18"
-				:r="RADIUS"
-				fill="none" />
-			<circle
-				v-for="segment in segments"
-				:key="segment.key"
-				:cx="18"
-				:cy="18"
-				:r="RADIUS"
-				fill="none"
-				:stroke="segment.color"
-				:stroke-dasharray="segment.dashArray"
-				:stroke-dashoffset="segment.dashOffset" />
-			<text
-				class="chart-donut__total"
-				x="18"
-				y="18"
-				text-anchor="middle"
-				dominant-baseline="central">
-				{{ total }}
-			</text>
-		</svg>
+		<!-- eslint-disable-next-line vue/no-unused-refs -- read by EchartMixin -->
+		<div v-show="ready" ref="chart" class="chart-donut__ring" role="img" />
 
 		<ol class="chart-donut__legend">
 			<li
@@ -59,7 +28,7 @@
 				class="chart-donut__legend-item">
 				<span
 					class="chart-donut__swatch"
-					:style="{ backgroundColor: segment.color }"
+					:style="{ backgroundColor: segment.colour }"
 					aria-hidden="true" />
 				<span class="chart-donut__legend-label" dir="auto">
 					{{ segment.label }}
@@ -76,121 +45,116 @@
 </template>
 
 <script>
-/**
- * Chosen so the circumference is 100: 2 * PI * r = 100. A slice's dash length is then its
- * percentage with no conversion.
- */
-const RADIUS = 15.9155
+import { donutOption } from './chartOptions.js'
+import EchartMixin from './EchartMixin.js'
 
-/** Slots past this fold into a single grey "Other". Beyond ~7 hues stop being separable. */
+/** Slices past this fold into a single grey "Other". Beyond ~7 hues stop being separable. */
 const MAX_SLICES = 7
-
-/** Surface gap between adjacent slices, in circumference units. */
-const SLICE_GAP = 0.7
 
 export default {
 	name: 'ChartDonut',
 
-	props: {
-		/**
-		 * `{ key?, label, value, muted? }` -- one entry per choice, ordered by the caller.
-		 * A muted entry is drawn grey and takes no categorical slot.
-		 */
-		items: {
-			type: Array,
-			required: true,
-		},
-	},
-
-	setup() {
-		return { RADIUS }
-	},
+	mixins: [EchartMixin],
 
 	computed: {
 		/** @return {number} every response the ring accounts for */
 		total() {
-			return this.items.reduce(
-				(sum, item) => sum + (Number(item.value) || 0),
+			return this.slices.reduce(
+				(sum, slice) => sum + (Number(slice.value) || 0),
 				0,
 			)
 		},
 
 		/**
-		 * Slices to draw, tail folded into "Other" and positioned around the ring.
+		 * The rows actually drawn: empty options dropped, and any tail folded into one
+		 * grey entry rather than given hues that cannot be told apart.
 		 *
-		 * @return {object[]} the slices, each carrying its own dash geometry
+		 * @return {object[]} the slices
 		 */
-		segments() {
+		slices() {
 			const kept = this.items.filter((item) => (Number(item.value) || 0) > 0)
-
-			// Fold the tail rather than inventing more hues for it.
-			let slices = kept
-			if (kept.length > MAX_SLICES) {
-				const head = kept.slice(0, MAX_SLICES - 1)
-				const tail = kept.slice(MAX_SLICES - 1)
-				slices = [
-					...head,
-					{
-						key: '__other__',
-						label: t('forms', 'Other ({count} options)', {
-							count: tail.length,
-						}),
-
-						value: tail.reduce(
-							(sum, item) => sum + (Number(item.value) || 0),
-							0,
-						),
-
-						folded: true,
-					},
-				]
+			if (kept.length <= MAX_SLICES) {
+				return kept
 			}
+			const head = kept.slice(0, MAX_SLICES - 1)
+			const tail = kept.slice(MAX_SLICES - 1)
+			return [
+				...head,
+				{
+					key: '__other__',
+					label: t('forms', 'Other ({count} options)', {
+						count: tail.length,
+					}),
 
-			const total = this.total || 1
-			// Start at twelve o'clock: a quarter turn back along a circumference of 100.
-			let cursor = 25
-			// Counted separately from the loop index, so that a grey slice -- the folded
-			// tail, or "No response", which is an absence rather than a choice -- does not
-			// consume a categorical slot and shift every real choice's hue along one.
-			let slot = 0
+					value: tail.reduce(
+						(sum, item) => sum + (Number(item.value) || 0),
+						0,
+					),
 
-			return slices.map((slice, index) => {
-				const value = Number(slice.value) || 0
-				const share = (100 * value) / total
-				// Only carve a gap out of a slice wide enough to survive losing it.
-				const drawn = share > SLICE_GAP * 2 ? share - SLICE_GAP : share
-				const grey = Boolean(slice.folded || slice.muted)
-				if (!grey) {
-					slot += 1
-				}
-				const segment = {
-					key: slice.key ?? index,
-					label: slice.label,
-					value,
-					percentage: Math.round(share),
-					color: grey
-						? 'var(--chart-muted)'
-						: `var(--chart-series-${slot})`,
-					dashArray: `${drawn} ${100 - drawn}`,
-					dashOffset: cursor,
-				}
-				// Dash offset runs anticlockwise, so subtract to advance clockwise.
-				cursor -= share
-				return segment
-			})
+					muted: true,
+				},
+			]
 		},
 
-		/** @return {string} the whole chart in one sentence, for screen readers */
-		summary() {
-			return this.segments
-				.map((segment) =>
-					t('forms', '{label}: {value} ({percentage}%)', {
-						label: segment.label,
-						value: segment.value,
-						percentage: segment.percentage,
-					}),
-				)
-				.join('. ')
+		/**
+		 * Which categorical slot each slice takes, or null for a grey one.
+		 *
+		 * Computed once and read by both the legend and the ring, so the two can never
+		 * disagree about which colour belongs to which slice. A grey slice -- a folded
+		 * tail, or an unanswered question -- takes no slot, so it does not shift every
+		 * real choice's hue along by one.
+		 *
+		 * @return {Array<?number>} a zero-based slot per slice, null where grey
+		 */
+		slotAssignment() {
+			let slot = 0
+			return this.slices.map((slice) => (slice.muted ? null : slot++))
+		},
+
+		/**
+		 * The legend rows.
+		 *
+		 * Swatches are given the CSS custom property rather than a resolved colour, so
+		 * they follow the theme by themselves and are correct on first paint instead of
+		 * waiting for the chart to report back.
+		 *
+		 * @return {object[]} label, count, share and swatch colour per slice
+		 */
+		segments() {
+			const total = this.total || 1
+			return this.slices.map((slice, index) => {
+				const slot = this.slotAssignment[index]
+				return {
+					key: slice.key ?? index,
+					label: slice.label,
+					value: slice.value,
+					percentage: Math.round((100 * slice.value) / total),
+					colour:
+						slot === null
+							? 'var(--chart-muted)'
+							: `var(--chart-series-${(slot % 7) + 1})`,
+				}
+			})
+		},
+	},
+
+	methods: {
+		/**
+		 * @param {object} theme the resolved palette and chrome colours
+		 * @return {object} the ECharts option
+		 */
+		chartOption(theme) {
+			const slots = theme.series.length || 1
+			return donutOption({
+				slices: this.slices,
+				// The library needs resolved colours; the legend uses the same slots as
+				// CSS custom properties. Both read slotAssignment, so they cannot disagree.
+				colours: this.slotAssignment.map((slot) =>
+					slot === null ? theme.muted : theme.series[slot % slots],
+				),
+				total: this.total,
+				theme,
+			})
 		},
 	},
 }
@@ -204,31 +168,14 @@ export default {
 	gap: 24px;
 
 	&__ring {
-		block-size: 160px;
+		block-size: 190px;
 		flex: 0 0 auto;
-		inline-size: 160px;
-		// The ring is a whole; mirroring it in RTL would say nothing extra.
-		transform: rotate(0deg);
-	}
-
-	&__track {
-		stroke: var(--color-background-dark);
-		stroke-width: 4;
-	}
-
-	circle:not(&__track) {
-		stroke-width: 4;
-	}
-
-	&__total {
-		fill: var(--color-main-text);
-		font-size: 6px;
-		font-weight: 600;
+		inline-size: 190px;
 	}
 
 	&__legend {
 		display: flex;
-		flex: 1 1 220px;
+		flex: 1 1 240px;
 		flex-direction: column;
 		gap: 6px;
 		list-style: none;
@@ -248,7 +195,7 @@ export default {
 		border-radius: 2px;
 		flex: 0 0 auto;
 		inline-size: 10px;
-		// Nudge down to sit on the text baseline rather than above it.
+		// Sit on the text baseline rather than above it.
 		transform: translateY(1px);
 	}
 
