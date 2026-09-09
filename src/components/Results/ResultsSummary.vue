@@ -26,12 +26,27 @@
 					)
 				}}
 			</p>
-			<ChartBars :items="rankingBars" :max="maxBordaScore" hidePercentage />
+			<ChartFormPicker
+				v-if="chartForms.length > 1"
+				v-model="chartForm"
+				:forms="chartForms"
+				:questionId="question.id" />
+			<ChartFigure
+				:items="rankingBars"
+				:form="chartForm"
+				:max="maxBordaScore"
+				hidePercentage />
 		</div>
 
 		<!-- Numeric summary. Number and rating questions previously showed no summary at
-		     all, because the option-bar view only covers types with predefined options. -->
-		<div v-if="numericStats" class="question-summary__statistic numeric-summary">
+		     all, because the option-bar view only covers types with predefined options.
+
+		     Chained to the branch above rather than starting afresh: ranking is a
+		     predefined type, so an unchained test here let the option-count branch below
+		     match a ranking question as well and draw it a second, meaningless chart. -->
+		<div
+			v-else-if="numericStats"
+			class="question-summary__statistic numeric-summary">
 			<dl class="numeric-summary__figures">
 				<div>
 					<dt>{{ t('forms', 'Average') }}</dt>
@@ -55,12 +70,19 @@
 				</div>
 			</dl>
 
-			<ChartBars
-				v-if="numericStats.buckets.length"
-				class="numeric-summary__bars"
-				:items="bucketBars"
-				:max="numericStats.busiest"
-				hidePercentage />
+			<template v-if="numericStats.buckets.length">
+				<ChartFormPicker
+					v-if="chartForms.length > 1"
+					v-model="chartForm"
+					:forms="chartForms"
+					:questionId="question.id" />
+				<ChartFigure
+					class="numeric-summary__bars"
+					:items="bucketBars"
+					:form="chartForm"
+					:max="numericStats.busiest"
+					hidePercentage />
+			</template>
 
 			<p v-if="npsScore !== null" class="numeric-summary__nps">
 				{{ t('forms', 'Net Promoter Score') }}:
@@ -86,33 +108,37 @@
 		<div
 			v-else-if="answerTypes[question.type].predefined"
 			class="question-summary__statistic">
-			<div v-if="canShowRing" class="question-summary__chart-form">
-				<NcCheckboxRadioSwitch
-					v-model="chartForm"
-					type="button"
-					value="bars"
-					:name="`chartForm_${question.id}`">
-					{{ t('forms', 'Bars') }}
-				</NcCheckboxRadioSwitch>
-				<NcCheckboxRadioSwitch
-					v-model="chartForm"
-					type="button"
-					value="ring"
-					:name="`chartForm_${question.id}`">
-					{{ t('forms', 'Ring') }}
-				</NcCheckboxRadioSwitch>
-			</div>
-			<ChartDonut
-				v-if="canShowRing && chartForm === 'ring'"
-				:items="optionBars" />
-			<ChartBars v-else :items="optionBars" :max="submissions.length" />
+			<ChartFormPicker
+				v-if="chartForms.length > 1"
+				v-model="chartForm"
+				:forms="chartForms"
+				:questionId="question.id" />
+			<ChartDonut v-if="chartForm === 'ring'" :items="optionBars" />
+			<ChartFigure
+				v-else
+				:items="optionBars"
+				:form="chartForm"
+				:max="submissions.length" />
 		</div>
 
-		<ChartHeatmap
+		<div
 			v-else-if="question.type === 'grid'"
-			:rows="gridHeatmap.rows"
-			:columns="gridHeatmap.columns"
-			:cells="gridHeatmap.cells" />
+			class="question-summary__statistic">
+			<ChartFormPicker
+				v-if="chartForms.length > 1"
+				v-model="chartForm"
+				:forms="chartForms"
+				:questionId="question.id" />
+			<ChartStacked
+				v-if="chartForm === 'stacked'"
+				:items="gridStacked"
+				:columns="gridHeatmap.columns" />
+			<ChartHeatmap
+				v-else
+				:rows="gridHeatmap.rows"
+				:columns="gridHeatmap.columns"
+				:cells="gridHeatmap.cells" />
+		</div>
 
 		<!-- Text answers are simply listed for now, could be automatically grouped in the future -->
 		<ul v-else class="question-summary__text">
@@ -149,22 +175,26 @@
 <script>
 import IconFile from '@material-symbols/svg-400/outlined/draft.svg?raw'
 import { generateUrl } from '@nextcloud/router'
-import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
-import ChartBars from './Charts/ChartBars.vue'
 import ChartDonut from './Charts/ChartDonut.vue'
+import ChartFigure from './Charts/ChartFigure.vue'
+import ChartFormPicker from './Charts/ChartFormPicker.vue'
 import ChartHeatmap from './Charts/ChartHeatmap.vue'
+import ChartStacked from './Charts/ChartStacked.vue'
 import answerTypes from '../../models/AnswerTypes.js'
 import { GridCellType, OptionType } from '../../models/Constants.ts'
+import { readChartForm, writeChartForm } from '../../utils/ChartPreferences.js'
+import { chartFormsFor } from './Charts/chartOptions.js'
 
 export default {
 	name: 'ResultsSummary',
 
 	components: {
-		ChartBars,
 		ChartDonut,
+		ChartFigure,
+		ChartFormPicker,
 		ChartHeatmap,
-		NcCheckboxRadioSwitch,
+		ChartStacked,
 		NcIconSvgWrapper,
 	},
 
@@ -189,13 +219,59 @@ export default {
 	data() {
 		return {
 			answerTypes,
-			// Bars by default even where a ring is allowed: bar labels are ordinary text
-			// that wraps, which long option text and right-to-left scripts both need.
+			// Replaced in created(), once the computed properties exist to say which
+			// forms this particular question may honestly be drawn as.
 			chartForm: 'bars',
 		}
 	},
 
 	computed: {
+		/**
+		 * The chart forms this question may honestly be drawn as.
+		 *
+		 * @return {string[]} the allowed forms, best first
+		 */
+		chartForms() {
+			return chartFormsFor(this.chartShape).forms
+		},
+
+		/**
+		 * What the summary is drawing, in the terms the matrix is written in.
+		 *
+		 * @return {object} the question's shape
+		 */
+		chartShape() {
+			return {
+				type: this.question.type,
+				isNumeric: this.numericStats !== null,
+				isPredefined: this.answerTypes[this.question.type].predefined,
+				isNumericGrid:
+					this.question.extraSettings?.questionType
+					=== GridCellType.Number,
+
+				// Only asked of a grid. Every other type reaches this through a computed
+				// that assumes the question has options, which a text question has not.
+				columnCount:
+					this.question.type === 'grid' ? this.gridColumns.length : 0,
+			}
+		},
+
+		/**
+		 * The grid arranged as one stack per row.
+		 *
+		 * @return {object[]} a row per grid row, its counts in column order
+		 */
+		gridStacked() {
+			return this.gridRows.map((row) => ({
+				key: row.id,
+				label: row.text,
+				values: this.gridColumns.map(
+					(column) =>
+						this.gridValue[row.id]?.[column.id]?.answersCount ?? 0,
+				),
+			}))
+		},
+
 		/**
 		 * Every numeric answer given to this question.
 		 *
@@ -506,18 +582,6 @@ export default {
 		},
 
 		/**
-		 * Whether a ring would be a truthful depiction of this question.
-		 *
-		 * Single choice only. A checkbox question lets one respondent tick several boxes,
-		 * so its shares sum past 100% and there is no whole for a ring to divide.
-		 *
-		 * @return {boolean} true when the ring form may be offered
-		 */
-		canShowRing() {
-			return ['multiple_unique', 'dropdown'].includes(this.question.type)
-		},
-
-		/**
 		 * The grid matrix arranged for the heatmap.
 		 *
 		 * @return {object} rows, columns and cells, in the shape ChartHeatmap expects
@@ -794,6 +858,39 @@ export default {
 			return answersModels
 		},
 	},
+
+	watch: {
+		chartForm(form) {
+			writeChartForm(this.question.id, form)
+		},
+
+		// A summary is a list of questions and Vue may reuse this instance for a
+		// different one, which would otherwise keep the previous question's choice --
+		// and that choice can easily be one this question must not be drawn as.
+		'question.id': function () {
+			this.chartForm = this.initialChartForm()
+		},
+	},
+
+	created() {
+		this.chartForm = this.initialChartForm()
+	},
+
+	methods: {
+		/**
+		 * Which form to open this question in.
+		 *
+		 * Whatever this reader last chose for it, provided that form is still one the
+		 * question may be drawn as -- a question can be edited into a different shape
+		 * after the choice was made -- and otherwise the form that suits its data best.
+		 *
+		 * @return {string} the chart form to start with
+		 */
+		initialChartForm() {
+			const { forms, preferred } = chartFormsFor(this.chartShape)
+			return readChartForm(this.question.id, forms) ?? preferred ?? 'bars'
+		},
+	},
 }
 </script>
 
@@ -882,13 +979,6 @@ export default {
 
 	&__statistic-percentage {
 		color: var(--color-text-maxcontrast);
-	}
-
-	&__chart-form {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 4px;
-		margin-block-end: 8px;
 	}
 
 	&__text {

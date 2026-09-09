@@ -8,7 +8,7 @@
 
   Only single choice. A checkbox question must never be drawn as a ring: a respondent may
   tick several boxes, so the shares sum past 100% and the ring would depict a whole that
-  does not exist. Those questions get ChartBars instead, and the caller enforces it.
+  does not exist. Those questions get ChartFigure instead, and the caller enforces it.
 
   The legend is HTML rather than the chart library's own, on purpose. It is then ordinary
   selectable text that wraps and mirrors with the rest of the page, it keeps every count

@@ -35,6 +35,9 @@ export function loadEcharts() {
 			])
 			core.use([
 				charts.BarChart,
+				// The stacked grid view is a bar series too, so it needs nothing
+				// further; the line view does.
+				charts.LineChart,
 				charts.PieChart,
 				components.GridComponent,
 				components.TooltipComponent,
