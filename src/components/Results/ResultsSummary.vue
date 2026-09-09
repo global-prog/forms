@@ -28,9 +28,10 @@
 			</p>
 			<ChartFormPicker
 				v-if="chartForms.length > 1"
-				v-model="chartForm"
+				:modelValue="chartForm"
 				:forms="chartForms"
-				:questionId="question.id" />
+				:questionId="question.id"
+				@update:modelValue="onChartFormChosen" />
 			<ChartFigure
 				:items="rankingBars"
 				:form="chartForm"
@@ -73,9 +74,10 @@
 			<template v-if="numericStats.buckets.length">
 				<ChartFormPicker
 					v-if="chartForms.length > 1"
-					v-model="chartForm"
+					:modelValue="chartForm"
 					:forms="chartForms"
-					:questionId="question.id" />
+					:questionId="question.id"
+					@update:modelValue="onChartFormChosen" />
 				<ChartFigure
 					class="numeric-summary__bars"
 					:items="bucketBars"
@@ -110,9 +112,10 @@
 			class="question-summary__statistic">
 			<ChartFormPicker
 				v-if="chartForms.length > 1"
-				v-model="chartForm"
+				:modelValue="chartForm"
 				:forms="chartForms"
-				:questionId="question.id" />
+				:questionId="question.id"
+				@update:modelValue="onChartFormChosen" />
 			<ChartDonut v-if="chartForm === 'ring'" :items="optionBars" />
 			<ChartFigure
 				v-else
@@ -126,9 +129,10 @@
 			class="question-summary__statistic">
 			<ChartFormPicker
 				v-if="chartForms.length > 1"
-				v-model="chartForm"
+				:modelValue="chartForm"
 				:forms="chartForms"
-				:questionId="question.id" />
+				:questionId="question.id"
+				@update:modelValue="onChartFormChosen" />
 			<ChartStacked
 				v-if="chartForm === 'stacked'"
 				:items="gridStacked"
@@ -860,8 +864,16 @@ export default {
 	},
 
 	watch: {
-		chartForm(form) {
-			writeChartForm(this.question.id, form)
+		// The list of honest forms is not fixed for the life of the component. It is
+		// derived from the answers, and answers can be deleted while the summary is on
+		// screen -- deleting the last numeric answer to a scale question turns it from
+		// an ordered distribution into a plain list of options, and a line drawn across
+		// a list of options is the very thing the matrix exists to refuse. So the
+		// current choice is re-checked whenever the list changes, not only when made.
+		chartForms(forms) {
+			if (!forms.includes(this.chartForm)) {
+				this.chartForm = chartFormsFor(this.chartShape).preferred ?? 'bars'
+			}
 		},
 
 		// A summary is a list of questions and Vue may reuse this instance for a
@@ -889,6 +901,22 @@ export default {
 		initialChartForm() {
 			const { forms, preferred } = chartFormsFor(this.chartShape)
 			return readChartForm(this.question.id, forms) ?? preferred ?? 'bars'
+		},
+
+		/**
+		 * Draw and remember a form the reader actually asked for.
+		 *
+		 * Only a choice made here is stored. Deliberately not a watcher on the value:
+		 * the value is also set when the component is created and when the honest forms
+		 * change under it, and storing those would record a default as a preference --
+		 * on every question, on every visit -- which would then outrank any later
+		 * improvement to what a question opens as.
+		 *
+		 * @param {string} form the form the reader picked
+		 */
+		onChartFormChosen(form) {
+			this.chartForm = form
+			writeChartForm(this.question.id, form)
 		},
 	},
 }

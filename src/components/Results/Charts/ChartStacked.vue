@@ -128,9 +128,12 @@ export default {
 				columns: this.columns,
 				// One colour per column rather than per row, so the mixin's row-wise
 				// helper is not what is wanted here.
-				colours: this.columns.map(
-					(column, index) => theme.series[index % theme.series.length],
-				),
+				colours: this.columns.map((column, index) => {
+					// readChartTheme returns an empty palette if the custom properties
+					// do not resolve, and a remainder by zero is NaN, not a colour.
+					const slots = theme.series.length || 1
+					return theme.series[index % slots]
+				}),
 
 				theme,
 				width,
