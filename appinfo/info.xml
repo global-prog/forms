@@ -17,7 +17,20 @@
 - **🙋 Get involved!** We have lots of stuff planned like more question types, collaboration on forms, [and much more](https://github.com/nextcloud/forms/milestones)!
 	]]></description>
 
-	<version>5.4.0.2</version>
+	<!--
+	  Version deliberately pinned above the 5.x line.
+
+	  This app is a fork carrying features that upstream does not have. The app store
+	  offers an update whenever its version is higher than the installed one, and applying
+	  such an update would silently replace this build with stock Forms: the added columns
+	  are nullable so the data survives, but conditional logic, sections, quiz mode and the
+	  rest would stop working.
+
+	  Keeping the version above any 5.x release means the store never offers one. An
+	  upstream 6.0 would still supersede this, at which point the fork should be rebased
+	  onto it deliberately rather than replaced by accident.
+	-->
+	<version>5.99.0</version>
 	<licence>AGPL-3.0-or-later</licence>
 
 	<author>Affan Hussain</author>
