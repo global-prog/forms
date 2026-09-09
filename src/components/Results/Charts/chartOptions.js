@@ -57,7 +57,9 @@ export function chartFormsFor({
 		// An ordered scale: a line is meaningful here and nowhere else.
 		return { forms: ['columns', 'bars', 'line'], preferred: 'columns' }
 	}
-	if (type === 'grid' || type === 'likert') {
+	// Note "likert" is not tested here and must not be: it is an entry in the add-question
+	// menu rather than a stored type, and a question made from it is stored as a grid.
+	if (type === 'grid') {
 		// Stacking is adding up, so it needs cells that can be added up. A grid of
 		// numbers holds an average per cell, and a stack of averages is not a quantity
 		// anyone has -- so that grid keeps the heatmap and is offered nothing else.
@@ -70,7 +72,13 @@ export function chartFormsFor({
 		}
 		return { forms: ['heatmap', 'stacked'], preferred: 'heatmap' }
 	}
-	if (type === 'multiple') {
+	// A checkbox question, and a conditional one. The checkbox case is the plain one: a
+	// respondent may tick several boxes. The conditional case is a question of evidence
+	// rather than of shape -- what one records depends on its trigger -- and a ring is
+	// only offered where the whole it divides is known to exist, so it is withheld until
+	// that is established. Withholding a chart that would have been fine is the cheaper
+	// mistake of the two by a wide margin.
+	if (type === 'multiple' || type === 'conditional') {
 		return { forms: ['bars', 'columns'], preferred: 'bars' }
 	}
 	if (isPredefined) {
