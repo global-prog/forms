@@ -201,11 +201,36 @@ class Form extends Entity {
 	 * Recognised keys:
 	 *   notifyOwner       bool   email the owner on every new submission
 	 *   notifyEmails      string extra recipients, comma separated
+	 *   language          string pin the form to a language, or '' to follow the reader
+	 *
+	 * Malformed JSON returns no settings rather than throwing. This is read on every
+	 * form load, including the public submit page, so a single bad row must not make a
+	 * form unopenable -- the worst case is that its optional settings are ignored.
 	 *
 	 * @return array the decoded settings
 	 */
 	public function getSettings(): array {
-		return json_decode($this->getSettingsJson() ?: '{}', true, 512, JSON_THROW_ON_ERROR);
+		try {
+			$settings = json_decode($this->getSettingsJson() ?: '{}', true, 512, JSON_THROW_ON_ERROR);
+		} catch (\JsonException $e) {
+			return [];
+		}
+		return is_array($settings) ? $settings : [];
+	}
+
+	/**
+	 * The language this form is pinned to, or '' to follow whoever is reading it.
+	 *
+	 * An unrecognised value reads as the default rather than being passed through, so a
+	 * stored value that is no longer supported degrades to following the reader.
+	 *
+	 * @return string a supported language code, or ''
+	 */
+	public function getLanguage(): string {
+		$language = $this->getSettings()['language'] ?? Constants::FORM_LANGUAGE_DEFAULT;
+		return is_string($language) && in_array($language, Constants::FORM_LANGUAGES, true)
+			? $language
+			: Constants::FORM_LANGUAGE_DEFAULT;
 	}
 
 	/**

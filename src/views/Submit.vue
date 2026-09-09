@@ -27,8 +27,12 @@
 		</NcEmptyContent>
 
 		<template v-else>
-			<!-- Forms title & description-->
-			<header>
+			<!-- Forms title & description. dir/lang come from the form's own language
+			     setting, because a form shared by link is usually opened by someone who
+			     is not signed in -- the server cannot know their language, so without
+			     this an Arabic form renders left to right. -->
+			<!-- eslint-disable-next-line vue/no-unused-refs -->
+			<header :dir="formDirection" :lang="formLanguage || undefined">
 				<!-- Optional per-form banner. Decorative, so it carries an empty alt and is
 				     hidden from screen readers; the form title conveys the meaning. -->
 				<img
@@ -84,6 +88,8 @@
 					success
 					|| (!form.canSubmit && !isMaxSubmissionsReached && !submissionId)
 				"
+				:dir="formDirection"
+				:lang="formLanguage || undefined"
 				class="forms-emptycontent"
 				:name="
 					form.submissionMessage
@@ -158,7 +164,12 @@
 			</NcEmptyContent>
 
 			<!-- Questions list -->
-			<form v-else ref="form" @submit.prevent="onSubmit">
+			<form
+				v-else
+				ref="form"
+				:dir="formDirection"
+				:lang="formLanguage || undefined"
+				@submit.prevent="onSubmit">
 				<ul>
 					<component
 						:is="answerTypes[question.type].component"
@@ -192,11 +203,16 @@
 							})
 						}}
 					</span>
-					<progress
-						class="form-pagination__progress"
-						:aria-label="t('forms', 'Progress through the form')"
-						:value="currentPage + 1"
-						:max="pageCount" />
+					<!-- Decorative: the status line above already states the page in
+					     words, which is what a screen reader announces. A native
+					     <progress> was replaced because its fill direction under
+					     right-to-left is browser-dependent, whereas a logical inline
+					     size grows from the reading start edge in both directions. -->
+					<div class="form-pagination__track" aria-hidden="true">
+						<div
+							class="form-pagination__fill"
+							:style="{ inlineSize: `${progressPercent}%` }" />
+					</div>
 				</div>
 				<div class="form-buttons">
 					<NcButton
@@ -297,6 +313,7 @@ import axios from '@nextcloud/axios'
 import { showError } from '@nextcloud/dialogs'
 import { emit } from '@nextcloud/event-bus'
 import { loadState } from '@nextcloud/initial-state'
+import { isRTL } from '@nextcloud/l10n'
 import moment from '@nextcloud/moment'
 import { generateOcsUrl } from '@nextcloud/router'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
@@ -423,6 +440,47 @@ export default {
 	},
 
 	computed: {
+		/**
+		 * How far through the pages the respondent is.
+		 *
+		 * @return {number} a percentage, 0 to 100
+		 */
+		progressPercent() {
+			if (this.pageCount <= 1) {
+				return 100
+			}
+			return Math.round((100 * (this.currentPage + 1)) / this.pageCount)
+		},
+
+		/**
+		 * The language this form is pinned to, or '' to follow whoever is reading it.
+		 *
+		 * @return {string} a language code, or ''
+		 */
+		formLanguage() {
+			return this.form?.settings?.language || ''
+		},
+
+		/**
+		 * Reading direction to impose on the form's own content.
+		 *
+		 * Undefined when no language is pinned, so the content inherits the page
+		 * direction instead of being nailed to the instance default.
+		 *
+		 * Applied to the form's blocks rather than to the document, so that an author
+		 * previewing an Arabic form does not have the surrounding interface flip with it.
+		 * `isRTL` comes from the l10n library so the list of right-to-left languages stays
+		 * in one place rather than being restated here.
+		 *
+		 * @return {string|undefined} 'rtl', 'ltr', or undefined to inherit
+		 */
+		formDirection() {
+			if (!this.formLanguage) {
+				return undefined
+			}
+			return isRTL(this.formLanguage) ? 'rtl' : 'ltr'
+		},
+
 		/**
 		 * the answers actually submitted.
 		 *
@@ -1506,7 +1564,28 @@ export default {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 12px;
-	margin: 8px 0 4px;
+	margin-block: 8px 4px;
+
+	&__track {
+		background-color: var(--color-background-dark);
+		block-size: 6px;
+		border-radius: 3px;
+		flex: 1 1 120px;
+		overflow: hidden;
+	}
+
+	&__fill {
+		background-color: var(--color-primary-element);
+		block-size: 100%;
+		// Logical, so the bar grows from the reading start edge in both directions.
+		border-end-end-radius: 3px;
+		border-start-end-radius: 3px;
+		transition: inline-size 0.2s ease-in-out;
+
+		@media (prefers-reduced-motion: reduce) {
+			transition: none;
+		}
+	}
 }
 
 .form-pagination__label {

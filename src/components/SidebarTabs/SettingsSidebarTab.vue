@@ -105,6 +105,31 @@
 				}}
 			</NcButton>
 		</NcColorPicker>
+		<div class="settings-language">
+			<label for="forms-settings__language" class="settings-language__label">
+				{{ t('forms', 'Form language') }}
+			</label>
+			<NcSelect
+				inputId="forms-settings__language"
+				aria-describedby="forms-settings__language-hint"
+				class="settings-language__select"
+				:clearable="false"
+				:disabled="formArchived || locked"
+				label="label"
+				:modelValue="selectedLanguageOption"
+				:options="languageOptions"
+				:searchable="false"
+				trackBy="id"
+				@update:modelValue="onLanguageChange" />
+		</div>
+		<p id="forms-settings__language-hint" class="settings-hint">
+			{{
+				t(
+					'forms',
+					'A form shared by link is often opened by people who are not signed in, so their language is unknown and the form falls back to this instance default. Pinning a language here sets the reading direction for every respondent.',
+				)
+			}}
+		</p>
 		<NcCheckboxRadioSwitch
 			:modelValue="notifyOwner"
 			:disabled="formArchived || locked"
@@ -425,6 +450,39 @@ export default {
 			return this.form.settings || {}
 		},
 
+		/**
+		 * The languages a form may be pinned to.
+		 *
+		 * Named in their own script, so a respondent recognises their language in the
+		 * list without having to read it in another one.
+		 *
+		 * @return {object[]} the options
+		 */
+		languageOptions() {
+			return [
+				{
+					id: '',
+					label: t('forms', 'Follow the language of whoever opens it'),
+				},
+				{ id: 'ar', label: 'العربية' },
+				{ id: 'en', label: 'English' },
+			]
+		},
+
+		/** @return {string} the language this form is pinned to, or '' to follow the reader */
+		formLanguage() {
+			return this.formSettings.language || ''
+		},
+
+		/** @return {object} the option matching the stored language */
+		selectedLanguageOption() {
+			return (
+				this.languageOptions.find(
+					(option) => option.id === this.formLanguage,
+				) ?? this.languageOptions[0]
+			)
+		},
+
 		/** @return {boolean} whether responses are graded against an answer key */
 		quizMode() {
 			return this.formSettings.quizMode === true
@@ -730,6 +788,15 @@ export default {
 		},
 
 		/**
+		 * @param {?object} option the chosen language, or null to follow the reader
+		 */
+		onLanguageChange(option) {
+			// null rather than '': setSettings() drops empty values, so clearing the pin
+			// removes the key instead of storing a blank one.
+			this.updateSettings({ language: option?.id || null })
+		},
+
+		/**
 		 * @param {boolean} checked grade responses against an answer key
 		 */
 		onQuizModeChange(checked) {
@@ -963,6 +1030,24 @@ export default {
 .settings-hint {
 	color: var(--color-text-maxcontrast);
 	padding-inline-start: 16px;
+}
+
+.settings-language {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-block: 8px;
+	padding-inline-start: 16px;
+
+	&__label {
+		color: var(--color-text-maxcontrast);
+	}
+
+	&__select {
+		// The endonyms are short, but the "follow the reader" option is a sentence.
+		min-inline-size: 0;
+		width: 100%;
+	}
 }
 
 .sidebar-tabs__content {

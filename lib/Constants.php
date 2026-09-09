@@ -451,4 +451,46 @@ class Constants {
 	public const UNSUBMITTED_FILES_FOLDER = self::FILES_FOLDER . '/unsubmitted';
 
 	public const FILES_FOLDER = 'Forms';
+
+	/**
+	 * Languages a form may be pinned to.
+	 *
+	 * A form shared by public link is usually opened by people who are not logged in, so
+	 * the server cannot know their language and falls back to the instance default. A form
+	 * written in Arabic then renders left to right, which is the problem this solves.
+	 *
+	 * The empty value means "follow whoever is reading it", and stays the default: that is
+	 * the right behaviour for a form shared inside the instance, where the reader's own
+	 * language is known and is the one they want.
+	 */
+	public const FORM_LANGUAGE_DEFAULT = '';
+
+	public const FORM_LANGUAGES = [
+		self::FORM_LANGUAGE_DEFAULT,
+		'ar',
+		'en',
+	];
+
+	/**
+	 * Every setting that may be stored in forms_v2_forms.settings_json, and its type.
+	 *
+	 * The column is free-form JSON, and the form update endpoint passes whatever it is
+	 * given straight to a setter, so without this list any client able to edit a form
+	 * could write arbitrary keys and unbounded values into it.
+	 */
+	public const FORM_SETTINGS = [
+		'quizMode' => 'boolean',
+		'shuffleQuestions' => 'boolean',
+		'headerImage' => 'string',
+		'accentColor' => 'string',
+		'notifyOwner' => 'boolean',
+		'notifyEmails' => 'string',
+		'language' => 'string',
+	];
+
+	/**
+	 * Cap on any single string held in settings_json. Generous for an address or a list
+	 * of recipients, and small enough that the column cannot be used as storage.
+	 */
+	public const FORM_SETTINGS_MAX_STRING = 2048;
 }

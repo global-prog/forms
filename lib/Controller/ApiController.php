@@ -404,6 +404,14 @@ class ApiController extends OCSController {
 			}
 		}
 
+		// settings_json is a free-form column and the loop below hands each key straight
+		// to its setter, so this is the only check between a client and its contents.
+		if (array_key_exists('settings', $keyValuePairs)
+			&& (!is_array($keyValuePairs['settings'])
+				|| !$this->formsService->areSettingsValid($keyValuePairs['settings']))) {
+			throw new OCSBadRequestException('Invalid settings, will not update.');
+		}
+
 		// Create FormEntity with given Params & Id.
 		foreach ($keyValuePairs as $key => $value) {
 			$method = 'set' . ucfirst($key);

@@ -145,7 +145,7 @@
 						<!-- Back to top-level button -->
 						<NcActionButton @click="isDownloadActionOpened = false">
 							<template #icon>
-								<NcIconSvgWrapper :svg="IconChevronLeft" />
+								<NcIconSvgWrapper :svg="IconBack" />
 							</template>
 							{{ t('forms', 'Download') }}
 						</NcActionButton>
@@ -286,7 +286,6 @@
 <script>
 import IconPoll from '@material-symbols/svg-400/outlined/bar_chart.svg?raw'
 import IconCancel from '@material-symbols/svg-400/outlined/block.svg?raw'
-import IconChevronLeft from '@material-symbols/svg-400/outlined/chevron_left.svg?raw'
 import IconFileDelimited from '@material-symbols/svg-400/outlined/csv.svg?raw'
 import IconDelete from '@material-symbols/svg-400/outlined/delete.svg?raw'
 import IconDownload from '@material-symbols/svg-400/outlined/download.svg?raw'
@@ -327,6 +326,7 @@ import PermissionTypes from '../mixins/PermissionTypes.js'
 import ViewsMixin from '../mixins/ViewsMixin.js'
 import answerTypes from '../models/AnswerTypes.js'
 import { FormState, INPUT_DEBOUNCE_MS } from '../models/Constants.ts'
+import { IconBack } from '../utils/DirectionalIcons.js'
 import logger from '../utils/Logger.js'
 import OcsResponse2Data from '../utils/OcsResponse2Data.js'
 import SetWindowTitle from '../utils/SetWindowTitle.js'
@@ -381,7 +381,7 @@ export default {
 			// non reactive props
 			responseViews,
 
-			IconChevronLeft,
+			IconBack,
 			IconDelete,
 			IconDownload,
 			IconFileDelimited,

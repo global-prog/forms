@@ -895,6 +895,51 @@ class FormsService {
 	 * @param string $questionType the question type
 	 * @return bool if the settings are valid
 	 */
+	/**
+	 * Check the form-level settings before they are written to settings_json.
+	 *
+	 * The update endpoint hands each key straight to its setter, so this is the only
+	 * thing standing between a client and arbitrary content in that column. Unknown keys
+	 * are rejected rather than dropped: silently discarding half a request would leave
+	 * the caller believing a setting had been saved.
+	 *
+	 * @param array $settings the settings to check
+	 * @return bool true when every key is recognised and well typed
+	 */
+	public function areSettingsValid(array $settings): bool {
+		foreach ($settings as $key => $value) {
+			if (!array_key_exists($key, Constants::FORM_SETTINGS)) {
+				$this->logger->debug('Unknown form setting: {key}', ['key' => $key]);
+				return false;
+			}
+
+			// An unset option arrives as null and is dropped by setSettings().
+			if ($value === null) {
+				continue;
+			}
+
+			if (gettype($value) !== Constants::FORM_SETTINGS[$key]) {
+				$this->logger->debug('Wrong type for form setting {key}', ['key' => $key]);
+				return false;
+			}
+
+			if (is_string($value) && strlen($value) > Constants::FORM_SETTINGS_MAX_STRING) {
+				$this->logger->debug('Form setting {key} is too long', ['key' => $key]);
+				return false;
+			}
+		}
+
+		if (isset($settings['language'])
+			&& !in_array($settings['language'], Constants::FORM_LANGUAGES, true)) {
+			$this->logger->debug('Unsupported form language: {language}', [
+				'language' => $settings['language'],
+			]);
+			return false;
+		}
+
+		return true;
+	}
+
 	public function areExtraSettingsValid(array $extraSettings, string $questionType): bool {
 		if (count($extraSettings) === 0) {
 			return true;

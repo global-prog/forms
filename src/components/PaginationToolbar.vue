@@ -12,7 +12,7 @@
 				:aria-label="t('forms', 'Go to first page')"
 				@click="pageNumber = 1">
 				<template #icon>
-					<NcIconSvgWrapper :svg="PageFirstIcon" />
+					<NcIconSvgWrapper :svg="IconFirst" />
 				</template>
 			</NcButton>
 			<NcButton
@@ -21,7 +21,7 @@
 				:aria-label="t('forms', 'Go to previous page')"
 				@click="pageNumber--">
 				<template #icon>
-					<NcIconSvgWrapper :svg="IconChevronLeft" />
+					<NcIconSvgWrapper :svg="IconBack" />
 				</template>
 			</NcButton>
 			<div class="page-number">
@@ -47,7 +47,7 @@
 				:aria-label="t('forms', 'Go to next page')"
 				@click="pageNumber++">
 				<template #icon>
-					<NcIconSvgWrapper :svg="IconChevronRight" />
+					<NcIconSvgWrapper :svg="IconForward" />
 				</template>
 			</NcButton>
 			<NcButton
@@ -56,7 +56,7 @@
 				:aria-label="t('forms', 'Go to last page')"
 				@click="pageNumber = totalPages">
 				<template #icon>
-					<NcIconSvgWrapper :svg="PageLastIcon" />
+					<NcIconSvgWrapper :svg="IconLast" />
 				</template>
 			</NcButton>
 		</div>
@@ -64,13 +64,15 @@
 </template>
 
 <script>
-import IconChevronLeft from '@material-symbols/svg-400/outlined/chevron_left.svg?raw'
-import IconChevronRight from '@material-symbols/svg-400/outlined/chevron_right.svg?raw'
-import PageFirstIcon from '@material-symbols/svg-400/outlined/first_page.svg?raw'
-import PageLastIcon from '@material-symbols/svg-400/outlined/last_page.svg?raw'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
+import {
+	IconBack,
+	IconFirst,
+	IconForward,
+	IconLast,
+} from '../utils/DirectionalIcons.js'
 
 export default {
 	name: 'PaginationToolbar',
@@ -101,10 +103,10 @@ export default {
 
 	setup() {
 		return {
-			IconChevronLeft,
-			IconChevronRight,
-			PageFirstIcon,
-			PageLastIcon,
+			IconBack,
+			IconFirst,
+			IconForward,
+			IconLast,
 		}
 	},
 

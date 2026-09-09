@@ -38,7 +38,7 @@
 				class="question-menu__question"
 				@click="activeQuestionType = null">
 				<template #icon>
-					<NcIconSvgWrapper :svg="IconChevronLeft" />
+					<NcIconSvgWrapper :svg="IconBack" />
 				</template>
 				{{ t('forms', 'Grid') }}
 			</NcActionButton>
@@ -63,12 +63,12 @@
 
 <script>
 import IconPlus from '@material-symbols/svg-400/outlined/add.svg?raw'
-import IconChevronLeft from '@material-symbols/svg-400/outlined/chevron_left.svg?raw'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import { IconBack } from '../utils/DirectionalIcons.js'
 
 export default {
 	name: 'AddQuestionMenu',
@@ -98,7 +98,7 @@ export default {
 
 	setup() {
 		return {
-			IconChevronLeft,
+			IconBack,
 			IconPlus,
 		}
 	},

@@ -51,7 +51,7 @@
 
 				<NcActionButton @click="allowedFileTypesDialogOpened = false">
 					<template #icon>
-						<NcIconSvgWrapper :svg="IconChevronLeft" />
+						<NcIconSvgWrapper :svg="IconBack" />
 					</template>
 					{{ t('forms', 'Allow only specific file types') }}
 				</NcActionButton>
@@ -153,7 +153,6 @@
 </template>
 
 <script>
-import IconChevronLeft from '@material-symbols/svg-400/outlined/chevron_left.svg?raw'
 import IconDelete from '@material-symbols/svg-400/outlined/delete.svg?raw'
 import IconFile from '@material-symbols/svg-400/outlined/draft.svg?raw'
 import IconFileDocumentAlert from '@material-symbols/svg-400/outlined/quick_reference.svg?raw'
@@ -175,6 +174,7 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import Question from './Question.vue'
 import QuestionMixin from '../../mixins/QuestionMixin.js'
 import fileTypes from '../../models/FileTypes.js'
+import { IconBack } from '../../utils/DirectionalIcons.js'
 import logger from '../../utils/Logger.js'
 import OcsResponse2Data from '../../utils/OcsResponse2Data.js'
 
@@ -213,7 +213,7 @@ export default {
 
 	setup() {
 		return {
-			IconChevronLeft,
+			IconBack,
 			IconDelete,
 			IconFile,
 			IconFileDocumentAlert,
