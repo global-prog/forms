@@ -31,10 +31,14 @@
 	  onto it deliberately rather than replaced by accident.
 
 	  BUMP THE PATCH NUMBER ON EVERY DEPLOY. Nextcloud does no work when the version is
-	  unchanged: `occ upgrade` finds nothing to update and exits non-zero, and -- the part
-	  that actually bites -- the app's JavaScript is cache-busted by this version, so
+	  unchanged: `occ upgrade` finds nothing to update and exits non-zero. The part that
+	  actually bites is that the app's JavaScript is cache-busted by this version, so
 	  browsers keep serving the previous bundle and the new code never runs even though
 	  the files are on disk. A deploy that reuses the version looks like it worked.
+
+	  Keep double hyphens out of this comment. XML forbids them inside a comment, and an
+	  info.xml that will not parse leaves Nextcloud unable to read the version at all,
+	  which fails in a way that looks exactly like the problem above.
 	-->
 	<version>5.99.1</version>
 	<licence>AGPL-3.0-or-later</licence>
