@@ -29,8 +29,14 @@
 	  Keeping the version above any 5.x release means the store never offers one. An
 	  upstream 6.0 would still supersede this, at which point the fork should be rebased
 	  onto it deliberately rather than replaced by accident.
+
+	  BUMP THE PATCH NUMBER ON EVERY DEPLOY. Nextcloud does no work when the version is
+	  unchanged: `occ upgrade` finds nothing to update and exits non-zero, and -- the part
+	  that actually bites -- the app's JavaScript is cache-busted by this version, so
+	  browsers keep serving the previous bundle and the new code never runs even though
+	  the files are on disk. A deploy that reuses the version looks like it worked.
 	-->
-	<version>5.99.0</version>
+	<version>5.99.1</version>
 	<licence>AGPL-3.0-or-later</licence>
 
 	<author>Affan Hussain</author>
