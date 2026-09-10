@@ -322,8 +322,50 @@ export function donutOption({ slices, colours, total, theme }) {
 /** Height reserved for a horizontal category label under a column. */
 const COLUMN_LABEL_BAND = 44
 
-/** Above this many columns the labels are turned to keep them readable. */
+/** Above this many columns the labels are turned, when the width is not yet known. */
 const COLUMN_ROTATE_ABOVE = 6
+
+/** A column with less room than this for its label has to have it turned. */
+const COLUMN_UPRIGHT_SLOT = 88
+
+/**
+ * Narrower than this per column and the chart stops being a chart.
+ *
+ * Turning the labels buys room down to about here; past it they overlap whatever angle
+ * they are at, and the honest answer is a different arrangement rather than a cleverer
+ * one. Horizontal bars have no such limit -- they grow downwards, and the page scrolls.
+ */
+const COLUMN_MIN_SLOT = 44
+
+/**
+ * Whether upright columns can be read at this width.
+ *
+ * @param {number} width the plot's width in pixels, 0 when not yet measured
+ * @param {number} count how many categories there are
+ * @return {boolean} false when the categories should be laid out as rows instead
+ */
+export function fitsAsColumns(width, count) {
+	if (!width || !count) {
+		// Nothing measured yet. Assume it fits rather than flashing the wrong
+		// arrangement and then correcting it a frame later.
+		return true
+	}
+	return width / count >= COLUMN_MIN_SLOT
+}
+
+/**
+ * Whether the category labels have to be turned to fit under their columns.
+ *
+ * @param {number} width the plot's width in pixels, 0 when not yet measured
+ * @param {number} count how many categories there are
+ * @return {boolean} true when the labels should be angled
+ */
+function turnsLabels(width, count) {
+	if (!width) {
+		return count > COLUMN_ROTATE_ABOVE
+	}
+	return width / count < COLUMN_UPRIGHT_SLOT
+}
 
 /** Height reserved once the labels are turned. */
 const COLUMN_LABEL_BAND_ROTATED = 92
@@ -346,6 +388,7 @@ const COLUMN_LABEL_BAND_ROTATED = 92
  * @param {object} spec.theme resolved palette and chrome colours
  * @param {number} [spec.max] value that should fill the track
  * @param {boolean} [spec.hidePercentage] true for counts that are not shares of a whole
+ * @param {number} [spec.width] the plot's width, which decides whether labels are turned
  * @return {object} the ECharts option
  */
 export function columnOption({
@@ -354,9 +397,10 @@ export function columnOption({
 	theme,
 	max = 0,
 	hidePercentage = false,
+	width = 0,
 }) {
 	const largest = Math.max(max, ...items.map((item) => Number(item.value) || 0))
-	const rotate = items.length > COLUMN_ROTATE_ABOVE
+	const rotate = turnsLabels(width, items.length)
 	const band = rotate ? COLUMN_LABEL_BAND_ROTATED : COLUMN_LABEL_BAND
 	// A turned label is aligned by its far end so it points at its own column, which is
 	// the opposite end when the form reads right to left.
@@ -653,9 +697,10 @@ export const PLOT_HEIGHT = 240
  *
  * @param {string} form one of bars, columns, line
  * @param {number} count how many categories there are
+ * @param {number} [width] the plot's width, which decides whether labels are turned
  * @return {number} the height in pixels
  */
-export function figureHeight(form, count) {
+export function figureHeight(form, count, width = 0) {
 	if (form === 'bars') {
 		return count * ROW_HEIGHT + CHART_PADDING * 2
 	}
@@ -664,8 +709,6 @@ export function figureHeight(form, count) {
 	}
 	return (
 		PLOT_HEIGHT
-		+ (count > COLUMN_ROTATE_ABOVE
-			? COLUMN_LABEL_BAND_ROTATED
-			: COLUMN_LABEL_BAND)
+		+ (turnsLabels(width, count) ? COLUMN_LABEL_BAND_ROTATED : COLUMN_LABEL_BAND)
 	)
 }

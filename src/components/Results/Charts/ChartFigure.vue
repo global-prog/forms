@@ -50,7 +50,13 @@
 </template>
 
 <script>
-import { barOption, columnOption, figureHeight, lineOption } from './chartOptions.js'
+import {
+	barOption,
+	columnOption,
+	figureHeight,
+	fitsAsColumns,
+	lineOption,
+} from './chartOptions.js'
 import EchartMixin from './EchartMixin.js'
 
 /** The forms this component knows how to draw. */
@@ -83,9 +89,38 @@ export default {
 	},
 
 	computed: {
+		/**
+		 * The arrangement actually drawn.
+		 *
+		 * Upright columns need a certain width each before their labels can be read, and
+		 * on a narrow screen a question with many options does not have it -- turning the
+		 * labels buys some room, but past a point they overlap at any angle. Rows have no
+		 * such limit, because they grow downwards and the page scrolls, so that is what a
+		 * too-narrow column chart becomes.
+		 *
+		 * The picker still shows what the reader chose: this is about the room available,
+		 * not about the choice, and it reverses the moment there is room again -- on a
+		 * phone turned sideways, or a widened window.
+		 *
+		 * @return {string} the form to draw
+		 */
+		effectiveForm() {
+			if (
+				this.form === 'columns'
+				&& !fitsAsColumns(this.plotWidth, this.items.length)
+			) {
+				return 'bars'
+			}
+			return this.form
+		},
+
 		/** @return {number} the height this arrangement needs */
 		height() {
-			return figureHeight(this.form, this.items.length)
+			return figureHeight(
+				this.effectiveForm,
+				this.items.length,
+				this.plotWidth,
+			)
 		},
 	},
 
@@ -111,7 +146,7 @@ export default {
 				max: this.max,
 				hidePercentage: this.hidePercentage,
 			}
-			if (this.form === 'line') {
+			if (this.effectiveForm === 'line') {
 				return lineOption({
 					...shared,
 					// A line is one series, so it takes one colour rather than a colour
@@ -119,10 +154,11 @@ export default {
 					colour: theme.series[0],
 				})
 			}
-			if (this.form === 'columns') {
+			if (this.effectiveForm === 'columns') {
 				return columnOption({
 					...shared,
 					colours: this.seriesColours(theme),
+					width,
 				})
 			}
 			return barOption({

@@ -4,7 +4,7 @@
 -->
 
 <template>
-	<div class="section question-summary">
+	<div class="section question-summary" :dir="questionDirection">
 		<h3 dir="auto">
 			{{ question.text }}
 		</h3>
@@ -188,6 +188,7 @@ import ChartStacked from './Charts/ChartStacked.vue'
 import answerTypes from '../../models/AnswerTypes.js'
 import { GridCellType, OptionType } from '../../models/Constants.ts'
 import { readChartForm, writeChartForm } from '../../utils/ChartPreferences.js'
+import { resolveDirection } from '../../utils/TextDirection.js'
 import { chartFormsFor } from './Charts/chartOptions.js'
 
 export default {
@@ -230,6 +231,28 @@ export default {
 	},
 
 	computed: {
+		/**
+		 * Which way this one question should be laid out.
+		 *
+		 * Taken from the question's own words rather than from the form's declared
+		 * language, because a form can be written in two languages and this is the most
+		 * specific evidence there is about this question. The option texts are consulted
+		 * too, since they are what the chart labels are made of, and a question whose
+		 * title is a bare number would otherwise decide nothing.
+		 *
+		 * Undefined when none of it has a direction, in which case the question inherits
+		 * the direction the results view has already set from the form.
+		 *
+		 * @return {?string} 'rtl', 'ltr', or undefined to inherit
+		 */
+		questionDirection() {
+			return resolveDirection(
+				'',
+				this.question.text,
+				...(this.question.options ?? []).map((option) => option.text),
+			)
+		},
+
 		/**
 		 * The chart forms this question may honestly be drawn as.
 		 *

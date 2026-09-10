@@ -63,9 +63,13 @@
 			</template>
 		</NcEmptyContent>
 
+		<!-- The editor shows the form's own words, so it is laid out the form's way. The
+		     title and description keep `dir="auto"` of their own: they are what an author
+		     is typing, and the direction has to follow the keystrokes rather than wait for
+		     the form to be saved. -->
 		<template v-else>
 			<!-- Forms title & description-->
-			<header>
+			<header :dir="formDirection" :lang="formLanguage || undefined">
 				<h2>
 					<label class="hidden-visually" for="form-title">{{
 						t('forms', 'Form title')
@@ -112,7 +116,7 @@
 				</p>
 			</header>
 
-			<section>
+			<section :dir="formDirection" :lang="formLanguage || undefined">
 				<!-- Questions list -->
 				<QuestionList
 					ref="questionList"

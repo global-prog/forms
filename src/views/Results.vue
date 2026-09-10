@@ -245,8 +245,17 @@
 			</template>
 		</NcEmptyContent>
 
-		<!-- Summary view for visualization -->
-		<section v-else-if="activeResponseView.id === 'summary'">
+		<!-- Summary view for visualization.
+
+		     Laid out in the form's own direction, not the reader's. The questions, the
+		     answers and every label in the charts are the form author's words, so an
+		     Arabic form read by someone whose interface is English must still run right
+		     to left. The chrome above -- the view switcher, the menus -- deliberately
+		     does not, because that belongs to the reader. -->
+		<section
+			v-else-if="activeResponseView.id === 'summary'"
+			:dir="formDirection"
+			:lang="formLanguage || undefined">
 			<ResultsSummary
 				v-for="question in questions"
 				:key="question.id"
@@ -255,7 +264,7 @@
 		</section>
 
 		<!-- Responses view for individual responses -->
-		<section v-else>
+		<section v-else :dir="formDirection" :lang="formLanguage || undefined">
 			<Submission
 				v-for="submission in submissions"
 				:key="submission.id"

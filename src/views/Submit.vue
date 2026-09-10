@@ -313,7 +313,6 @@ import axios from '@nextcloud/axios'
 import { showError } from '@nextcloud/dialogs'
 import { emit } from '@nextcloud/event-bus'
 import { loadState } from '@nextcloud/initial-state'
-import { isRTL } from '@nextcloud/l10n'
 import moment from '@nextcloud/moment'
 import { generateOcsUrl } from '@nextcloud/router'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
@@ -450,35 +449,6 @@ export default {
 				return 100
 			}
 			return Math.round((100 * (this.currentPage + 1)) / this.pageCount)
-		},
-
-		/**
-		 * The language this form is pinned to, or '' to follow whoever is reading it.
-		 *
-		 * @return {string} a language code, or ''
-		 */
-		formLanguage() {
-			return this.form?.settings?.language || ''
-		},
-
-		/**
-		 * Reading direction to impose on the form's own content.
-		 *
-		 * Undefined when no language is pinned, so the content inherits the page
-		 * direction instead of being nailed to the instance default.
-		 *
-		 * Applied to the form's blocks rather than to the document, so that an author
-		 * previewing an Arabic form does not have the surrounding interface flip with it.
-		 * `isRTL` comes from the l10n library so the list of right-to-left languages stays
-		 * in one place rather than being restated here.
-		 *
-		 * @return {string|undefined} 'rtl', 'ltr', or undefined to inherit
-		 */
-		formDirection() {
-			if (!this.formLanguage) {
-				return undefined
-			}
-			return isRTL(this.formLanguage) ? 'rtl' : 'ltr'
 		},
 
 		/**

@@ -13,6 +13,7 @@ import MarkdownIt from 'markdown-it'
 import CancelableRequest from '../utils/CancelableRequest.js'
 import logger from '../utils/Logger.js'
 import OcsResponse2Data from '../utils/OcsResponse2Data.js'
+import { resolveDirection } from '../utils/TextDirection.js'
 
 export default {
 	provide() {
@@ -54,6 +55,36 @@ export default {
 	},
 
 	computed: {
+		/**
+		 * The language the form itself is written in.
+		 *
+		 * '' means the form has not said, which is the default and, on any instance that
+		 * had forms before the setting existed, the usual case.
+		 *
+		 * @return {string} a language code, or '' to work it out from the content
+		 */
+		formLanguage() {
+			return this.form?.settings?.language || ''
+		},
+
+		/**
+		 * Which way the form's own content should be laid out.
+		 *
+		 * Shared by every view that shows a form's words -- filling it in, editing it,
+		 * and reading its responses -- because they are the same words either way. It is
+		 * NOT applied to the surrounding application chrome, which belongs to the reader
+		 * and stays in the reader's own language.
+		 *
+		 * @return {?string} 'rtl', 'ltr', or undefined to inherit
+		 */
+		formDirection() {
+			return resolveDirection(
+				this.formLanguage,
+				this.form?.title,
+				this.form?.description,
+			)
+		},
+
 		/**
 		 * Return form title, or placeholder if not set
 		 *

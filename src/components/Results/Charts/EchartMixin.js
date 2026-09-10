@@ -40,6 +40,10 @@ export default {
 			// placeholder instead of an empty box on a slow connection.
 			ready: false,
 			failed: false,
+			// The plot's measured width. Kept here rather than read on demand because
+			// an arrangement that does not fit at this width is a different arrangement,
+			// and the height it needs is a computed property.
+			plotWidth: 0,
 		}
 	},
 
@@ -90,6 +94,9 @@ export default {
 			}
 			const theme = readChartTheme(this.$refs.chart)
 			const width = this.$refs.chart.clientWidth
+			if (width !== this.plotWidth) {
+				this.plotWidth = width
+			}
 			// `notMerge` so a series that has gone away is removed rather than lingering
 			// underneath the new one.
 			this.chart.setOption(this.chartOption(theme, width), { notMerge: true })
@@ -99,6 +106,9 @@ export default {
 		observe() {
 			if (window.ResizeObserver) {
 				this.resizeObserver = new ResizeObserver(() => {
+					// Repaint rather than only resize: on a narrow screen the width
+					// decides which arrangement is legible, not just how big it is.
+					this.paint()
 					this.chart?.resize()
 				})
 				this.resizeObserver.observe(this.$refs.chart)
