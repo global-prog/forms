@@ -477,6 +477,9 @@ class ApiController extends OCSController {
 		}
 
 		$questionData = $this->formsService->getQuestions($formId);
+		if (!$this->formsService->canEditForm($form)) {
+			$questionData = $this->formsService->withoutAnswerKeys($questionData);
+		}
 		$questionData = array_map(static function (array $question) {
 			if (empty($question['extraSettings'])) {
 				$question['extraSettings'] = new \stdClass();
@@ -522,6 +525,10 @@ class ApiController extends OCSController {
 
 		if ($question['formId'] !== $formId) {
 			throw new OCSBadRequestException('Question doesn\'t belong to given form');
+		}
+
+		if (!$this->formsService->canEditForm($form)) {
+			$question = $this->formsService->withoutAnswerKeys([$question])[0];
 		}
 
 		if (empty($question['extraSettings'])) {

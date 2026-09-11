@@ -277,6 +277,18 @@ class Constants {
 	];
 
 	/**
+	 * The parts of a question's settings that give a quiz away: the answer key, and the
+	 * feedback, which names the right answer as often as not. Only people who can edit the
+	 * form are sent them; a respondent learns them from their graded result, if at all.
+	 */
+	public const QUIZ_KEY_SETTINGS = [
+		'correctOptions',
+		'correctAnswer',
+		'feedbackCorrect',
+		'feedbackIncorrect',
+	];
+
+	/**
 	 * Media blocks reference a URL.
 	 *
 	 * Note for anyone extending this: an externally hosted image or video means the

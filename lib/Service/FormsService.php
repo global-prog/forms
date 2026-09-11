@@ -151,6 +151,34 @@ class FormsService {
 	}
 
 	/**
+	 * Questions as a respondent may see them: without the quiz answer key or feedback,
+	 * including on the questions inside a conditional question's branches.
+	 *
+	 * Grading happens on the server, so nothing a respondent's browser does needs them,
+	 * and sending them would let anyone read the answers off the page before submitting.
+	 *
+	 * @param list<array> $questions questions as getQuestions() returns them
+	 * @return list<array> the same questions with the key removed
+	 */
+	public function withoutAnswerKeys(array $questions): array {
+		return array_map(function (array $question): array {
+			if (!is_array($question['extraSettings'] ?? null)) {
+				return $question;
+			}
+			foreach (Constants::QUIZ_KEY_SETTINGS as $key) {
+				unset($question['extraSettings'][$key]);
+			}
+			foreach ($question['extraSettings']['branches'] ?? [] as $index => $branch) {
+				if (is_array($branch['subQuestions'] ?? null)) {
+					$question['extraSettings']['branches'][$index]['subQuestions']
+						= $this->withoutAnswerKeys($branch['subQuestions']);
+				}
+			}
+			return $question;
+		}, $questions);
+	}
+
+	/**
 	 * Load subquestions for a conditional question and attach them to branches
 	 *
 	 * @param array $question The conditional question data
@@ -269,6 +297,9 @@ class FormsService {
 
 		// Append permissions for current user.
 		$result['permissions'] = $this->getPermissions($form);
+		if (!in_array(Constants::PERMISSION_EDIT, $result['permissions'], true)) {
+			$result['questions'] = $this->withoutAnswerKeys($result['questions']);
+		}
 		// Append canSubmit, to be able to show proper EmptyContent on internal view.
 		$result['canSubmit'] = $this->canSubmit($form);
 		// Append isMaxSubmissionsReached to show proper message on submit view.
