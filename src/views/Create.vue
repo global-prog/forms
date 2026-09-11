@@ -711,6 +711,11 @@ export default {
 		margin-block-end: 24px;
 		padding-inline-start: 32px;
 		margin-inline-end: -24px;
+		// The parent centres its children by their margin box, so with the full width
+		// that negative margin pushed the header 12px past the edge on a narrow screen --
+		// a sideways scroll in a left-to-right form, and clipped content in a right-to-left
+		// one, where that edge cannot be scrolled to. Wide screens still get 750px.
+		width: calc(100% - 24px);
 
 		.form-title {
 			font-size: 28px;
