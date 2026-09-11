@@ -1111,11 +1111,27 @@ export default {
 	&__figures {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 16px;
+		gap: 12px 28px;
 		margin: 0;
 
+		// One tile per figure: the number large on top, what it is beneath. The label
+		// stays first in the markup, so a screen reader still says what a number is
+		// before saying the number.
 		div {
-			min-width: 72px;
+			display: flex;
+			flex-direction: column-reverse;
+			min-inline-size: 64px;
+		}
+
+		// Nextcloud's own stylesheet gives every dt a fixed 130px inline box, end-aligned
+		// and padded, which set each label beside its value and pushed the fifth figure
+		// onto a line of its own.
+		dt,
+		dd {
+			display: block;
+			inline-size: auto;
+			padding: 0;
+			text-align: start;
 		}
 
 		dt {
@@ -1124,8 +1140,10 @@ export default {
 		}
 
 		dd {
-			font-size: 1.3em;
+			font-size: 1.5em;
+			font-variant-numeric: tabular-nums;
 			font-weight: bold;
+			line-height: 1.2;
 			margin: 0;
 		}
 	}
