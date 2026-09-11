@@ -499,13 +499,18 @@ class SubmissionService {
 			$questionId = $question['id'];
 			$questionAnswered = array_key_exists($questionId, $answers);
 
-			// sections are display-only. They carry no answer, can never be "required",
-			// and must not be treated as an unanswered mandatory question.
+			// sections, images and videos are display-only. An absent answer is expected
+			// and must not count as an unanswered mandatory question -- but a present one is
+			// refused rather than skipped, since nothing else would stop it being stored
+			// against a block that has nowhere to show it. The submit view never sends one.
 			if (in_array($question['type'], [
 				Constants::ANSWER_TYPE_SECTION,
 				Constants::ANSWER_TYPE_IMAGE,
 				Constants::ANSWER_TYPE_VIDEO,
 			], true)) {
+				if ($questionAnswered) {
+					throw new \InvalidArgumentException(sprintf('Question "%s" does not take an answer.', $question['text']));
+				}
 				continue;
 			}
 
