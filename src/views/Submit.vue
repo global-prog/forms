@@ -508,6 +508,8 @@ export default {
 			pageHistory: [],
 			/** the graded result of a quiz, returned by the server on submit */
 			quizResult: null,
+			/** the answers as the page opened with them, from a saved draft or a link */
+			answersAtOpen: null,
 			/** fixed for this page load, so the order does not change while answering */
 			shuffleSeed: Math.floor(Math.random() * 0x7fffffff) || 1,
 			/**
@@ -912,6 +914,20 @@ export default {
 			return Object.keys(this.answers).length > 0
 		},
 
+		/**
+		 * Has anything been answered since the page opened? Answers it opened with, from
+		 * a pre-filled link or the respondent's saved draft, are not lost by leaving, so
+		 * leaving is not questioned over them.
+		 *
+		 * @return {boolean} true when leaving would lose answers
+		 */
+		hasChangesSinceOpen() {
+			return (
+				Object.keys(this.answers).length !== 0
+				&& JSON.stringify(this.answers) !== this.answersAtOpen
+			)
+		},
+
 		/** @return {string} the answers given so far, as a pre-filled link's query */
 		prefilledQuery() {
 			return queryFromAnswers(this.validQuestions, this.answers)
@@ -1122,6 +1138,7 @@ export default {
 				answers[questionId] = values
 			}
 			this.answers = answers
+			this.answersAtOpen = JSON.stringify(answers)
 		},
 
 		/**
@@ -1416,11 +1433,7 @@ export default {
 		 * Methods for catching unwanted unload events
 		 */
 		beforeWindowUnload(e) {
-			if (
-				this.isActive
-				&& !this.submitForm
-				&& Object.keys(this.answers).length !== 0
-			) {
+			if (this.isActive && !this.submitForm && this.hasChangesSinceOpen) {
 				// Cancel the window unload event
 				e.preventDefault()
 				e.returnValue = ''
@@ -1434,7 +1447,7 @@ export default {
 		 * Conditions to show the confirmation dialog:
 		 * - The form is active.
 		 * - The form is not currently submitted.
-		 * - There are answers provided in the form.
+		 * - Something has been answered since the page opened.
 		 *
 		 * If the conditions are met, a confirmation dialog is shown and a promise is returned.
 		 * The promise resolves with the value passed to the confirm button callback.
@@ -1443,11 +1456,7 @@ export default {
 		 * passed to the confirm button callback if the dialog is shown, otherwise returns true.
 		 */
 		confirmLeaveForm() {
-			if (
-				this.isActive
-				&& !this.submitForm
-				&& Object.keys(this.answers).length !== 0
-			) {
+			if (this.isActive && !this.submitForm && this.hasChangesSinceOpen) {
 				this.showConfirmLeaveDialog = true
 				return new Promise((resolve) => {
 					this.confirmButtonCallback = (val) => {
