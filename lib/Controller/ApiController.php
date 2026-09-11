@@ -1686,6 +1686,8 @@ class ApiController extends OCSController {
 		} catch (\InvalidArgumentException $e) {
 			throw new OCSBadRequestException($e->getMessage());
 		}
+		// Store only what the respondent was actually shown; see keepAnswersToShownQuestions.
+		$answers = $this->submissionService->keepAnswersToShownQuestions($questions, $answers);
 
 		// Create Submission
 		$submission = new Submission();
@@ -1797,6 +1799,8 @@ class ApiController extends OCSController {
 		} catch (\InvalidArgumentException $e) {
 			throw new OCSBadRequestException($e->getMessage());
 		}
+		// Store only what the respondent was actually shown; see keepAnswersToShownQuestions.
+		$answers = $this->submissionService->keepAnswersToShownQuestions($questions, $answers);
 
 		// get existing submission of this user
 		try {

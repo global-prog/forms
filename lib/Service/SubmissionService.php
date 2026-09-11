@@ -483,6 +483,50 @@ class SubmissionService {
 	 * @param int $formId Id of the form being submitted
 	 * @throws \InvalidArgumentException if validation failed
 	 */
+	/**
+	 * Keep only the answers to questions the respondent could actually see.
+	 *
+	 * validateSubmission() skips a question that was hidden by a display condition or
+	 * jumped past by a "go to section" branch -- it cannot be required, and it is not
+	 * checked -- but every answer sent was then stored regardless. So an answer to a
+	 * question the respondent never saw was kept: from a crafted request, or from any
+	 * disagreement between the submit view and the server about what was shown. And
+	 * because it had skipped validation, it could even be an answer that would otherwise
+	 * have been refused. The submit view already drops these, so nothing a respondent can
+	 * see changes; this makes the server hold the same line instead of trusting it.
+	 *
+	 * Dropped rather than refused: the view and the server each evaluate the conditions,
+	 * and a submission must not fail because the two disagreed about a question the
+	 * respondent was not asked.
+	 *
+	 * @param array $questions every question of the form
+	 * @param array<int|string, mixed> $answers the submitted answers, keyed by question id
+	 * @return array<int|string, mixed> the answers to questions that were shown
+	 */
+	public function keepAnswersToShownQuestions(array $questions, array $answers): array {
+		$questionsById = [];
+		foreach ($questions as $question) {
+			$questionsById[$question['id']] = $question;
+		}
+		$reachableQuestions = $this->getReachableQuestions($questions, $answers);
+
+		$kept = [];
+		foreach ($answers as $questionId => $answer) {
+			$question = $questionsById[$questionId] ?? null;
+			if ($question === null) {
+				continue;
+			}
+			if (!($reachableQuestions[$question['id']] ?? true)) {
+				continue;
+			}
+			if (!$this->isQuestionVisible($question, $questionsById, $answers)) {
+				continue;
+			}
+			$kept[$questionId] = $answer;
+		}
+		return $kept;
+	}
+
 	public function validateSubmission(array $questions, array $answers, string $formOwnerId, int $formId): void {
 		// re-derive, server-side, which questions the respondent actually saw. Both
 		// checks below must happen here and not be taken on trust from the client: a required
