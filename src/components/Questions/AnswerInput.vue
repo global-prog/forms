@@ -19,7 +19,6 @@
 			:class="{ 'question__input--shifted': !isDropdown }"
 			:maxlength="maxOptionLength"
 			type="text"
-			dir="auto"
 			@input="debounceOnInput"
 			@keydown.delete="deleteEntry"
 			@keydown.enter.prevent="onEnter"
@@ -576,6 +575,23 @@ export default {
 		position: relative;
 		inset-inline-start: -12px;
 		margin-inline-end: -12px !important;
+		// The option's text shows in its own direction, but the field's layout follows the
+		// form's. With dir="auto" instead, an English option in a right-to-left form made
+		// the field itself left-to-right, so the logical offsets below resolved from the
+		// wrong side and pushed it 10px past the edge of a narrow screen.
+		unicode-bidi: plaintext;
+
+		// plaintext also aligns the text by its own direction, which would start an English
+		// option on the far side, underneath the drag handle. Align by the direction the
+		// field inherits instead -- which :dir() reads and plaintext does not change.
+		// (match-parent is the obvious choice and has no effect on a plaintext input.)
+		&:dir(rtl) {
+			text-align: right;
+		}
+
+		&:dir(ltr) {
+			text-align: left;
+		}
 
 		&--shifted {
 			inset-inline-start: calc(-1 * var(--default-clickable-area));
