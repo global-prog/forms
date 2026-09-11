@@ -514,6 +514,7 @@
     "Show correct answers after submitting" : "إظهار الإجابات الصحيحة بعد الإرسال",
     "Anyone who submits can pass the answers on. Allow one response per person if that matters." : "يمكن لأي شخص يرسل إجابته أن ينقل الإجابات لغيره. اسمح برد واحد لكل شخص إذا كان ذلك مهمًا.",
     "Correct answer:" : "الإجابة الصحيحة:",
+    "Download chart" : "تنزيل المخطط",
     "Show fewer" : "عرض أقل",
     "Show all {count} answers" : "عرض الإجابات كلها ({count})",
     "_%n response_::_%n responses_" : ["%n رد","رد واحد","ردّان","%n ردود","%n ردًا","%n رد"],

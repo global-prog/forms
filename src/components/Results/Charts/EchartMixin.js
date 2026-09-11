@@ -8,6 +8,52 @@ import { forget, onThemeChange, whenNearView } from './chartScheduler.js'
 import { loadEcharts, readChartTheme } from './echartsLoader.js'
 
 /**
+ * Break a title into lines that fit a width.
+ *
+ * @param {CanvasRenderingContext2D} context measures the text in its current font
+ * @param {string} text the title
+ * @param {number} width the widest a line may be
+ * @return {string[]} the lines
+ */
+function wrapText(context, text, width) {
+	const lines = []
+	let line = ''
+	for (const word of String(text ?? '')
+		.trim()
+		.split(/\s+/)
+		.filter(Boolean)) {
+		const candidate = line ? `${line} ${word}` : word
+		if (line && context.measureText(candidate).width > width) {
+			lines.push(line)
+			line = word
+		} else {
+			line = candidate
+		}
+	}
+	if (line) {
+		lines.push(line)
+	}
+	return lines
+}
+
+/**
+ * A file name from a question, keeping its words - Arabic included - but none of the
+ * characters a file system refuses.
+ *
+ * @param {string} title the question
+ * @return {string} the name, without extension
+ */
+function fileNameFor(title) {
+	const name = String(title ?? '')
+		// eslint-disable-next-line no-control-regex -- control characters are what it removes
+		.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ')
+		.replace(/\s+/g, ' ')
+		.trim()
+		.slice(0, 80)
+	return name || 'chart'
+}
+
+/**
  * Shared lifecycle for the ECharts-backed summary charts.
  *
  * A component using this supplies `chartOption(theme)` and renders one element with
@@ -136,6 +182,89 @@ export default {
 
 			// The theme is watched once for the page, and every chart repainted together.
 			this.stopThemeWatch = onThemeChange(() => this.paint())
+		},
+
+		/**
+		 * Save the chart as a PNG, titled, for a report or a slide.
+		 *
+		 * Drawn from the chart's own SVG at twice its size, on the page's background so
+		 * its text keeps the contrast it has on screen, with the title written above it
+		 * in the direction the question reads.
+		 *
+		 * @param {string} title the question, written above the chart and naming the file
+		 * @param {string} direction 'rtl' or 'ltr', how the title reads
+		 */
+		async downloadImage(title, direction = 'ltr') {
+			this.start()
+			if (!this.chart || !this.$refs.chart) {
+				return
+			}
+			const scale = 2
+			const padding = 24
+			const width = this.$refs.chart.clientWidth
+			const height = this.$refs.chart.clientHeight
+			const style = window.getComputedStyle(this.$refs.chart)
+			const background =
+				style.getPropertyValue('--color-main-background').trim() || '#ffffff'
+			const ink =
+				style.getPropertyValue('--color-main-text').trim() || '#222222'
+
+			const canvas = document.createElement('canvas')
+			const context = canvas.getContext('2d')
+			context.font = `bold 16px ${style.fontFamily || 'sans-serif'}`
+			const lines = wrapText(context, title, width).slice(0, 3)
+			const titleHeight = lines.length ? lines.length * 22 + padding : 0
+			canvas.width = (width + 2 * padding) * scale
+			canvas.height = (height + titleHeight + 2 * padding) * scale
+			context.scale(scale, scale)
+			context.fillStyle = background
+			context.fillRect(0, 0, canvas.width, canvas.height)
+
+			context.font = `bold 16px ${style.fontFamily || 'sans-serif'}`
+			context.fillStyle = ink
+			context.direction = direction === 'rtl' ? 'rtl' : 'ltr'
+			context.textAlign = 'start'
+			context.textBaseline = 'top'
+			const x = direction === 'rtl' ? width + padding : padding
+			lines.forEach((line, index) => {
+				context.fillText(line, x, padding + index * 22)
+			})
+
+			const svg = this.chart.renderToSVGString()
+			const url = URL.createObjectURL(
+				new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }),
+			)
+			try {
+				const image = new Image()
+				await new Promise((resolve, reject) => {
+					image.onload = resolve
+					image.onerror = reject
+					image.src = url
+				})
+				context.drawImage(
+					image,
+					padding,
+					padding + titleHeight,
+					width,
+					height,
+				)
+			} finally {
+				URL.revokeObjectURL(url)
+			}
+
+			const blob = await new Promise((resolve) =>
+				canvas.toBlob(resolve, 'image/png'),
+			)
+			if (!blob) {
+				return
+			}
+			const link = document.createElement('a')
+			link.href = URL.createObjectURL(blob)
+			link.download = `${fileNameFor(title)}.png`
+			document.body.appendChild(link)
+			link.click()
+			link.remove()
+			setTimeout(() => URL.revokeObjectURL(link.href), 1000)
 		},
 
 		/**

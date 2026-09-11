@@ -33,6 +33,7 @@
 				:questionId="question.id"
 				@update:modelValue="onChartFormChosen" />
 			<ChartFigure
+				ref="figure"
 				:items="rankingBars"
 				:form="chartForm"
 				:max="maxBordaScore"
@@ -109,6 +110,7 @@
 					:questionId="question.id"
 					@update:modelValue="onChartFormChosen" />
 				<ChartFigure
+					ref="figure"
 					class="numeric-summary__bars"
 					:items="bucketBars"
 					:form="chartForm"
@@ -132,6 +134,7 @@
 			<ChartDonut v-if="chartForm === 'ring'" :items="optionBars" />
 			<ChartFigure
 				v-else
+				ref="figure"
 				:items="optionBars"
 				:form="chartForm"
 				:max="submissions.length" />
@@ -156,6 +159,18 @@
 				:columns="gridHeatmap.columns"
 				:cells="gridHeatmap.cells" />
 		</div>
+
+		<!-- The bars, columns or line as a picture, titled, for a report or a slide. -->
+		<NcButton
+			v-if="hasDownloadableChart"
+			class="question-summary__download"
+			variant="tertiary"
+			@click="downloadChart">
+			<template #icon>
+				<NcIconSvgWrapper :svg="IconDownload" />
+			</template>
+			{{ t('forms', 'Download chart') }}
+		</NcButton>
 
 		<!-- Typed answers are grouped by what they say, most frequent first; the long tail
 		     waits behind a button on screen but is always printed. -->
@@ -207,6 +222,7 @@
 </template>
 
 <script>
+import IconDownload from '@material-symbols/svg-400/outlined/download.svg?raw'
 import IconFile from '@material-symbols/svg-400/outlined/draft.svg?raw'
 import { generateUrl } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -261,6 +277,7 @@ export default {
 
 	setup() {
 		return {
+			IconDownload,
 			IconFile,
 		}
 	},
@@ -935,6 +952,26 @@ export default {
 			return [noResponse, ...listed]
 		},
 
+		/**
+		 * Whether this question is drawn as bars, columns or a line, which can be saved
+		 * as a picture. A ring and a grid carry their labels outside the drawing.
+		 *
+		 * @return {boolean} true when the chart can be downloaded
+		 */
+		hasDownloadableChart() {
+			if (this.question.type === 'ranking') {
+				return this.rankingBars.length > 0
+			}
+			if (this.numericStats) {
+				return this.numericStats.buckets.length > 0
+			}
+			return (
+				this.answerTypes[this.question.type]?.predefined === true
+				&& this.question.type !== 'grid'
+				&& this.chartForm !== 'ring'
+			)
+		},
+
 		/** @return {number} how many answers wait behind the button */
 		hiddenAnswerCount() {
 			return Math.max(0, this.listedAnswers.length - 1 - this.shownAtFirst)
@@ -1056,6 +1093,14 @@ export default {
 		 *
 		 * @param {string} form the form the reader picked
 		 */
+		/** Save this question's chart as a picture, named and titled after the question. */
+		downloadChart() {
+			this.$refs.figure?.downloadImage(
+				this.question.text,
+				this.questionDirection,
+			)
+		},
+
 		onChartFormChosen(form) {
 			// Only ever one of the forms this question may be drawn as. Anything else is
 			// ignored rather than stored, so a malformed value cannot outlive the page.
@@ -1115,6 +1160,10 @@ export default {
 	}
 
 	&__text-toggle {
+		margin-block-start: 4px;
+	}
+
+	&__download {
 		margin-block-start: 4px;
 	}
 
@@ -1267,7 +1316,8 @@ export default {
 		display: list-item;
 	}
 
-	.question-summary__text-toggle {
+	.question-summary__text-toggle,
+	.question-summary__download {
 		display: none;
 	}
 }
