@@ -19,13 +19,13 @@
 /** How far ahead of the screen a chart starts, so it is ready by the time it is seen. */
 const LOOK_AHEAD = '400px 0px'
 
-/** @type {Map<Element, Function>} charts waiting to come into view */
+/** @type {Map<Element, () => void>} charts waiting to come into view */
 const waiting = new Map()
 
 /** @type {?IntersectionObserver} */
 let visibility = null
 
-/** @type {Set<Function>} charts to repaint when the theme changes */
+/** @type {Set<() => void>} charts to repaint when the theme changes */
 const themed = new Set()
 
 let themeWatched = false
@@ -61,7 +61,7 @@ function watchPrinting() {
  * be watched.
  *
  * @param {Element} element the chart's container
- * @param {Function} start draws the chart
+ * @param {() => void} start draws the chart
  */
 export function whenNearView(element, start) {
 	if (!window.IntersectionObserver) {
@@ -149,8 +149,8 @@ function watchTheme() {
 /**
  * Repaint a chart whenever the theme changes.
  *
- * @param {Function} repaint repaints the chart
- * @return {Function} stops repainting it
+ * @param {() => void} repaint repaints the chart
+ * @return {() => void} stops repainting it
  */
 export function onThemeChange(repaint) {
 	watchTheme()
