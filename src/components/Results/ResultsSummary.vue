@@ -157,11 +157,12 @@
 				:cells="gridHeatmap.cells" />
 		</div>
 
-		<!-- Text answers are simply listed for now, could be automatically grouped in the future -->
+		<!-- Typed answers are grouped by what they say, most frequent first; the long tail
+		     waits behind a button on screen but is always printed. -->
 		<ul v-else class="question-summary__text">
 			<!-- Do not wrap the following line between tags! `white-space:pre-line` respects `\n` but would produce additional empty first line -->
 			<!-- eslint-disable-next-line -->
-			<li v-for="(answer, index) in answers" :key="answer.id" dir="auto">
+			<li v-for="(answer, index) in listedAnswers" :key="answer.id" dir="auto" :class="{ 'question-summary__text-more': index > shownAtFirst && !showAllAnswers }">
 				<template v-if="answer.url">
 					<a :href="answer.url" target="_blank">
 						<NcIconSvgWrapper :svg="IconFile" inline />
@@ -184,14 +185,31 @@
 				<template v-else>
 					{{ answer.text }}
 				</template>
+				<span v-if="answer.count > 1" class="question-summary__text-count">{{
+					n('forms', '%n response', '%n responses', answer.count)
+				}}</span>
 			</li>
 		</ul>
+		<NcButton
+			v-if="hiddenAnswerCount > 0"
+			class="question-summary__text-toggle"
+			variant="tertiary"
+			@click="showAllAnswers = !showAllAnswers">
+			{{
+				showAllAnswers
+					? t('forms', 'Show fewer')
+					: t('forms', 'Show all {count} answers', {
+							count: listedAnswers.length - 1,
+						})
+			}}
+		</NcButton>
 	</div>
 </template>
 
 <script>
 import IconFile from '@material-symbols/svg-400/outlined/draft.svg?raw'
 import { generateUrl } from '@nextcloud/router'
+import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import ChartDonut from './Charts/ChartDonut.vue'
 import ChartFigure from './Charts/ChartFigure.vue'
@@ -201,6 +219,7 @@ import ChartStacked from './Charts/ChartStacked.vue'
 import answerTypes from '../../models/AnswerTypes.js'
 import { GridCellType, OptionType } from '../../models/Constants.ts'
 import { readChartForm, writeChartForm } from '../../utils/ChartPreferences.js'
+import { groupTextAnswers } from '../../utils/TextAnswers.js'
 import { resolveDirection } from '../../utils/TextDirection.js'
 import { bucketsFor, chartFormsFor } from './Charts/chartOptions.js'
 
@@ -213,6 +232,7 @@ export default {
 		ChartFormPicker,
 		ChartHeatmap,
 		ChartStacked,
+		NcButton,
 		NcIconSvgWrapper,
 	},
 
@@ -251,6 +271,9 @@ export default {
 			// Replaced in created(), once the computed properties exist to say which
 			// forms this particular question may honestly be drawn as.
 			chartForm: 'bars',
+			// How many typed answers show before the rest wait behind a button.
+			shownAtFirst: 20,
+			showAllAnswers: false,
 		}
 	},
 
@@ -897,6 +920,26 @@ export default {
 			return matrix
 		},
 
+		/**
+		 * The typed answers as listed: "No response" first, then each distinct short or
+		 * long answer once with how often it was given. Other kinds - files, dates,
+		 * colours - are listed as they are, since each is its own thing.
+		 *
+		 * @return {object[]} the list, with a count on each entry
+		 */
+		listedAnswers() {
+			const [noResponse, ...given] = this.answers
+			const listed = ['short', 'long'].includes(this.question.type)
+				? groupTextAnswers(given)
+				: given.map((answer) => ({ ...answer, count: 1 }))
+			return [noResponse, ...listed]
+		},
+
+		/** @return {number} how many answers wait behind the button */
+		hiddenAnswerCount() {
+			return Math.max(0, this.listedAnswers.length - 1 - this.shownAtFirst)
+		},
+
 		// For text answers like short answer and long text
 		answers() {
 			const answersModels = []
@@ -1060,6 +1103,21 @@ export default {
 		color: var(--color-text-maxcontrast);
 	}
 
+	&__text-more {
+		display: none;
+	}
+
+	&__text-count {
+		color: var(--color-text-maxcontrast);
+		font-variant-numeric: tabular-nums;
+		margin-inline-start: 8px;
+		white-space: nowrap;
+	}
+
+	&__text-toggle {
+		margin-block-start: 4px;
+	}
+
 	&__text {
 		list-style-type: initial;
 
@@ -1200,6 +1258,17 @@ export default {
 			line-height: 1.2;
 			margin: 0;
 		}
+	}
+}
+
+// Paper has no button to press, so a printed summary lists every answer.
+@media print {
+	.question-summary__text-more {
+		display: list-item;
+	}
+
+	.question-summary__text-toggle {
+		display: none;
 	}
 }
 </style>
