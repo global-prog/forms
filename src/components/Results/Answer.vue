@@ -18,7 +18,8 @@
 			<NcIconSvgWrapper
 				class="answer__grade-mark"
 				:svg="grade.correct === true ? IconCheck : IconClose"
-				:size="18" />
+				:size="18"
+				inline />
 			{{
 				grade.correct === true
 					? t('forms', 'Correct')
