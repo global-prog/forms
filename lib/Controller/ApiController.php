@@ -1570,6 +1570,12 @@ class ApiController extends OCSController {
 			return $submission;
 		}, $submissions);
 
+		// Someone allowed to see the results but not to edit the form sees each response's
+		// grade, not the key it was graded against.
+		if (!$this->formsService->canEditForm($form)) {
+			$questions = $this->formsService->withoutAnswerKeys($questions);
+		}
+
 		$questions = array_map(static function (array $question) {
 			if (empty($question['extraSettings'])) {
 				$question['extraSettings'] = new \stdClass();
