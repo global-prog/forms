@@ -126,6 +126,9 @@ export default {
 
 	&__item {
 		background-color: var(--color-main-background);
+		// A button inside a dialog inherits the accent colour, which is for a link, not
+		// for a card of text.
+		color: var(--color-main-text);
 		border: 2px solid var(--color-border);
 		border-radius: var(--border-radius-large);
 		cursor: pointer;
