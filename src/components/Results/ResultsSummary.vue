@@ -69,7 +69,37 @@
 					<dt>{{ t('forms', 'Responses') }}</dt>
 					<dd>{{ numericStats.count }}</dd>
 				</div>
+				<div v-if="npsScore !== null">
+					<dt>{{ t('forms', 'Net Promoter Score') }}</dt>
+					<dd>{{ npsScore }}</dd>
+				</div>
 			</dl>
+
+			<!-- The Net Promoter Score's three groups, as a single bar under the figures.
+			     Each group is also named with its share in text, so the colours are never
+			     the only way to tell them apart. -->
+			<div v-if="npsBreakdown" class="nps-breakdown">
+				<div class="nps-breakdown__bar" aria-hidden="true">
+					<span
+						v-for="group in npsGroups"
+						:key="group.key"
+						class="nps-breakdown__segment"
+						:class="`nps-breakdown__segment--${group.key}`"
+						:style="{ flexGrow: group.share }" />
+				</div>
+				<ul class="nps-breakdown__legend">
+					<li
+						v-for="group in npsGroups"
+						:key="group.key"
+						class="nps-breakdown__item">
+						<span
+							class="nps-breakdown__swatch"
+							:class="`nps-breakdown__segment--${group.key}`"
+							aria-hidden="true" />
+						{{ group.label }}
+					</li>
+				</ul>
+			</div>
 
 			<template v-if="numericStats.buckets.length">
 				<ChartFormPicker
@@ -85,23 +115,6 @@
 					:max="numericStats.busiest"
 					hidePercentage />
 			</template>
-
-			<p v-if="npsScore !== null" class="numeric-summary__nps">
-				{{ t('forms', 'Net Promoter Score') }}:
-				<strong>{{ npsScore }}</strong>
-				<span class="question-summary__statistic-percentage">
-					{{
-						t(
-							'forms',
-							'{promoters}% promoters, {detractors}% detractors',
-							{
-								promoters: npsBreakdown.promoters,
-								detractors: npsBreakdown.detractors,
-							},
-						)
-					}}
-				</span>
-			</p>
 		</div>
 
 		<!-- Answers with countable results for visualization. A single-choice question can
@@ -417,6 +430,43 @@ export default {
 				passives: share(values.filter((v) => v >= 7 && v <= 8).length),
 				detractors: share(values.filter((v) => v <= 6).length),
 			}
+		},
+
+		/**
+		 * The three Net Promoter groups in the order the scale runs, for the bar and its
+		 * legend. Groups with nobody in them are kept, so the legend always names all
+		 * three and a missing colour never has to be inferred.
+		 *
+		 * @return {object[]} key, share and label per group
+		 */
+		npsGroups() {
+			const breakdown = this.npsBreakdown
+			if (!breakdown) {
+				return []
+			}
+			return [
+				{
+					key: 'detractors',
+					share: breakdown.detractors,
+					label: t('forms', '{percent}% detractors (0 to 6)', {
+						percent: breakdown.detractors,
+					}),
+				},
+				{
+					key: 'passives',
+					share: breakdown.passives,
+					label: t('forms', '{percent}% passives (7 or 8)', {
+						percent: breakdown.passives,
+					}),
+				},
+				{
+					key: 'promoters',
+					share: breakdown.promoters,
+					label: t('forms', '{percent}% promoters (9 or 10)', {
+						percent: breakdown.promoters,
+					}),
+				},
+			]
 		},
 
 		/**
@@ -1103,6 +1153,63 @@ export default {
 	}
 }
 
+.nps-breakdown {
+	margin-block: 12px 4px;
+	max-inline-size: 520px;
+
+	&__bar {
+		block-size: 10px;
+		border-radius: var(--border-radius);
+		display: flex;
+		gap: 2px;
+		overflow: hidden;
+	}
+
+	&__segment {
+		// A group with nobody in it takes no room, but the legend still names it.
+		flex-basis: 0;
+
+		// The element variants, which Nextcloud tunes for coloured marks on the page in
+		// both themes. The plain status colours are background tones that nearly vanish
+		// on a dark page, and the -text ones are too pale to tell apart from the grey.
+		&--detractors {
+			background-color: var(--color-element-error);
+		}
+
+		&--passives {
+			background-color: var(--color-text-maxcontrast);
+		}
+
+		&--promoters {
+			background-color: var(--color-element-success);
+		}
+	}
+
+	&__legend {
+		color: var(--color-text-maxcontrast);
+		display: flex;
+		flex-wrap: wrap;
+		font-size: 0.9em;
+		gap: 4px 16px;
+		list-style: none;
+		margin: 6px 0 0;
+		padding: 0;
+	}
+
+	&__item {
+		align-items: center;
+		display: flex;
+		gap: 6px;
+	}
+
+	&__swatch {
+		block-size: 10px;
+		border-radius: 2px;
+		flex: 0 0 auto;
+		inline-size: 10px;
+	}
+}
+
 .numeric-summary {
 	display: flex;
 	flex-direction: column;
@@ -1148,9 +1255,5 @@ export default {
 		}
 	}
 
-	&__nps strong {
-		font-size: 1.2em;
-		margin-inline: 4px;
-	}
 }
 </style>
