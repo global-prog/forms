@@ -71,6 +71,11 @@
 					:style="{ textAlign: formTextAlign }">
 					{{ computedText }}
 				</h3>
+				<span
+					v-if="quizPoints !== null"
+					class="question__header__title__points">
+					{{ n('forms', '%n point', '%n points', quizPoints) }}
+				</span>
 				<div v-else class="question__header__title__text"></div>
 				<div
 					v-if="!readOnly && !questionValid"
@@ -231,6 +236,7 @@ export default {
 		$markdownit: { from: '$markdownit' },
 		// How to align the author's words; see ViewsMixin authorTextAlign.
 		formTextAlign: { from: 'formTextAlign', default: undefined },
+		formSettings: { from: 'formSettings', default: () => () => ({}) },
 	},
 
 	props: {
@@ -386,6 +392,28 @@ export default {
 				return this.text + ' *'
 			}
 			return this.text
+		},
+
+		/**
+		 * What this question is worth, shown to respondents of a quiz as a quiz form
+		 * usually does. A respondent's copy of the question carries no answer key, so the
+		 * server marks the scored ones; the author's copy has the key itself.
+		 *
+		 * @return {?number} the points, or null when not shown
+		 */
+		quizPoints() {
+			if (!this.readOnly || this.formSettings()?.quizMode !== true) {
+				return null
+			}
+			const extra = this.extraSettings ?? {}
+			const keyed =
+				Object.values(extra.correctOptions ?? {}).length > 0
+				|| (extra.correctAnswer ?? '') !== ''
+			if (!keyed && extra.scored !== true) {
+				return null
+			}
+			const points = typeof extra.points === 'number' ? extra.points : 1
+			return points > 0 ? points : null
 		},
 
 		computedDescription() {
@@ -581,6 +609,15 @@ export default {
 		&__title {
 			display: flex;
 			min-height: 44px;
+
+			&__points {
+				align-self: center;
+				color: var(--color-text-maxcontrast);
+				flex: 0 0 auto;
+				font-variant-numeric: tabular-nums;
+				margin-inline-start: 12px;
+				white-space: nowrap;
+			}
 
 			&__text {
 				flex: 1 1 100%;

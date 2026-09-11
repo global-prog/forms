@@ -516,6 +516,7 @@ OC.L10N.register(
     "Show correct answers after submitting" : "إظهار الإجابات الصحيحة بعد الإرسال",
     "Anyone who submits can pass the answers on. Allow one response per person if that matters." : "يمكن لأي شخص يرسل إجابته أن ينقل الإجابات لغيره. اسمح برد واحد لكل شخص إذا كان ذلك مهمًا.",
     "Correct answer:" : "الإجابة الصحيحة:",
+    "_%n point_::_%n points_" : ["%n درجة","درجة واحدة","درجتان","%n درجات","%n درجة","%n درجة"],
     "Copy pre-filled link" : "نسخ رابط بإجابات مُعبّأة مسبقًا",
     "Pre-filled link copied" : "تم نسخ الرابط ذي الإجابات المُعبّأة مسبقًا",
     "To send a link with some answers already filled in, open the form with View, answer those questions and choose \"Copy pre-filled link\"." : "لإرسال رابط تكون فيه بعض الإجابات مُعبّأة مسبقًا، افتح النموذج عبر «عرض»، وأجب عن تلك الأسئلة، ثم اختر «نسخ رابط بإجابات مُعبّأة مسبقًا».",

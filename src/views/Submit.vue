@@ -440,6 +440,13 @@ export default {
 
 	mixins: [ViewsMixin],
 
+	// Questions read the form's settings, to show what each is worth in a quiz.
+	provide() {
+		return {
+			formSettings: () => this.form.settings ?? {},
+		}
+	},
+
 	/*
 	 * This is used to confirm that the user wants to leave the page
 	 * if the form is unsubmitted.

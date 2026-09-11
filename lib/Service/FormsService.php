@@ -165,6 +165,14 @@ class FormsService {
 			if (!is_array($question['extraSettings'] ?? null)) {
 				return $question;
 			}
+			// Whether a question is scored is no secret, and lets the form show what it is
+			// worth; without the key the browser could not tell.
+			$extra = $question['extraSettings'];
+			if (!empty($extra['correctOptions']) || ($extra['correctAnswer'] ?? '') !== '') {
+				$question['extraSettings']['scored'] = true;
+			} else {
+				unset($question['extraSettings']['points']);
+			}
 			foreach (Constants::QUIZ_KEY_SETTINGS as $key) {
 				unset($question['extraSettings'][$key]);
 			}
