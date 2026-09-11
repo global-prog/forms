@@ -35,7 +35,7 @@
 		<p
 			v-if="modelValue && selectedQuestion && selectedAnswer"
 			class="summary-filter__printed">
-			{{
+			<bdi dir="auto">{{
 				t(
 					'forms',
 					'Only responses where "{question}" was answered "{answer}"',
@@ -44,7 +44,7 @@
 						answer: selectedAnswer.label,
 					},
 				)
-			}}
+			}}</bdi>
 		</p>
 		<p v-if="modelValue" class="summary-filter__count" role="status">
 			{{

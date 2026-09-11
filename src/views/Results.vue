@@ -252,10 +252,9 @@
 		     Arabic form read by someone whose interface is English must still run right
 		     to left. The chrome above -- the view switcher, the menus -- deliberately
 		     does not, because that belongs to the reader. -->
-		<section
-			v-else-if="activeResponseView.id === 'summary'"
-			:dir="formDirection"
-			:lang="formLanguage || undefined">
+		<!-- The filter belongs to the reader, like the view switcher above it, so it is
+		     laid out in the reader's direction rather than the form's. -->
+		<section v-else-if="activeResponseView.id === 'summary'">
 			<SummaryFilter
 				v-if="submissions.length > 1"
 				v-model="summaryFilter"
@@ -265,7 +264,7 @@
 			<p v-if="!summarySubmissions.length" class="summary-filter-empty">
 				{{ t('forms', 'No responses gave this answer.') }}
 			</p>
-			<template v-else>
+			<div v-else :dir="formDirection" :lang="formLanguage || undefined">
 				<QuizInsights
 					v-if="form.settings?.quizMode"
 					:submissions="summarySubmissions"
@@ -277,7 +276,7 @@
 					:questions="summaryQuestions"
 					:submissions="summarySubmissions"
 					:formLanguage="formLanguage" />
-			</template>
+			</div>
 		</section>
 
 		<!-- Responses view for individual responses -->
