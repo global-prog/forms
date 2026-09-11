@@ -24,6 +24,13 @@ use OCA\Forms\Db\Form;
  * suddenly mark every response as zero out of many.
  */
 class QuizService {
+	/** Types whose answers name options, which are stored by their text. */
+	private const CHOICE_TYPES = [
+		Constants::ANSWER_TYPE_DROPDOWN,
+		Constants::ANSWER_TYPE_MULTIPLE,
+		Constants::ANSWER_TYPE_MULTIPLEUNIQUE,
+	];
+
 	/**
 	 * Is this form a quiz?
 	 *
@@ -85,7 +92,8 @@ class QuizService {
 	 * of the option carrying that text before grading. A choice that no longer matches an
 	 * option, because it was an "other" answer or the option has since been reworded, gets
 	 * back the prefix an "other" answer arrives with, so it can never pass for an option id
-	 * even when someone typed one.
+	 * even when someone typed one. A grid or a ranking is stored as what arrived, encoded, so
+	 * it is decoded back; everything else is stored as it arrived.
 	 *
 	 * @param list<array> $questions the form's questions, as arrays
 	 * @param array $stored the stored answer texts, keyed by question id
@@ -98,8 +106,13 @@ class QuizService {
 			if ($texts === []) {
 				continue;
 			}
-			if (!in_array($question['type'] ?? '', Constants::ANSWER_TYPES_PREDEFINED, true)
-				|| ($question['type'] ?? '') === Constants::ANSWER_TYPE_LINEARSCALE) {
+			$type = $question['type'] ?? '';
+			if ($type === Constants::ANSWER_TYPE_GRID || $type === Constants::ANSWER_TYPE_RANKING) {
+				$decoded = json_decode((string)$texts[0], true);
+				$answers[$question['id']] = is_array($decoded) ? $decoded : [];
+				continue;
+			}
+			if (!in_array($this->choiceType($question), self::CHOICE_TYPES, true)) {
 				$answers[$question['id']] = $texts;
 				continue;
 			}
@@ -116,6 +129,20 @@ class QuizService {
 			);
 		}
 		return $this->grade($questions, $answers);
+	}
+
+	/**
+	 * The type a question is answered as: a conditional question is answered as its trigger.
+	 *
+	 * @param array $question the question
+	 * @return string the answer type
+	 */
+	private function choiceType(array $question): string {
+		$type = (string)($question['type'] ?? '');
+		if ($type === Constants::ANSWER_TYPE_CONDITIONAL) {
+			return (string)($question['extraSettings']['triggerType'] ?? '');
+		}
+		return $type;
 	}
 
 	/**
@@ -137,7 +164,19 @@ class QuizService {
 	 */
 	private function isCorrect(array $question, array $answer): bool {
 		$extra = $question['extraSettings'] ?? [];
-		$type = $question['type'] ?? '';
+		$type = $this->choiceType($question);
+
+		// A conditional question arrives as its trigger's answer alongside the answers inside
+		// it; only the trigger is graded.
+		if (array_key_exists('trigger', $answer)) {
+			$answer = (array)$answer['trigger'];
+		}
+		// Anything nested, such as a grid's rows, cannot match a key of plain values.
+		foreach ($answer as $value) {
+			if (!is_scalar($value)) {
+				return false;
+			}
+		}
 
 		if (!empty($extra['correctOptions'])) {
 			$expected = array_map('strval', (array)$extra['correctOptions']);
