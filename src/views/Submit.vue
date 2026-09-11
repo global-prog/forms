@@ -1622,11 +1622,11 @@ export default {
 
 	&__mark {
 		align-self: center;
-		color: var(--color-error-text);
+		color: var(--color-element-error);
 	}
 
 	&__question--correct &__mark {
-		color: var(--color-success-text);
+		color: var(--color-element-success);
 	}
 
 	&__points {

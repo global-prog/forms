@@ -32,11 +32,21 @@
 		<p class="submission-date">
 			{{ submissionDateTime }}
 		</p>
+		<p v-if="quizScore" class="submission-score">
+			{{
+				t('forms', 'Scored {score} out of {max}', {
+					score: quizScore.score,
+					max: quizScore.max,
+				})
+			}}
+			<span class="submission-score__percent">{{ quizScore.percent }}%</span>
+		</p>
 
 		<Answer
 			v-for="question in answeredQuestions"
 			:key="question.id"
 			:question="question"
+			:grade="quizGrades[question.id]"
 			:highlight="highlight"
 			:answerText="question.squashedAnswers"
 			:answers="question.answers"
@@ -128,6 +138,32 @@ export default {
 		 */
 		answeredQuestions() {
 			return this.parseQuestions(this.questions)
+		},
+
+		/**
+		 * This response's quiz score, when the form is a quiz. The server grades every
+		 * stored response, so the score here is the one the respondent was shown.
+		 *
+		 * @return {?object} score, max and percentage
+		 */
+		quizScore() {
+			const quiz = this.submission.quiz
+			const max = Number(quiz?.max)
+			if (!(max > 0)) {
+				return null
+			}
+			const score = Number(quiz.score) || 0
+			return {
+				score: Math.round(score * 100) / 100,
+				max: Math.round(max * 100) / 100,
+				percent: Math.round((score / max) * 100),
+			}
+		},
+
+		/** @return {object} each graded question's result, keyed by question id */
+		quizGrades() {
+			const graded = this.submission.quiz?.questions
+			return graded && typeof graded === 'object' ? graded : {}
 		},
 	},
 
@@ -395,6 +431,18 @@ export default {
 	&-date {
 		color: var(--color-text-lighter);
 		margin-block-start: -8px;
+	}
+
+	&-score {
+		font-weight: bold;
+		margin-block-start: 4px;
+
+		&__percent {
+			color: var(--color-text-maxcontrast);
+			font-variant-numeric: tabular-nums;
+			font-weight: normal;
+			margin-inline-start: 8px;
+		}
 	}
 }
 </style>

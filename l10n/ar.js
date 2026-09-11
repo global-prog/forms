@@ -511,6 +511,7 @@ OC.L10N.register(
     "Whole numbers only." : "أعداد صحيحة فقط.",
     "You must answer this question" : "يجب الإجابة على هذا السؤال",
     "You scored {score} out of {max}" : "حصلت على {score} من {max}",
+    "Scored {score} out of {max}" : "الدرجة {score} من {max}",
     "all rules" : "كل القواعد",
     "any rule" : "أي قاعدة",
     "avg. rank {average}" : "متوسط الرتبة {average}",

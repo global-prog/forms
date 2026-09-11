@@ -11,6 +11,28 @@
 			:style="{ textAlign: formTextAlign }">
 			{{ questionText }}
 		</h4>
+		<p
+			v-if="grade"
+			class="answer__grade"
+			:class="{ 'answer__grade--correct': grade.correct === true }">
+			<NcIconSvgWrapper
+				class="answer__grade-mark"
+				:svg="grade.correct === true ? IconCheck : IconClose"
+				:size="18" />
+			{{
+				grade.correct === true
+					? t('forms', 'Correct')
+					: t('forms', 'Incorrect')
+			}}
+			<span class="answer__grade-points">
+				{{
+					t('forms', '{earned} of {points}', {
+						earned: tidy(grade.earned),
+						points: tidy(grade.points),
+					})
+				}}
+			</span>
+		</p>
 		<!-- Do not wrap the following line between tags! `white-space:pre-line` respects `\n` but would produce additional empty first line -->
 		<!-- eslint-disable-next-line -->
 		<template v-if="questionType === 'file' && answers.length">
@@ -103,6 +125,8 @@
 </template>
 
 <script>
+import IconCheck from '@material-symbols/svg-400/outlined/check.svg?raw'
+import IconClose from '@material-symbols/svg-400/outlined/close.svg?raw'
 import IconFile from '@material-symbols/svg-400/outlined/draft.svg?raw'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcHighlight from '@nextcloud/vue/components/NcHighlight'
@@ -179,11 +203,21 @@ export default {
 			required: false,
 			default: '',
 		},
+
+		/** How this answer was graded, when the form is a quiz and the question is scored. */
+		grade: {
+			type: Object,
+			required: false,
+			default: null,
+		},
 	},
 
 	setup() {
 		return {
+			IconCheck,
+			IconClose,
 			IconFile,
+			tidy: (value) => Math.round((Number(value) || 0) * 100) / 100,
 		}
 	},
 }
@@ -196,6 +230,27 @@ export default {
 
 	&__question-text {
 		font-weight: bold;
+	}
+
+	&__grade {
+		align-items: center;
+		display: flex;
+		gap: 4px;
+	}
+
+	// Only the mark carries the colour: the status tones are too light for body text.
+	&__grade-mark {
+		color: var(--color-element-error);
+	}
+
+	&__grade--correct &__grade-mark {
+		color: var(--color-element-success);
+	}
+
+	&__grade-points {
+		color: var(--color-text-maxcontrast);
+		font-variant-numeric: tabular-nums;
+		margin-inline-start: 8px;
 	}
 
 	&__text {
