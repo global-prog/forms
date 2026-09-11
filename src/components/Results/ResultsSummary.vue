@@ -102,6 +102,31 @@
 				</ul>
 			</div>
 
+			<!-- The same numbers within each answer to another question: the average
+			     rating by department, by year group, by whatever was asked. -->
+			<div v-if="groupingQuestions.length" class="question-summary__compare">
+				<NcSelect
+					class="question-summary__compare-select"
+					:inputLabel="t('forms', 'Break down by')"
+					:placeholder="t('forms', 'One average for everyone')"
+					:options="groupingOptions"
+					:modelValue="selectedGrouping"
+					label="label"
+					trackBy="id"
+					@update:modelValue="onGroupingChosen" />
+				<ChartFigure
+					v-if="comparisonBars.length"
+					:items="comparisonBars"
+					form="bars"
+					:max="comparisonMax"
+					hidePercentage />
+				<p
+					v-else-if="groupBy !== null"
+					class="question-summary__ranking-description">
+					{{ t('forms', 'Nobody answered both questions.') }}
+				</p>
+			</div>
+
 			<template v-if="numericStats.buckets.length">
 				<ChartFormPicker
 					v-if="chartForms.length > 1"
@@ -227,6 +252,7 @@ import IconFile from '@material-symbols/svg-400/outlined/draft.svg?raw'
 import { generateUrl } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
+import NcSelect from '@nextcloud/vue/components/NcSelect'
 import ChartDonut from './Charts/ChartDonut.vue'
 import ChartFigure from './Charts/ChartFigure.vue'
 import ChartFormPicker from './Charts/ChartFormPicker.vue'
@@ -235,6 +261,10 @@ import ChartStacked from './Charts/ChartStacked.vue'
 import answerTypes from '../../models/AnswerTypes.js'
 import { GridCellType, OptionType } from '../../models/Constants.ts'
 import { readChartForm, writeChartForm } from '../../utils/ChartPreferences.js'
+import {
+	compareByAnswer,
+	groupingQuestions as questionsThatGroup,
+} from '../../utils/CompareAnswers.js'
 import { groupTextAnswers } from '../../utils/TextAnswers.js'
 import { resolveDirection } from '../../utils/TextDirection.js'
 import { bucketsFor, chartFormsFor } from './Charts/chartOptions.js'
@@ -249,6 +279,7 @@ export default {
 		ChartHeatmap,
 		ChartStacked,
 		NcButton,
+		NcSelect,
 		NcIconSvgWrapper,
 	},
 
@@ -261,6 +292,13 @@ export default {
 		submissions: {
 			type: Array,
 			required: true,
+		},
+
+		/** Every answerable question of the form, so one can be broken down by another. */
+		questions: {
+			type: Array,
+			required: false,
+			default: () => [],
 		},
 
 		question: {
@@ -288,6 +326,8 @@ export default {
 			// Replaced in created(), once the computed properties exist to say which
 			// forms this particular question may honestly be drawn as.
 			chartForm: 'bars',
+			// The question whose answers the numbers are broken down by, if any.
+			groupBy: null,
 			// How many typed answers show before the rest wait behind a button.
 			shownAtFirst: 20,
 			showAllAnswers: false,
@@ -952,6 +992,60 @@ export default {
 			return [noResponse, ...listed]
 		},
 
+		/** @return {object[]} the questions this one's numbers can be broken down by */
+		groupingQuestions() {
+			return this.numericStats
+				? questionsThatGroup(this.questions, this.question)
+				: []
+		},
+
+		/** @return {{id: number, label: string}[]} those questions, for the picker */
+		groupingOptions() {
+			return this.groupingQuestions.map((question) => ({
+				id: question.id,
+				label: question.text,
+			}))
+		},
+
+		/** @return {?object} the chosen grouping question, for the picker */
+		selectedGrouping() {
+			return (
+				this.groupingOptions.find((option) => option.id === this.groupBy)
+				?? null
+			)
+		},
+
+		/**
+		 * This question's average within each answer to the chosen question.
+		 *
+		 * @return {object[]} chart rows, largest average first
+		 */
+		comparisonBars() {
+			const grouping = this.groupingQuestions.find(
+				(question) => question.id === this.groupBy,
+			)
+			if (!grouping) {
+				return []
+			}
+			return compareByAnswer(this.submissions, grouping, this.question).map(
+				(group) => ({
+					key: group.key,
+					label: group.label,
+					value: group.mean,
+					percentage: 0,
+					note: n('forms', '%n response', '%n responses', group.count),
+				}),
+			)
+		},
+
+		/** @return {number} the widest an average bar can be: the top of the scale */
+		comparisonMax() {
+			const highest = this.scaleRange?.high
+			return typeof highest === 'number' && highest > 0
+				? highest
+				: Math.max(...this.comparisonBars.map((bar) => bar.value), 1)
+		},
+
 		/**
 		 * Whether this question is drawn as bars, columns or a line, which can be saved
 		 * as a picture. A ring and a grid carry their labels outside the drawing.
@@ -1093,6 +1187,13 @@ export default {
 		 *
 		 * @param {string} form the form the reader picked
 		 */
+		/**
+		 * @param {?{id: number}} option the question to break the numbers down by
+		 */
+		onGroupingChosen(option) {
+			this.groupBy = option?.id ?? null
+		},
+
 		/** Save this question's chart as a picture, named and titled after the question. */
 		downloadChart() {
 			this.$refs.figure?.downloadImage(
@@ -1165,6 +1266,15 @@ export default {
 
 	&__download {
 		margin-block-start: 4px;
+	}
+
+	&__compare {
+		margin-block: 16px 8px;
+	}
+
+	&__compare-select {
+		max-inline-size: 360px;
+		min-inline-size: 0;
 	}
 
 	&__text {

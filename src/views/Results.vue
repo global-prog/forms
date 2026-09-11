@@ -274,6 +274,7 @@
 					v-for="question in summaryQuestions"
 					:key="question.id"
 					:question="question"
+					:questions="summaryQuestions"
 					:submissions="summarySubmissions"
 					:formLanguage="formLanguage" />
 			</template>
