@@ -56,6 +56,7 @@ import {
 	figureHeight,
 	fitsAsColumns,
 	lineOption,
+	longestLabel,
 } from './chartOptions.js'
 import EchartMixin from './EchartMixin.js'
 
@@ -120,6 +121,7 @@ export default {
 				this.effectiveForm,
 				this.items.length,
 				this.plotWidth,
+				longestLabel(this.items),
 			)
 		},
 	},

@@ -353,18 +353,43 @@ export function fitsAsColumns(width, count) {
 	return width / count >= COLUMN_MIN_SLOT
 }
 
+/** A generous width per character of a 12px label, for deciding whether one fits. */
+const LABEL_CHAR_WIDTH = 7.5
+
 /**
  * Whether the category labels have to be turned to fit under their columns.
  *
+ * Decided by the labels themselves when their length is known: the steps of a scale are
+ * one or two digits, which fit under a column far narrower than a sentence does, and
+ * turning "1" to "5" on a phone only made them harder to read. Without the lengths it
+ * falls back to how much room each column has.
+ *
  * @param {number} width the plot's width in pixels, 0 when not yet measured
  * @param {number} count how many categories there are
+ * @param {?number} longestLabel characters in the longest label, when known
  * @return {boolean} true when the labels should be angled
  */
-function turnsLabels(width, count) {
+function turnsLabels(width, count, longestLabel = null) {
 	if (!width) {
 		return count > COLUMN_ROTATE_ABOVE
 	}
-	return width / count < COLUMN_UPRIGHT_SLOT
+	const slot = width / count
+	if (longestLabel !== null) {
+		// A little clear space either side, so neighbouring labels never touch.
+		return longestLabel * LABEL_CHAR_WIDTH > slot - 8
+	}
+	return slot < COLUMN_UPRIGHT_SLOT
+}
+
+/**
+ * @param {object[]} items the chart rows
+ * @return {number} characters in the longest label
+ */
+export function longestLabel(items) {
+	return items.reduce(
+		(most, item) => Math.max(most, String(item.label ?? '').length),
+		0,
+	)
 }
 
 /** Height reserved once the labels are turned. */
@@ -400,7 +425,7 @@ export function columnOption({
 	width = 0,
 }) {
 	const largest = Math.max(max, ...items.map((item) => Number(item.value) || 0))
-	const rotate = turnsLabels(width, items.length)
+	const rotate = turnsLabels(width, items.length, longestLabel(items))
 	const band = rotate ? COLUMN_LABEL_BAND_ROTATED : COLUMN_LABEL_BAND
 	// A turned label is aligned by its far end so it points at its own column, which is
 	// the opposite end when the form reads right to left.
@@ -698,9 +723,10 @@ export const PLOT_HEIGHT = 240
  * @param {string} form one of bars, columns, line
  * @param {number} count how many categories there are
  * @param {number} [width] the plot's width, which decides whether labels are turned
+ * @param {?number} [labelLength] characters in the longest label, when known
  * @return {number} the height in pixels
  */
-export function figureHeight(form, count, width = 0) {
+export function figureHeight(form, count, width = 0, labelLength = null) {
 	if (form === 'bars') {
 		return count * ROW_HEIGHT + CHART_PADDING * 2
 	}
@@ -709,7 +735,9 @@ export function figureHeight(form, count, width = 0) {
 	}
 	return (
 		PLOT_HEIGHT
-		+ (turnsLabels(width, count) ? COLUMN_LABEL_BAND_ROTATED : COLUMN_LABEL_BAND)
+		+ (turnsLabels(width, count, labelLength)
+			? COLUMN_LABEL_BAND_ROTATED
+			: COLUMN_LABEL_BAND)
 	)
 }
 
