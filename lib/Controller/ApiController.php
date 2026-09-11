@@ -1518,8 +1518,24 @@ class ApiController extends OCSController {
 			$questions[$question['id']] = $question;
 		}
 
+		// A quiz's responses carry their grade, so the results can say how the class did as
+		// well as what each person answered. Graded here by the same service that grades a
+		// submission as it arrives, rather than recomputed in the browser, so the two can
+		// never disagree; and computed from the questions as plain arrays, before the empty
+		// settings below are turned into objects for the JSON.
+		$isQuiz = $this->quizService->isQuiz($form);
+		$questionList = array_values($questions);
+
 		// Append Display Names
-		$submissions = array_map(function (array $submission) use ($questions) {
+		$submissions = array_map(function (array $submission) use ($questions, $isQuiz, $questionList) {
+			if ($isQuiz) {
+				$given = [];
+				foreach ($submission['answers'] ?? [] as $answer) {
+					$given[$answer['questionId']][] = $answer['text'];
+				}
+				$submission['quiz'] = $this->quizService->grade($questionList, $given);
+			}
+
 			if (!empty($submission['answers'])) {
 				$submission['answers'] = array_map(function (array $answer) use ($questions) {
 					$name = $questions[$answer['questionId']]['name'];

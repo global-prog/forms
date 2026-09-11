@@ -35,3 +35,65 @@ html {
 	clip-path: inset(50%);
 	white-space: nowrap;
 }
+
+/*
+  Chart palette.
+
+  Fixed hexes, not Nextcloud's theme variables, and deliberately so. A categorical palette
+  has to hold guarantees that can be checked -- a lightness band, a chroma floor, and enough
+  separation between neighbouring slots to survive colour-blind vision -- and a user-chosen
+  `--color-primary-element` is unknowable here, so nothing about it can be guaranteed. Chart
+  *chrome* does use the theme variables (ink, track, surface, border), so a chart still sits
+  correctly in whatever theme the instance wears; only the series hues are pinned.
+
+  Both columns were checked with a colour-separation validator against the two surfaces these
+  charts actually render on -- #ffffff and #171717 -- rather than against generic defaults.
+  Seven slots clear every gate for neighbouring pairs, which is the case that applies to bars
+  and to ring segments. Three of the light slots fall below 3:1 against white, which is
+  allowed only because every chart here prints its label and its count as ordinary text: no
+  value is ever carried by colour alone, so the palette is a wayfinding aid, not the data.
+
+  The slot ORDER is load-bearing, not cosmetic -- it is what keeps neighbouring hues apart.
+  Adding an eighth colour, or reordering these, needs re-validating; a generated extra hue
+  is indistinguishable from one already present. Past seven the charts fold the tail into a
+  single grey "Other" instead.
+*/
+.question-summary,
+.quiz-insights {
+	--chart-series-1: #2a78d6;
+	--chart-series-2: #eb6834;
+	--chart-series-3: #1baf7a;
+	--chart-series-4: #eda100;
+	--chart-series-5: #e87ba4;
+	--chart-series-6: #008300;
+	--chart-series-7: #4a3aa7;
+	/* Grey carries "not a choice": an unanswered question, or a folded tail. */
+	--chart-muted: #898781;
+}
+
+/* An explicitly chosen dark theme wins outright; the default theme follows the OS. */
+[data-theme-dark] .question-summary,
+[data-theme-dark] .quiz-insights,
+[data-theme-dark-highcontrast] .question-summary,
+[data-theme-dark-highcontrast] .quiz-insights {
+	--chart-series-1: #3987e5;
+	--chart-series-2: #d95926;
+	--chart-series-3: #199e70;
+	--chart-series-4: #c98500;
+	--chart-series-5: #d55181;
+	--chart-series-6: #008300;
+	--chart-series-7: #9085e9;
+}
+
+@media (prefers-color-scheme: dark) {
+	[data-theme-default] .question-summary,
+	[data-theme-default] .quiz-insights {
+		--chart-series-1: #3987e5;
+		--chart-series-2: #d95926;
+		--chart-series-3: #199e70;
+		--chart-series-4: #c98500;
+		--chart-series-5: #d55181;
+		--chart-series-6: #008300;
+		--chart-series-7: #9085e9;
+	}
+}

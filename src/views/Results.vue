@@ -256,6 +256,10 @@
 			v-else-if="activeResponseView.id === 'summary'"
 			:dir="formDirection"
 			:lang="formLanguage || undefined">
+			<QuizInsights
+				v-if="form.settings?.quizMode"
+				:submissions="submissions"
+				:questions="questions" />
 			<ResultsSummary
 				v-for="question in summaryQuestions"
 				:key="question.id"
@@ -329,6 +333,7 @@ import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import PaginationToolbar from '../components/PaginationToolbar.vue'
 import PillMenu from '../components/PillMenu.vue'
+import QuizInsights from '../components/Results/QuizInsights.vue'
 import ResultsSummary from '../components/Results/ResultsSummary.vue'
 import Submission from '../components/Results/Submission.vue'
 import TopBar from '../components/TopBar.vue'
@@ -376,6 +381,7 @@ export default {
 		NcEmptyContent,
 		NcLoadingIcon,
 		PillMenu,
+		QuizInsights,
 		ResultsSummary,
 		Submission,
 		TopBar,
