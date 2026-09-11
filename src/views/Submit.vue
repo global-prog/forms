@@ -71,6 +71,15 @@
 				<p v-if="form.expires && form.showExpiration" class="info-message">
 					<bdi>{{ expirationMessage }}</bdi>
 				</p>
+				<p v-if="isWaitingToOpen && canEditForm" class="info-message">
+					<bdi>{{
+						t(
+							'forms',
+							'Opens on {date}. Until then only people who can edit the form can answer it.',
+							{ date: openingDate },
+						)
+					}}</bdi>
+				</p>
 				<!-- Generate form information message-->
 				<p v-if="infoMessage" class="info-message">
 					<bdi>{{ infoMessage }}</bdi>
@@ -210,6 +219,19 @@
 				">
 				<template #icon>
 					<NcIconSvgWrapper :svg="IconCheckSvg" size="64" />
+				</template>
+			</NcEmptyContent>
+			<!-- Scheduled to open later. The server refuses answers until then too; whoever
+			     can edit the form gets the form, with a note, so they can try it out. -->
+			<NcEmptyContent
+				v-else-if="isWaitingToOpen && !canEditForm"
+				class="forms-emptycontent"
+				:name="t('forms', 'Not open yet')"
+				:description="
+					t('forms', 'This form opens on {date}.', { date: openingDate })
+				">
+				<template #icon>
+					<NcIconSvgWrapper :svg="IconScheduleSvg" size="64" />
 				</template>
 			</NcEmptyContent>
 			<NcEmptyContent
@@ -388,6 +410,7 @@ import IconCheck from '@material-symbols/svg-400/outlined/check.svg?raw'
 import IconClose from '@material-symbols/svg-400/outlined/close.svg?raw'
 import IconLink from '@material-symbols/svg-400/outlined/link.svg?raw'
 import IconRefresh from '@material-symbols/svg-400/outlined/refresh.svg?raw'
+import IconSchedule from '@material-symbols/svg-400/outlined/schedule.svg?raw'
 import IconSend from '@material-symbols/svg-400/outlined/send.svg?raw'
 import axios from '@nextcloud/axios'
 import { showError, showSuccess } from '@nextcloud/dialogs'
@@ -493,6 +516,7 @@ export default {
 			IconCloseSvg: IconClose,
 			IconLinkSvg: IconLink,
 			IconRefreshSvg: IconRefresh,
+			IconScheduleSvg: IconSchedule,
 			IconSendSvg: IconSend,
 
 			maxStringLengths: loadState('forms', 'maxStringLengths'),
@@ -794,6 +818,29 @@ export default {
 
 		isArchived() {
 			return this.form.state === FormState.FormArchived
+		},
+
+		/** @return {number} when the form opens, or 0 when it has no opening time */
+		opensAt() {
+			const value = Number(this.form.settings?.opensAt)
+			return Number.isInteger(value) && value > 0 ? value : 0
+		},
+
+		/** @return {boolean} whether the form has an opening time still to come */
+		isWaitingToOpen() {
+			return this.opensAt > moment().unix()
+		},
+
+		/** @return {string} the opening time, written out in the reader's locale */
+		openingDate() {
+			return moment(this.opensAt, 'X')
+				.locale(window.OC.getLanguage())
+				.format('LLL')
+		},
+
+		/** @return {boolean} whether the reader can edit this form */
+		canEditForm() {
+			return this.form.permissions?.includes('edit') === true
 		},
 
 		isClosed() {

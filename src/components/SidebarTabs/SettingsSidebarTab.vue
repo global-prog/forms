@@ -191,6 +191,32 @@
 			</NcCheckboxRadioSwitch>
 		</div>
 		<NcCheckboxRadioSwitch
+			:modelValue="opensLater"
+			:disabled="formArchived || locked"
+			type="switch"
+			@update:modelValue="onOpensLaterChange">
+			{{ t('forms', 'Open at a set time') }}
+		</NcCheckboxRadioSwitch>
+		<div v-show="opensLater && !formArchived" class="settings-div--indent">
+			<NcDateTimePicker
+				id="opensAtDatetimePicker"
+				:clearable="false"
+				:disabled="locked"
+				:disabledDate="notBeforeToday"
+				:editable="false"
+				:format="stringifyOpeningDate"
+				:minuteStep="5"
+				:showSecond="false"
+				:modelValue="openingDate"
+				type="datetime"
+				@update:modelValue="onOpeningDateChange" />
+			<p
+				v-if="closesBeforeOpening"
+				class="settings-hint settings-hint--warning">
+				{{ t('forms', 'The form expires before it opens.') }}
+			</p>
+		</div>
+		<NcCheckboxRadioSwitch
 			:modelValue="hasMaxSubmissions"
 			:disabled="formArchived || locked"
 			type="switch"
@@ -586,6 +612,31 @@ export default {
 			return this.form.expires !== 0
 		},
 
+		/** @return {number} when the form opens, or 0 when it opens straight away */
+		opensAt() {
+			const value = this.formSettings.opensAt
+			return Number.isInteger(value) && value > 0 ? value : 0
+		},
+
+		/** @return {boolean} whether the form waits for a set time to open */
+		opensLater() {
+			return this.opensAt > 0
+		},
+
+		/** @return {Date} the opening time, for the picker */
+		openingDate() {
+			return moment(this.opensAt, 'X').toDate()
+		},
+
+		/** @return {boolean} whether the expiry date comes first, so it never opens */
+		closesBeforeOpening() {
+			return (
+				this.opensLater
+				&& this.formExpires
+				&& this.form.expires <= this.opensAt
+			)
+		},
+
 		formArchived() {
 			return this.form.state === FormState.FormArchived
 		},
@@ -882,6 +933,35 @@ export default {
 			}
 		},
 
+		/**
+		 * @param {boolean} checked wait for a set time before taking responses
+		 */
+		onOpensLaterChange(checked) {
+			// Tomorrow on the hour is a likelier start than this very minute.
+			this.updateSettings({
+				opensAt: checked
+					? moment().add(1, 'day').startOf('hour').unix()
+					: null,
+			})
+		},
+
+		/**
+		 * @param {Date} datetime the chosen opening time
+		 */
+		onOpeningDateChange(datetime) {
+			this.updateSettings({ opensAt: parseInt(moment(datetime).format('X')) })
+		},
+
+		/**
+		 * @param {Date} datetime the picker's date
+		 * @return {string} the opening time as the picker shows it
+		 */
+		stringifyOpeningDate(datetime) {
+			return t('forms', 'Opens on {date}', {
+				date: moment(datetime).format('LLL'),
+			})
+		},
+
 		onShowExpirationChange(checked) {
 			this.$emit('update:formProp', 'showExpiration', checked)
 		},
@@ -1047,7 +1127,8 @@ export default {
 <style lang="scss" scoped>
 @use '../../scssmixins/markdownOutput' as *;
 
-#expiresDatetimePicker {
+#expiresDatetimePicker,
+#opensAtDatetimePicker {
 	width: calc(100% - var(--default-clickable-area));
 }
 
@@ -1058,6 +1139,12 @@ export default {
 .settings-hint {
 	color: var(--color-text-maxcontrast);
 	padding-inline-start: 16px;
+}
+
+// A setting that defeats itself: said in the body colour, in bold, rather than greyed out.
+.settings-hint--warning {
+	color: var(--color-main-text);
+	font-weight: bold;
 }
 
 .settings-language {

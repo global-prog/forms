@@ -493,6 +493,7 @@ class Constants {
 	public const FORM_SETTINGS = [
 		'quizMode' => 'boolean',
 		'quizShowAnswers' => 'boolean',
+		'opensAt' => 'integer',
 		'shuffleQuestions' => 'boolean',
 		'headerImage' => 'string',
 		'accentColor' => 'string',

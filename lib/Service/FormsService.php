@@ -478,7 +478,27 @@ class FormsService {
 			throw new OCSForbiddenException('This form is no longer taking answers');
 		}
 
+		// Nor before it opens, except for whoever can edit it and wants to try it out.
+		if ($this->isNotOpenYet($form) && !$this->canEditForm($form)) {
+			throw new OCSForbiddenException('This form is not open yet');
+		}
+
 		return $form;
+	}
+
+	/**
+	 * Has the form been given an opening time that is still to come?
+	 *
+	 * @param Form $form the form
+	 * @return bool true while the form is waiting to open
+	 */
+	public function isNotOpenYet(Form $form): bool {
+		try {
+			$opensAt = $form->getSettings()['opensAt'] ?? 0;
+		} catch (\Throwable) {
+			return false;
+		}
+		return is_int($opensAt) && $opensAt > time();
 	}
 
 	/**
@@ -966,6 +986,13 @@ class FormsService {
 				$this->logger->debug('Form setting {key} is too long', ['key' => $key]);
 				return false;
 			}
+		}
+
+		// An opening time is a moment, not a count: nothing before 1970 or past 2100.
+		if (isset($settings['opensAt'])
+			&& ($settings['opensAt'] < 0 || $settings['opensAt'] > 4102444800)) {
+			$this->logger->debug('Form opening time out of range');
+			return false;
 		}
 
 		if (isset($settings['language'])
