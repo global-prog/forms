@@ -121,6 +121,11 @@
 					:max="comparisonMax"
 					hidePercentage />
 				<p
+					v-if="comparisonBars.length"
+					class="question-summary__compare-counts">
+					{{ comparisonCounts }}
+				</p>
+				<p
 					v-else-if="groupBy !== null"
 					class="question-summary__ranking-description">
 					{{ t('forms', 'Nobody answered both questions.') }}
@@ -1038,6 +1043,18 @@ export default {
 			)
 		},
 
+		/**
+		 * How many people are in each group, in words: an average of four means little
+		 * without knowing whether four people or four hundred gave it.
+		 *
+		 * @return {string} the groups and their sizes
+		 */
+		comparisonCounts() {
+			return this.comparisonBars
+				.map((bar) => `${bar.label}: ${bar.note}`)
+				.join(' · ')
+		},
+
 		/** @return {number} the widest an average bar can be: the top of the scale */
 		comparisonMax() {
 			const highest = this.scaleRange?.high
@@ -1275,6 +1292,12 @@ export default {
 	&__compare-select {
 		max-inline-size: 360px;
 		min-inline-size: 0;
+	}
+
+	&__compare-counts {
+		color: var(--color-text-maxcontrast);
+		margin-block-start: 4px;
+		overflow-wrap: anywhere;
 	}
 
 	&__text {
