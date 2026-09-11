@@ -1388,6 +1388,12 @@ export default {
 		 */
 		resetData() {
 			this.answers = {}
+			// Back to the first page. Clearing the answers left the respondent on whatever
+			// page they had reached, with the earlier pages now empty behind them; and
+			// opening another form kept the page number, landing part-way through it or
+			// past its end.
+			this.currentPage = 0
+			this.pageHistory = []
 			this.loading = false
 			this.showConfirmLeaveDialog = false
 			this.showClearFormDialog = false
