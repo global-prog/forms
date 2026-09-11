@@ -122,8 +122,12 @@
 				</template>
 				<!-- Quiz result. Graded server-side, so the answer key is never sent to the
 				     browser and cannot be read off the page before submitting. -->
-				<template v-if="quizScore" #action>
-					<div class="quiz-result" role="status" aria-live="polite">
+				<template v-if="quizScore || canSubmitAnother" #action>
+					<div
+						v-if="quizScore"
+						class="quiz-result"
+						role="status"
+						aria-live="polite">
 						<p class="quiz-result__score">
 							{{
 								t('forms', 'You scored {score} out of {max}', {
@@ -191,6 +195,18 @@
 							</li>
 						</ol>
 					</div>
+					<!-- A form that takes several responses per person offers the next
+					     straight away, rather than leaving the respondent to reload. -->
+					<NcButton
+						v-if="canSubmitAnother"
+						class="submit-another"
+						variant="secondary"
+						@click="onSubmitAnother">
+						<template #icon>
+							<NcIconSvgWrapper :svg="IconRefreshSvg" />
+						</template>
+						{{ t('forms', 'Submit another response') }}
+					</NcButton>
 				</template>
 			</NcEmptyContent>
 			<NcEmptyContent
@@ -975,6 +991,17 @@ export default {
 			)
 		},
 
+		/** @return {boolean} whether to offer another response once one is in */
+		canSubmitAnother() {
+			return (
+				this.success
+				&& !this.submissionId
+				&& this.form.submitMultiple === true
+				&& !this.isMaxSubmissionsReached
+				&& this.isActive
+			)
+		},
+
 		/** @return {string} the answers given so far, as a pre-filled link's query */
 		prefilledQuery() {
 			return queryFromAnswers(this.validQuestions, this.answers)
@@ -1618,6 +1645,19 @@ export default {
 		},
 
 		/**
+		 * Start a fresh response after one has been sent, from the top of the form, with
+		 * whatever a pre-filled link carried filled in again.
+		 */
+		onSubmitAnother() {
+			this.resetData()
+			this.quizResult = null
+			this.applyPrefilledAnswers()
+			this.$nextTick(() => {
+				this.$el?.scrollIntoView?.({ block: 'start' })
+			})
+		},
+
+		/**
 		 * Reset View-Data
 		 */
 		resetData() {
@@ -1644,6 +1684,11 @@ export default {
 
 .forms-emptycontent {
 	height: 100%;
+}
+
+.submit-another {
+	margin-block-start: 16px;
+	margin-inline: auto;
 }
 
 .app-content {
