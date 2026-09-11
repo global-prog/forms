@@ -4,6 +4,7 @@
  */
 
 import logger from '../../../utils/Logger.js'
+import { forget, onThemeChange, whenNearView } from './chartScheduler.js'
 import { loadEcharts, readChartTheme } from './echartsLoader.js'
 
 /**
@@ -24,6 +25,10 @@ import { loadEcharts, readChartTheme } from './echartsLoader.js'
  *     colours on a dark ground until something tells it to look again.
  *   A chart mounted into a zero-height container draws nothing and never recovers on
  *     its own, so size is observed rather than measured once.
+ *
+ * A chart starts drawing only as it comes near the screen, or when the page is printed;
+ * see chartScheduler.js. Its box keeps its height meanwhile, so nothing moves when it
+ * draws.
  */
 export default {
 	props: {
@@ -71,22 +76,37 @@ export default {
 			return
 		}
 		this.ready = true
-		this.chart = this.echarts.init(this.$refs.chart, null, {
-			renderer: 'svg',
-		})
-		this.paint()
-		this.observe()
+		// Shown now; measure it, so the arrangement and the height it needs are settled
+		// before the chart draws rather than changing when it does.
+		await this.$nextTick()
+		if (!this.$refs.chart) {
+			return
+		}
+		this.plotWidth = this.$refs.chart.clientWidth
+		whenNearView(this.$refs.chart, () => this.start())
 	},
 
 	beforeUnmount() {
+		forget(this.$refs.chart)
 		this.resizeObserver?.disconnect()
-		this.themeObserver?.disconnect()
-		this.colourScheme?.removeEventListener('change', this.paint)
+		this.stopThemeWatch?.()
 		this.chart?.dispose()
 		this.chart = null
 	},
 
 	methods: {
+		/** Draw the chart for the first time and keep it current from then on. */
+		start() {
+			if (this.chart || !this.$refs.chart || !this.echarts) {
+				return
+			}
+			this.chart = this.echarts.init(this.$refs.chart, null, {
+				renderer: 'svg',
+			})
+			this.paint()
+			this.observe()
+		},
+
 		/** Rebuild the option from the current data and the current theme. */
 		paint() {
 			if (!this.chart || !this.$refs.chart) {
@@ -114,25 +134,8 @@ export default {
 				this.resizeObserver.observe(this.$refs.chart)
 			}
 
-			// Nextcloud applies a theme by stamping an attribute on the document, so the
-			// attribute list is what to watch rather than any event.
-			this.themeObserver = new MutationObserver(() => this.paint())
-			for (const node of [document.documentElement, document.body]) {
-				this.themeObserver.observe(node, {
-					attributes: true,
-					attributeFilter: [
-						'class',
-						'style',
-						'data-theme-dark',
-						'data-theme-default',
-					],
-				})
-			}
-
-			// The default theme defers to the operating system, which the attributes above
-			// never change.
-			this.colourScheme = window.matchMedia?.('(prefers-color-scheme: dark)')
-			this.colourScheme?.addEventListener('change', this.paint)
+			// The theme is watched once for the page, and every chart repainted together.
+			this.stopThemeWatch = onThemeChange(() => this.paint())
 		},
 
 		/**
