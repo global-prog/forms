@@ -13,6 +13,12 @@
   neighbouring points are neighbours, so it is offered on a rating or a scale and withheld
   from a list of options, whose order is only the order someone typed them in.
 
+  A radio group drawn as buttons -- `type="radio"` with `buttonVariant` -- and not
+  `type="button"`, which despite the name is a set of independent toggles: it treats the
+  value as a list and appends to it, so choosing a second form turned "bars" into
+  ["b", "a", "r", "s", "columns"], the chart silently fell back to bars, and the ring was
+  never reachable at all.
+
   Each choice carries an icon and its name. The icon alone would be quicker to scan but
   leaves the control unreadable to a screen reader and ambiguous to anyone who has not met
   the icon before; the name is what makes it a control rather than a puzzle.
@@ -28,7 +34,8 @@
 			:modelValue="modelValue"
 			:value="form"
 			:name="`chartForm_${questionId}`"
-			type="button"
+			type="radio"
+			buttonVariant
 			@update:modelValue="$emit('update:modelValue', $event)">
 			<NcIconSvgWrapper
 				class="chart-form-picker__icon"

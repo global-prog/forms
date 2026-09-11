@@ -1004,6 +1004,10 @@ export default {
 		flex-direction: column;
 		margin-block-end: 24px;
 		margin-inline-start: 40px;
+		// The full width plus that margin overflowed any screen narrower than the
+		// header's maximum, clipping the start of the title and making the whole view
+		// scroll sideways on a phone. Wide screens still get the full 750px.
+		width: calc(100% - 40px);
 
 		h2 {
 			margin-block-end: 0; // because the input field has enough padding

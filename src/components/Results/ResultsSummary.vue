@@ -938,6 +938,11 @@ export default {
 		 * @param {string} form the form the reader picked
 		 */
 		onChartFormChosen(form) {
+			// Only ever one of the forms this question may be drawn as. Anything else is
+			// ignored rather than stored, so a malformed value cannot outlive the page.
+			if (!this.chartForms.includes(form)) {
+				return
+			}
 			this.chartForm = form
 			writeChartForm(this.question.id, form)
 		},

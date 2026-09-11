@@ -1428,6 +1428,9 @@ export default {
 	header {
 		margin-block-end: 24px;
 		margin-inline-start: var(--default-clickable-area);
+		// The contents below are narrowed for small screens, but the header itself was
+		// still the full width plus that margin, so a phone scrolled sideways by it.
+		width: calc(100% - var(--default-clickable-area));
 
 		.form-title,
 		.form-desc,
