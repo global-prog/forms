@@ -1717,6 +1717,10 @@ export default {
 		border-radius: var(--border-radius-large);
 		margin-block-end: 16px;
 		margin-inline-start: var(--default-clickable-area);
+		// The clipping below would otherwise let this flex item shrink past its contents:
+		// a flex item whose overflow is not visible has an automatic minimum size of zero,
+		// and the column squeezed the card to a few pixels, hiding the title entirely.
+		flex-shrink: 0;
 		// So the accent band's corners follow the card's.
 		overflow: hidden;
 		// The contents below are narrowed for small screens, but the header itself was
