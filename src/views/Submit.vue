@@ -6,6 +6,7 @@
 <template>
 	<NcAppContent
 		:class="{ 'app-content--public': publicView }"
+		:style="accentColor ? { '--form-accent': accentColor } : undefined"
 		:pageHeading="t('forms', 'Submit form')">
 		<TopBar
 			v-if="!publicView"
@@ -266,6 +267,7 @@
 					<div class="form-pagination__track" aria-hidden="true">
 						<div
 							class="form-pagination__fill"
+							:class="{ 'form-pagination__fill--accent': accentColor }"
 							:style="{ inlineSize: `${progressPercent}%` }" />
 					</div>
 				</div>
@@ -1653,10 +1655,12 @@ export default {
 }
 
 .form-accent {
-	border-radius: 2px;
-	height: 4px;
-	margin-block: 8px;
-	width: 72px;
+	// A band across the top of the form, as a form's own colour is usually shown. It was
+	// a 72px underline, easy to miss, which made the setting look like it did nothing.
+	border-radius: var(--border-radius-large);
+	height: 10px;
+	margin-block: 0 16px;
+	width: 100%;
 }
 
 .form-pagination {
@@ -1676,6 +1680,12 @@ export default {
 
 	&__fill {
 		background-color: var(--color-primary-element);
+
+		// The form's own colour, where it has one. A progress bar carries no text, so
+		// unlike the buttons it can take any colour without harming contrast.
+		&--accent {
+			background-color: var(--form-accent);
+		}
 		block-size: 100%;
 		// Logical, so the bar grows from the reading start edge in both directions.
 		border-end-end-radius: 3px;
