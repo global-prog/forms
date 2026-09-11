@@ -712,3 +712,39 @@ export function figureHeight(form, count, width = 0) {
 		+ (turnsLabels(width, count) ? COLUMN_LABEL_BAND_ROTATED : COLUMN_LABEL_BAND)
 	)
 }
+
+/**
+ * Count numeric answers into buckets, one per value.
+ *
+ * On a fixed scale every step is a bucket, and a step nobody chose is a measured zero.
+ * Bucketing only the values that were chosen would start a 0 to 10 scale at whatever its
+ * lowest answer happened to be, hide every gap, and let a line run straight across a step
+ * as though someone had picked it. The range is widened to cover any answer given before
+ * the scale was edited to be narrower. A free number has no steps, so there only the
+ * values people typed are counted, and only while there are few enough to draw.
+ *
+ * @param {number[]} values every answer given
+ * @param {?{low: number, high: number}} range the scale's ends, or null for a free number
+ * @param {number} [maxDistinct] how many distinct free values are still worth drawing
+ * @return {Array<{value: number, count: number}>} the buckets in ascending order
+ */
+export function bucketsFor(values, range, maxDistinct = 20) {
+	if (values.length === 0) {
+		return []
+	}
+	const sorted = [...values].sort((a, b) => a - b)
+	const count = (value) => values.filter((v) => v === value).length
+	if (range) {
+		const low = Math.min(range.low, sorted[0])
+		const high = Math.max(range.high, sorted[sorted.length - 1])
+		return Array.from({ length: high - low + 1 }, (_, i) => ({
+			value: low + i,
+			count: count(low + i),
+		}))
+	}
+	const distinct = [...new Set(sorted)]
+	if (distinct.length > maxDistinct) {
+		return []
+	}
+	return distinct.map((value) => ({ value, count: count(value) }))
+}

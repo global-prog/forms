@@ -189,7 +189,7 @@ import answerTypes from '../../models/AnswerTypes.js'
 import { GridCellType, OptionType } from '../../models/Constants.ts'
 import { readChartForm, writeChartForm } from '../../utils/ChartPreferences.js'
 import { resolveDirection } from '../../utils/TextDirection.js'
-import { chartFormsFor } from './Charts/chartOptions.js'
+import { bucketsFor, chartFormsFor } from './Charts/chartOptions.js'
 
 export default {
 	name: 'ResultsSummary',
@@ -324,6 +324,25 @@ export default {
 		},
 
 		/**
+		 * The steps of a question answered on a fixed scale.
+		 *
+		 * @return {?{low: number, high: number}} the scale's ends, or null for a free number
+		 */
+		scaleRange() {
+			const settings = this.question.extraSettings ?? {}
+			if (this.question.type === 'linearscale') {
+				return {
+					low: settings.optionsLowest ?? 1,
+					high: settings.optionsHighest ?? 5,
+				}
+			}
+			if (this.question.type === 'rating') {
+				return { low: 1, high: settings.maxRating ?? 5 }
+			}
+			return null
+		},
+
+		/**
 		 * Summary statistics for a numeric question.
 		 *
 		 * Median is reported alongside the average because a single extreme answer drags an
@@ -344,16 +363,8 @@ export default {
 					: (sorted[middle - 1] + sorted[middle]) / 2
 			const round = (n) => Math.round(n * 100) / 100
 
-			// Bucket by distinct value, but only when the spread is small enough for a bar
-			// per value to be readable - a free-form number question can hold anything.
-			const distinct = [...new Set(sorted)]
-			const buckets =
-				distinct.length <= 20
-					? distinct.map((value) => ({
-							value,
-							count: values.filter((v) => v === value).length,
-						}))
-					: []
+			// Every step of a scale, including the ones nobody chose; see bucketsFor.
+			const buckets = bucketsFor(values, this.scaleRange)
 
 			return {
 				count: values.length,
@@ -579,7 +590,7 @@ export default {
 		/**
 		 * The distribution of a numeric question as bars.
 		 *
-		 * @return {object[]} one bar per distinct value that was answered
+		 * @return {object[]} one bar per step of a scale, or per distinct free value
 		 */
 		bucketBars() {
 			return (this.numericStats?.buckets ?? []).map((bucket) => ({
