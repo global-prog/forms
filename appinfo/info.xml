@@ -40,7 +40,7 @@
 	  info.xml that will not parse leaves Nextcloud unable to read the version at all,
 	  which fails in a way that looks exactly like the problem above.
 	-->
-	<version>5.99.9</version>
+	<version>5.99.10</version>
 	<licence>AGPL-3.0-or-later</licence>
 
 	<author>Affan Hussain</author>
