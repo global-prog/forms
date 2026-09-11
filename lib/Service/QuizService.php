@@ -50,8 +50,8 @@ class QuizService {
 	 *
 	 * @param list<array> $questions the form's questions, as arrays
 	 * @param array $answers answers keyed by question id
-	 * @param bool $revealKey also give each question's correct answer, in words; only for a
-	 *                        respondent who has submitted, and only when the author allows it
+	 * @param bool $revealKey also give the correct answer, in words, to each question missed;
+	 *                        only for a respondent who has submitted, when the author allows it
 	 * @return array{score: float, max: float, questions: array<int, array{correct: bool, points: float, earned: float, feedback: string, correctAnswer?: string}>}
 	 */
 	public function grade(array $questions, array $answers, bool $revealKey = false): array {
@@ -81,7 +81,8 @@ class QuizService {
 					? ($extra['feedbackCorrect'] ?? '')
 					: ($extra['feedbackIncorrect'] ?? '')),
 			];
-			if ($revealKey) {
+			// Only where it was missed: the respondent already knows the answers they got right.
+			if ($revealKey && !$correct) {
 				$perQuestion[$question['id']]['correctAnswer'] = $this->describeKey($question);
 			}
 		}
