@@ -154,6 +154,14 @@
 				</NcActionLink>
 			</NcActions>
 		</div>
+		<p class="share-hint">
+			{{
+				t(
+					'forms',
+					'To send a link with some answers already filled in, open the form with View, answer those questions and choose "Copy pre-filled link".',
+				)
+			}}
+		</p>
 
 		<!-- All users on Instance -->
 		<div v-if="appConfig.allowPermitAll">
@@ -500,6 +508,13 @@ export default {
 .sidebar-tabs__content {
 	display: flex;
 	flex-direction: column;
+}
+
+.share-hint {
+	color: var(--color-text-maxcontrast);
+	margin-block: 4px 12px;
+	// Under the link's words rather than its icon: the avatar is 32px plus its gap.
+	padding-inline-start: 40px;
 }
 
 .share-div {

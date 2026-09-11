@@ -308,6 +308,19 @@
 						</template>
 						{{ t('forms', 'Clear form') }}
 					</NcButton>
+					<!-- For the author: turn the answers given here into a link that opens
+					     the form with them already filled in. -->
+					<NcButton
+						v-if="canCopyPrefilledLink"
+						alignment="center-reverse"
+						class="submit-button"
+						variant="tertiary-no-background"
+						@click.prevent="copyPrefilledLink">
+						<template #icon>
+							<NcIconSvgWrapper :svg="IconLinkSvg" />
+						</template>
+						{{ t('forms', 'Copy pre-filled link') }}
+					</NcButton>
 					<NcButton
 						v-if="currentPage >= pageCount - 1"
 						alignment="center-reverse"
@@ -373,14 +386,15 @@
 import IconCancel from '@material-symbols/svg-400/outlined/block.svg?raw'
 import IconCheck from '@material-symbols/svg-400/outlined/check.svg?raw'
 import IconClose from '@material-symbols/svg-400/outlined/close.svg?raw'
+import IconLink from '@material-symbols/svg-400/outlined/link.svg?raw'
 import IconRefresh from '@material-symbols/svg-400/outlined/refresh.svg?raw'
 import IconSend from '@material-symbols/svg-400/outlined/send.svg?raw'
 import axios from '@nextcloud/axios'
-import { showError } from '@nextcloud/dialogs'
+import { showError, showSuccess } from '@nextcloud/dialogs'
 import { emit } from '@nextcloud/event-bus'
 import { loadState } from '@nextcloud/initial-state'
 import moment from '@nextcloud/moment'
-import { generateOcsUrl } from '@nextcloud/router'
+import { generateOcsUrl, generateUrl } from '@nextcloud/router'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
@@ -402,6 +416,7 @@ import {
 import { isQuestionVisible, resolveBranching } from '../utils/DisplayConditions.js'
 import logger from '../utils/Logger.js'
 import OcsResponse2Data from '../utils/OcsResponse2Data.js'
+import { answersFromQuery, queryFromAnswers } from '../utils/PrefillLink.js'
 import SetWindowTitle from '../utils/SetWindowTitle.js'
 
 export default {
@@ -469,6 +484,7 @@ export default {
 		return {
 			IconCheckSvg: IconCheck,
 			IconCloseSvg: IconClose,
+			IconLinkSvg: IconLink,
 			IconRefreshSvg: IconRefresh,
 			IconSendSvg: IconSend,
 
@@ -889,6 +905,20 @@ export default {
 			return Object.keys(this.answers).length > 0
 		},
 
+		/** @return {string} the answers given so far, as a pre-filled link's query */
+		prefilledQuery() {
+			return queryFromAnswers(this.validQuestions, this.answers)
+		},
+
+		/** @return {boolean} whether to offer the author a pre-filled link */
+		canCopyPrefilledLink() {
+			return (
+				this.form.permissions?.includes('edit') === true
+				&& !this.submissionId
+				&& this.prefilledQuery !== ''
+			)
+		},
+
 		submissionId() {
 			const id =
 				this.$route?.params.submissionId
@@ -924,6 +954,7 @@ export default {
 			// Fetch full form on change
 			this.fetchFullForm(this.form.id)
 			this.initFromLocalStorage()
+			this.applyPrefilledAnswers()
 			SetWindowTitle(this.formTitle)
 		},
 	},
@@ -951,6 +982,7 @@ export default {
 				this.initFromLocalStorage()
 			}
 		}
+		this.applyPrefilledAnswers()
 
 		SetWindowTitle(this.formTitle)
 	},
@@ -1059,6 +1091,52 @@ export default {
 				return JSON.parse(fromLocalStorage)
 			}
 			return null
+		},
+
+		/**
+		 * Fill in the answers a pre-filled link carries. A respondent's own saved answers
+		 * win, so reopening the link does not undo what they had changed; editing a
+		 * response takes nothing from the link.
+		 */
+		applyPrefilledAnswers() {
+			if (this.submissionId) {
+				return
+			}
+			const prefilled = answersFromQuery(
+				this.validQuestions,
+				window.location.search,
+			)
+			const answers = { ...this.answers }
+			for (const [questionId, values] of Object.entries(prefilled)) {
+				const current = answers[questionId]
+				if (Array.isArray(current) ? current.length > 0 : current) {
+					continue
+				}
+				answers[questionId] = values
+			}
+			this.answers = answers
+		},
+
+		/**
+		 * Copy a link to this form with the answers given here filled in. The form's
+		 * public link is used when it has one, since that is the link people are sent.
+		 */
+		async copyPrefilledLink() {
+			const linkShare = (this.form.shares ?? []).find(
+				(share) => share.shareType === OC.Share.SHARE_TYPE_LINK,
+			)
+			const path = linkShare
+				? generateUrl('/apps/forms/s/{hash}', { hash: linkShare.shareWith })
+				: generateUrl('/apps/forms/{hash}', { hash: this.form.hash })
+			const url = new URL(path, window.location.href)
+			url.search = this.prefilledQuery
+			try {
+				await navigator.clipboard.writeText(url.href)
+				showSuccess(t('forms', 'Pre-filled link copied'))
+			} catch (error) {
+				showError(t('forms', 'Cannot copy, please copy the link manually'))
+				logger.error('Copy pre-filled link failed', { error })
+			}
 		},
 
 		/**
