@@ -165,6 +165,14 @@
 									}}
 								</span>
 								<p
+									v-if="!item.correct && item.correctAnswer"
+									class="quiz-result__feedback">
+									{{ t('forms', 'Correct answer:') }}
+									<bdi dir="auto" class="quiz-result__answer">{{
+										item.correctAnswer
+									}}</bdi>
+								</p>
+								<p
 									v-if="item.feedback"
 									class="quiz-result__feedback"
 									dir="auto"
@@ -587,6 +595,8 @@ export default {
 					earned: tidy(graded[question.id].earned),
 					points: tidy(graded[question.id].points),
 					feedback: graded[question.id].feedback || '',
+					// Sent only when the author chose to show the right answers.
+					correctAnswer: graded[question.id].correctAnswer || '',
 				}))
 		},
 
@@ -1639,6 +1649,11 @@ export default {
 		color: var(--color-text-maxcontrast);
 		grid-column: 2 / -1;
 		margin: 0;
+	}
+
+	&__answer {
+		color: var(--color-main-text);
+		font-weight: bold;
 	}
 
 	&__percent {

@@ -1768,11 +1768,12 @@ class ApiController extends OCSController {
 		}
 
 		// A quiz returns the respondent's result so it can be shown immediately. Grading is
-		// done here, server-side, from the stored answer key - the client never sees the key.
+		// done here, server-side, from the stored answer key - the client never sees the key,
+		// unless the author has chosen to show the correct answers once a response is in.
 		$quizResult = null;
 		if ($this->quizService->isQuiz($form)) {
 			try {
-				$quizResult = $this->quizService->grade($questions, $answers);
+				$quizResult = $this->quizService->grade($questions, $answers, $this->quizService->revealsKey($form));
 			} catch (\Throwable $e) {
 				// A grading problem must not fail a response that is already stored.
 				$this->logger->warning('Could not grade submission', [

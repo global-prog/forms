@@ -50,9 +50,11 @@ class QuizService {
 	 *
 	 * @param list<array> $questions the form's questions, as arrays
 	 * @param array $answers answers keyed by question id
-	 * @return array{score: float, max: float, questions: array<int, array{correct: bool, points: float, earned: float, feedback: string}>}
+	 * @param bool $revealKey also give each question's correct answer, in words; only for a
+	 *                        respondent who has submitted, and only when the author allows it
+	 * @return array{score: float, max: float, questions: array<int, array{correct: bool, points: float, earned: float, feedback: string, correctAnswer?: string}>}
 	 */
-	public function grade(array $questions, array $answers): array {
+	public function grade(array $questions, array $answers, bool $revealKey = false): array {
 		$score = 0.0;
 		$max = 0.0;
 		$perQuestion = [];
@@ -79,9 +81,48 @@ class QuizService {
 					? ($extra['feedbackCorrect'] ?? '')
 					: ($extra['feedbackIncorrect'] ?? '')),
 			];
+			if ($revealKey) {
+				$perQuestion[$question['id']]['correctAnswer'] = $this->describeKey($question);
+			}
 		}
 
 		return ['score' => $score, 'max' => $max, 'questions' => $perQuestion];
+	}
+
+	/**
+	 * Should a respondent be shown the answer key once they have submitted?
+	 *
+	 * @param Form $form the form
+	 * @return bool true when the author has chosen to reveal it
+	 */
+	public function revealsKey(Form $form): bool {
+		try {
+			return !empty($form->getSettings()['quizShowAnswers']);
+		} catch (\Throwable) {
+			return false;
+		}
+	}
+
+	/**
+	 * A question's correct answer in words: the text of each correct option, in the order
+	 * the options are shown, or the expected answer as typed by the author.
+	 *
+	 * @param array $question the question
+	 * @return string the correct answer
+	 */
+	private function describeKey(array $question): string {
+		$extra = $question['extraSettings'] ?? [];
+		if (empty($extra['correctOptions'])) {
+			return (string)($extra['correctAnswer'] ?? '');
+		}
+		$correct = array_map('strval', (array)$extra['correctOptions']);
+		$texts = [];
+		foreach ($question['options'] ?? [] as $option) {
+			if (in_array((string)$option['id'], $correct, true)) {
+				$texts[] = (string)$option['text'];
+			}
+		}
+		return implode(', ', $texts);
 	}
 
 	/**

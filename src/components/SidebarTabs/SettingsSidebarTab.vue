@@ -73,6 +73,22 @@
 			}}
 		</p>
 		<NcCheckboxRadioSwitch
+			v-show="quizMode"
+			:modelValue="quizShowAnswers"
+			:disabled="formArchived || locked"
+			type="switch"
+			@update:modelValue="onQuizShowAnswersChange">
+			{{ t('forms', 'Show correct answers after submitting') }}
+		</NcCheckboxRadioSwitch>
+		<p v-show="quizMode && quizShowAnswers" class="settings-hint">
+			{{
+				t(
+					'forms',
+					'Anyone who submits can pass the answers on. Allow one response per person if that matters.',
+				)
+			}}
+		</p>
+		<NcCheckboxRadioSwitch
 			:modelValue="shuffleQuestions"
 			:disabled="formArchived || locked"
 			type="switch"
@@ -488,6 +504,11 @@ export default {
 			return this.formSettings.quizMode === true
 		},
 
+		/** @return {boolean} whether a respondent is shown the right answers once they submit */
+		quizShowAnswers() {
+			return this.formSettings.quizShowAnswers === true
+		},
+
 		/** @return {boolean} whether questions are shown in a random order */
 		shuffleQuestions() {
 			return this.formSettings.shuffleQuestions === true
@@ -801,6 +822,13 @@ export default {
 		 */
 		onQuizModeChange(checked) {
 			this.updateSettings({ quizMode: checked })
+		},
+
+		/**
+		 * @param {boolean} checked show the right answers with a submitted quiz's result
+		 */
+		onQuizShowAnswersChange(checked) {
+			this.updateSettings({ quizShowAnswers: checked })
 		},
 
 		/**
