@@ -283,10 +283,6 @@
 						ref="questions"
 						:key="question.id"
 						v-bind="question"
-						:class="{
-							'question--card':
-								!answerTypes[question.type].displayOnly,
-						}"
 						readOnly
 						:answerType="answerTypes[question.type]"
 						:index="index + 1"
@@ -1786,7 +1782,11 @@ export default {
 		// which a long form on a phone otherwise leaves to guesswork. Sections, images
 		// and videos are not answered and stay flat, so they read as what they are --
 		// dividers between the cards rather than cards themselves.
-		.question--card {
+		// A card is the question itself; a section, an image or a video is not answered
+		// and stays flat, so it reads as a divider between cards rather than a card. The
+		// class cannot come from the loop above: it would have to fall through two
+		// components to reach this element, so the contents say which is which.
+		.question:not(:has(.question-section)):not(:has(.question-media)) {
 			background-color: var(--color-main-background);
 			border: 2px solid var(--color-border);
 			border-radius: var(--border-radius-large);
