@@ -78,6 +78,47 @@ class QuizService {
 	}
 
 	/**
+	 * Grade a response as it was stored.
+	 *
+	 * A response arrives naming the options chosen by id, but is stored naming them by their
+	 * text, while the key names them by id. So each stored choice is turned back into the id
+	 * of the option carrying that text before grading. A choice that no longer matches an
+	 * option, because it was an "other" answer or the option has since been reworded, gets
+	 * back the prefix an "other" answer arrives with, so it can never pass for an option id
+	 * even when someone typed one.
+	 *
+	 * @param list<array> $questions the form's questions, as arrays
+	 * @param array $stored the stored answer texts, keyed by question id
+	 * @return array the grade, shaped as grade() returns it
+	 */
+	public function gradeStored(array $questions, array $stored): array {
+		$answers = [];
+		foreach ($questions as $question) {
+			$texts = $stored[$question['id']] ?? [];
+			if ($texts === []) {
+				continue;
+			}
+			if (!in_array($question['type'] ?? '', Constants::ANSWER_TYPES_PREDEFINED, true)
+				|| ($question['type'] ?? '') === Constants::ANSWER_TYPE_LINEARSCALE) {
+				$answers[$question['id']] = $texts;
+				continue;
+			}
+
+			// Two options with the same text cannot be told apart once stored; the first wins.
+			$idsByText = [];
+			foreach ($question['options'] ?? [] as $option) {
+				$idsByText[(string)$option['text']] ??= (string)$option['id'];
+			}
+			$answers[$question['id']] = array_map(
+				static fn ($text) => $idsByText[(string)$text]
+					?? Constants::QUESTION_EXTRASETTINGS_OTHER_PREFIX . $text,
+				$texts,
+			);
+		}
+		return $this->grade($questions, $answers);
+	}
+
+	/**
 	 * Does this question carry an answer key?
 	 *
 	 * @param array $extra the question's extra settings

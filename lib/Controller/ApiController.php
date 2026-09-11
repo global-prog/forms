@@ -1533,7 +1533,7 @@ class ApiController extends OCSController {
 				foreach ($submission['answers'] ?? [] as $answer) {
 					$given[$answer['questionId']][] = $answer['text'];
 				}
-				$submission['quiz'] = $this->quizService->grade($questionList, $given);
+				$submission['quiz'] = $this->quizService->gradeStored($questionList, $given);
 			}
 
 			if (!empty($submission['answers'])) {
