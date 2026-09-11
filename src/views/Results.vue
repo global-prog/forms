@@ -260,7 +260,8 @@
 				v-for="question in summaryQuestions"
 				:key="question.id"
 				:question="question"
-				:submissions="submissions" />
+				:submissions="submissions"
+				:formLanguage="formLanguage" />
 		</section>
 
 		<!-- Responses view for individual responses -->

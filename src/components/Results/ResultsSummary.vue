@@ -213,6 +213,12 @@ export default {
 			type: Object,
 			required: true,
 		},
+
+		/** The form's declared language, or '' when it follows the reader. */
+		formLanguage: {
+			type: String,
+			default: '',
+		},
 	},
 
 	setup() {
@@ -234,11 +240,13 @@ export default {
 		/**
 		 * Which way this one question should be laid out.
 		 *
-		 * Taken from the question's own words rather than from the form's declared
-		 * language, because a form can be written in two languages and this is the most
-		 * specific evidence there is about this question. The option texts are consulted
-		 * too, since they are what the chart labels are made of, and a question whose
-		 * title is a bare number would otherwise decide nothing.
+		 * The form's declared language wins where there is one, exactly as in the editor
+		 * and the form itself: an author who has said "this form is Arabic" has settled
+		 * it for every question. Otherwise it is taken from this question's own words,
+		 * which is what lets a form written in two languages lay each question out its
+		 * own way. The option texts are consulted too, since they are what the chart
+		 * labels are made of, and a question whose title is a bare number would
+		 * otherwise decide nothing.
 		 *
 		 * Undefined when none of it has a direction, in which case the question inherits
 		 * the direction the results view has already set from the form.
@@ -247,7 +255,9 @@ export default {
 		 */
 		questionDirection() {
 			return resolveDirection(
-				'',
+				// A declared language decides for every question, as it does in the editor
+				// and the form itself; the words only decide when nothing was declared.
+				this.formLanguage,
 				this.question.text,
 				...(this.question.options ?? []).map((option) => option.text),
 			)
