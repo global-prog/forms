@@ -62,11 +62,11 @@
 					v-html="formDescription" />
 				<!-- Show expiration message-->
 				<p v-if="form.expires && form.showExpiration" class="info-message">
-					{{ expirationMessage }}
+					<bdi>{{ expirationMessage }}</bdi>
 				</p>
 				<!-- Generate form information message-->
 				<p v-if="infoMessage" class="info-message">
-					{{ infoMessage }}
+					<bdi>{{ infoMessage }}</bdi>
 				</p>
 			</header>
 

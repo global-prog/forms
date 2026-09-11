@@ -40,11 +40,11 @@
 			</a>
 
 			<p v-else class="question-media__empty">
-				{{
+				<bdi>{{
 					isImage
 						? t('forms', 'No image address set yet.')
 						: t('forms', 'No video address set yet.')
-				}}
+				}}</bdi>
 			</p>
 
 			<template v-if="!readOnly">

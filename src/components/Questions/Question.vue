@@ -162,11 +162,13 @@
 					v-html="computedDescription" />
 				<!-- eslint-enable vue/no-v-html -->
 			</div>
+			<!-- The interface's sentences, inside a question laid out the form's way:
+			     <bdi> keeps their punctuation at their own end. -->
 			<NcNoteCard v-if="hasInfo" :id="infoId" type="info">
-				{{ infoMessage }}
+				<bdi>{{ infoMessage }}</bdi>
 			</NcNoteCard>
 			<NcNoteCard v-if="hasError" :id="errorId" type="error">
-				{{ errorMessage }}
+				<bdi>{{ errorMessage }}</bdi>
 			</NcNoteCard>
 		</div>
 

@@ -20,3 +20,18 @@ html {
 	background-image: url(../img/forms.svg);
 	filter: var(--background-invert-if-dark);
 }
+
+/*
+ * Nextcloud hides screen-reader-only text by pushing it 10000px toward the inline start.
+ * Forms lays a form's own content out in the form's direction, which can differ from the
+ * page's, and inside such a region "inline start" is the other side: the push then lands
+ * in the scrollable direction of the page around it and gives it a horizontal scrollbar
+ * thousands of pixels wide. Inside a region with a direction of its own the same text is
+ * hidden by clipping instead, which needs no offset at all. It stays in the accessibility
+ * tree either way, and anything that reveals itself on focus is left alone.
+ */
+[dir] .hidden-visually:not(:focus):not(:focus-within) {
+	inset-inline-start: auto;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}

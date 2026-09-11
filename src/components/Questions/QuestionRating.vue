@@ -21,6 +21,28 @@
 		:errorMessage="errorMessage"
 		:isTriggerQuestion="isTriggerQuestion"
 		v-on="commonListeners">
+		<!-- In the question's own menu, as every other type does. A separate button after
+		     the stars wrapped onto a line of its own and, drawn with the same empty star,
+		     looked like one more star to pick. -->
+		<template #actions>
+			<NcActionInput
+				type="number"
+				min="2"
+				max="10"
+				:label="t('forms', 'Number of stars')"
+				:modelValue="String(maxRating)"
+				@submit="onChangeMax"
+				@input="onChangeMax" />
+			<NcActionRadio
+				v-for="option in ['star', 'heart', 'thumb']"
+				:key="option"
+				:modelValue="ratingIcon"
+				:name="`ratingIcon_${id}`"
+				:value="option"
+				@update:modelValue="onChangeIcon(option)">
+				{{ iconLabel(option) }}
+			</NcActionRadio>
+		</template>
 		<div class="question__content">
 			<fieldset class="rating" :disabled="!readOnly">
 				<legend class="hidden-visually">
@@ -55,31 +77,6 @@
 					{{ t('forms', 'Clear') }}
 				</NcButton>
 			</fieldset>
-			<NcActions
-				v-if="!readOnly"
-				:aria-label="t('forms', 'Rating settings')"
-				variant="tertiary-no-background">
-				<template #icon>
-					<NcIconSvgWrapper :svg="iconEmpty" />
-				</template>
-				<NcActionInput
-					type="number"
-					min="2"
-					max="10"
-					:label="t('forms', 'Number of stars')"
-					:modelValue="String(maxRating)"
-					@submit="onChangeMax"
-					@input="onChangeMax" />
-				<NcActionRadio
-					v-for="option in ['star', 'heart', 'thumb']"
-					:key="option"
-					:modelValue="ratingIcon"
-					:name="`ratingIcon_${id}`"
-					:value="option"
-					@update:modelValue="onChangeIcon(option)">
-					{{ iconLabel(option) }}
-				</NcActionRadio>
-			</NcActions>
 		</div>
 		<template #insert>
 			<slot name="insert" />
@@ -96,7 +93,6 @@ import IconThumbFilled from '@material-symbols/svg-400/outlined/thumb_up-fill.sv
 import IconThumb from '@material-symbols/svg-400/outlined/thumb_up.svg?raw'
 import NcActionInput from '@nextcloud/vue/components/NcActionInput'
 import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
-import NcActions from '@nextcloud/vue/components/NcActions'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import Question from './Question.vue'
@@ -111,7 +107,6 @@ export default {
 	components: {
 		NcActionInput,
 		NcActionRadio,
-		NcActions,
 		NcButton,
 		NcIconSvgWrapper,
 		Question,
