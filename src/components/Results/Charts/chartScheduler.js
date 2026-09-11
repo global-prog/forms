@@ -19,11 +19,11 @@
 /** How far ahead of the screen a chart starts, so it is ready by the time it is seen. */
 const LOOK_AHEAD = '400px 0px'
 
-/** @type {Map<Element, () => void>} charts waiting to come into view */
+/** @type {Map<Element, {start: () => void, observer: IntersectionObserver}>} charts waiting to come into view */
 const waiting = new Map()
 
-/** @type {?IntersectionObserver} */
-let visibility = null
+/** @type {Map<?Element, IntersectionObserver>} one observer per scrolling area */
+const observers = new Map()
 
 /** @type {Set<() => void>} charts to repaint when the theme changes */
 const themed = new Set()
@@ -34,9 +34,9 @@ let printWatched = false
 
 /** Draw every chart still waiting, as printing needs them all. */
 function startAll() {
-	for (const [element, start] of [...waiting]) {
+	for (const [element, { start, observer }] of [...waiting]) {
 		waiting.delete(element)
-		visibility?.unobserve(element)
+		observer.unobserve(element)
 		start()
 	}
 }
@@ -57,6 +57,61 @@ function watchPrinting() {
 }
 
 /**
+ * The nearest ancestor that scrolls, which is what brings a chart into view.
+ *
+ * Measured against the window instead, a chart inside a scrolling area is cut off at that
+ * area's edge, so the look-ahead margin is lost and every chart would start only as it
+ * appears - drawing in front of the reader rather than before they arrive.
+ *
+ * @param {Element} element the chart's container
+ * @return {?Element} the scrolling area, or null for the window
+ */
+function scrollingArea(element) {
+	for (
+		let node = element.parentElement;
+		node && node !== document.body;
+		node = node.parentElement
+	) {
+		// A box scrolled only sideways computes its vertical overflow as auto too, so it
+		// must also be taller inside than out to be what brings charts into view.
+		const overflow = window.getComputedStyle?.(node)?.overflowY
+		if (
+			(overflow === 'auto' || overflow === 'scroll')
+			&& node.scrollHeight > node.clientHeight
+		) {
+			return node
+		}
+	}
+	return null
+}
+
+/**
+ * @param {?Element} root the scrolling area to watch within, or null for the window
+ * @return {IntersectionObserver} the observer for that area
+ */
+function observerFor(root) {
+	let observer = observers.get(root)
+	if (!observer) {
+		observer = new window.IntersectionObserver(
+			(entries) => {
+				for (const entry of entries) {
+					if (!entry.isIntersecting) {
+						continue
+					}
+					const pending = waiting.get(entry.target)
+					waiting.delete(entry.target)
+					observer.unobserve(entry.target)
+					pending?.start()
+				}
+			},
+			{ root, rootMargin: LOOK_AHEAD },
+		)
+		observers.set(root, observer)
+	}
+	return observer
+}
+
+/**
  * Run `start` once `element` comes near the screen, or straight away where that cannot
  * be watched.
  *
@@ -69,24 +124,9 @@ export function whenNearView(element, start) {
 		return
 	}
 	watchPrinting()
-	if (!visibility) {
-		visibility = new window.IntersectionObserver(
-			(entries) => {
-				for (const entry of entries) {
-					if (!entry.isIntersecting) {
-						continue
-					}
-					const run = waiting.get(entry.target)
-					waiting.delete(entry.target)
-					visibility.unobserve(entry.target)
-					run?.()
-				}
-			},
-			{ rootMargin: LOOK_AHEAD },
-		)
-	}
-	waiting.set(element, start)
-	visibility.observe(element)
+	const observer = observerFor(scrollingArea(element))
+	waiting.set(element, { start, observer })
+	observer.observe(element)
 }
 
 /**
@@ -95,8 +135,10 @@ export function whenNearView(element, start) {
  * @param {?Element} element the chart's container
  */
 export function forget(element) {
-	if (element && waiting.delete(element)) {
-		visibility?.unobserve(element)
+	const pending = element && waiting.get(element)
+	if (pending) {
+		waiting.delete(element)
+		pending.observer.unobserve(element)
 	}
 }
 
