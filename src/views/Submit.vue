@@ -117,6 +117,51 @@
 							}}
 						</p>
 						<p class="quiz-result__percent">{{ quizScore.percent }}%</p>
+						<!-- How each question went, with the author's feedback. The author can
+						     write feedback for a right and a wrong answer, and the server
+						     sends it back with the grade; without this list it was never
+						     shown to anyone. Only the respondent's own result is revealed,
+						     never the answer key, which stays on the server. -->
+						<ol
+							v-if="quizBreakdown.length"
+							class="quiz-result__questions">
+							<li
+								v-for="item in quizBreakdown"
+								:key="item.id"
+								class="quiz-result__question"
+								:class="{
+									'quiz-result__question--correct': item.correct,
+								}">
+								<NcIconSvgWrapper
+									class="quiz-result__mark"
+									:svg="item.correct ? IconCheckSvg : IconCloseSvg"
+									:size="20" />
+								<span class="hidden-visually">
+									{{
+										item.correct
+											? t('forms', 'Correct')
+											: t('forms', 'Incorrect')
+									}}
+								</span>
+								<span class="quiz-result__text" dir="auto">{{
+									item.text
+								}}</span>
+								<span class="quiz-result__points">
+									{{
+										t('forms', '{earned} of {points}', {
+											earned: item.earned,
+											points: item.points,
+										})
+									}}
+								</span>
+								<p
+									v-if="item.feedback"
+									class="quiz-result__feedback"
+									dir="auto">
+									{{ item.feedback }}
+								</p>
+							</li>
+						</ol>
 					</div>
 				</template>
 			</NcEmptyContent>
@@ -307,6 +352,7 @@
 <script>
 import IconCancel from '@material-symbols/svg-400/outlined/block.svg?raw'
 import IconCheck from '@material-symbols/svg-400/outlined/check.svg?raw'
+import IconClose from '@material-symbols/svg-400/outlined/close.svg?raw'
 import IconRefresh from '@material-symbols/svg-400/outlined/refresh.svg?raw'
 import IconSend from '@material-symbols/svg-400/outlined/send.svg?raw'
 import axios from '@nextcloud/axios'
@@ -402,6 +448,7 @@ export default {
 		// Non reactive properties
 		return {
 			IconCheckSvg: IconCheck,
+			IconCloseSvg: IconClose,
 			IconRefreshSvg: IconRefresh,
 			IconSendSvg: IconSend,
 
@@ -505,6 +552,30 @@ export default {
 				max: tidy(result.max),
 				percent: Math.round((result.score / result.max) * 100),
 			}
+		},
+
+		/**
+		 * Each graded question's result, in the order the form asks them.
+		 *
+		 * @return {object[]} id, text, whether it was right, points earned and available,
+		 *                    and the author's feedback for that outcome
+		 */
+		quizBreakdown() {
+			const graded = this.quizResult?.questions
+			if (!this.quizScore || !graded || typeof graded !== 'object') {
+				return []
+			}
+			const tidy = (value) => Math.round((Number(value) || 0) * 100) / 100
+			return this.form.questions
+				.filter((question) => graded[question.id])
+				.map((question) => ({
+					id: question.id,
+					text: question.text,
+					correct: graded[question.id].correct === true,
+					earned: tidy(graded[question.id].earned),
+					points: tidy(graded[question.id].points),
+					feedback: graded[question.id].feedback || '',
+				}))
 		},
 
 		/** @return {string} optional banner image address for this form */
@@ -1516,6 +1587,46 @@ export default {
 	&__score {
 		font-size: 1.1em;
 		font-weight: bold;
+	}
+
+	&__questions {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		list-style: none;
+		margin-block: 16px 0;
+		margin-inline: auto;
+		max-inline-size: 560px;
+		padding: 0;
+		text-align: start;
+	}
+
+	&__question {
+		align-items: baseline;
+		display: grid;
+		gap: 2px 8px;
+		grid-template-columns: auto 1fr auto;
+	}
+
+	&__mark {
+		align-self: center;
+		color: var(--color-error-text);
+	}
+
+	&__question--correct &__mark {
+		color: var(--color-success-text);
+	}
+
+	&__points {
+		color: var(--color-text-maxcontrast);
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+
+	&__feedback {
+		color: var(--color-text-maxcontrast);
+		grid-column: 2 / -1;
+		margin: 0;
 	}
 
 	&__percent {
