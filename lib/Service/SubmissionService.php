@@ -516,7 +516,8 @@ class SubmissionService {
 			if ($question === null) {
 				continue;
 			}
-			if (!($reachableQuestions[$question['id']] ?? true)) {
+			// Absent from the reachable list means the page was skipped; see validateSubmission.
+			if (empty($reachableQuestions[$question['id']])) {
 				continue;
 			}
 			if (!$this->isQuestionVisible($question, $questionsById, $answers)) {
@@ -559,7 +560,10 @@ class SubmissionService {
 			}
 
 			// skipped by a "go to section" jump -- the respondent never saw this page.
-			if (!($reachableQuestions[$questionId] ?? true)) {
+			// getReachableQuestions() lists only the questions that were reached, so one
+			// that is absent was skipped. Reading an absent entry as reachable enforced every
+			// required question on a skipped page, and refused anyone who took the branch.
+			if (empty($reachableQuestions[$questionId])) {
 				continue;
 			}
 
