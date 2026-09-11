@@ -81,6 +81,7 @@
 						class="form-title"
 						rows="1"
 						dir="auto"
+						:style="{ textAlign: authorTextAlign }"
 						:maxlength="maxStringLengths.formTitle"
 						:placeholder="t('forms', 'Form title')"
 						required
@@ -97,6 +98,7 @@
 					class="form-desc"
 					rows="1"
 					dir="auto"
+					:style="{ textAlign: authorTextAlign }"
 					:value="form.description"
 					:placeholder="
 						t(

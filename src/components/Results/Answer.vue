@@ -5,7 +5,10 @@
 
 <template>
 	<div class="answer">
-		<h4 class="answer__question-text" dir="auto">
+		<h4
+			class="answer__question-text"
+			dir="auto"
+			:style="{ textAlign: formTextAlign }">
 			{{ questionText }}
 		</h4>
 		<!-- Do not wrap the following line between tags! `white-space:pre-line` respects `\n` but would produce additional empty first line -->
@@ -112,6 +115,11 @@ export default {
 		NcCheckboxRadioSwitch,
 		NcIconSvgWrapper,
 		NcHighlight,
+	},
+
+	// How to align the author's words; see ViewsMixin authorTextAlign.
+	inject: {
+		formTextAlign: { from: 'formTextAlign', default: undefined },
 	},
 
 	props: {

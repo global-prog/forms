@@ -5,7 +5,7 @@
 
 <template>
 	<div class="section question-summary" :dir="questionDirection">
-		<h3 dir="auto">
+		<h3 dir="auto" :style="{ textAlign: formTextAlign }">
 			{{ question.text }}
 		</h3>
 		<p class="question-summary__detail">
@@ -201,6 +201,11 @@ export default {
 		ChartHeatmap,
 		ChartStacked,
 		NcIconSvgWrapper,
+	},
+
+	// How to align the author's words; see ViewsMixin authorTextAlign.
+	inject: {
+		formTextAlign: { from: 'formTextAlign', default: undefined },
 	},
 
 	props: {

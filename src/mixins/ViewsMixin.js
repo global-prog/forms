@@ -10,6 +10,7 @@ import { emit } from '@nextcloud/event-bus'
 import moment from '@nextcloud/moment'
 import { generateOcsUrl } from '@nextcloud/router'
 import MarkdownIt from 'markdown-it'
+import { computed } from 'vue'
 import CancelableRequest from '../utils/CancelableRequest.js'
 import logger from '../utils/Logger.js'
 import OcsResponse2Data from '../utils/OcsResponse2Data.js'
@@ -19,6 +20,9 @@ export default {
 	provide() {
 		return {
 			$markdownit: this.markdownit,
+			// Components below the view that show the author's words read this, so a
+			// declared language aligns every one of them the same way.
+			formTextAlign: computed(() => this.authorTextAlign),
 		}
 	},
 
@@ -83,6 +87,27 @@ export default {
 				this.form?.title,
 				this.form?.description,
 			)
+		},
+
+		/**
+		 * How to align text the form's author wrote: its title, description, questions
+		 * and feedback.
+		 *
+		 * Each of those keeps dir="auto", so its own words decide their order and a full
+		 * stop stays at the end of an English sentence. But on its own that also aligned
+		 * them by their words, so a declared-Arabic form set every English line flush left
+		 * inside a right-to-left layout, and the setting changed almost nothing a respondent
+		 * sees. When a language is declared it now decides the alignment of all of them;
+		 * without one, each keeps aligning by its own words. What respondents type is never
+		 * subject to this.
+		 *
+		 * @return {string|undefined} 'right', 'left', or undefined to leave it alone
+		 */
+		authorTextAlign() {
+			if (!this.formLanguage) {
+				return undefined
+			}
+			return this.formDirection === 'rtl' ? 'right' : 'left'
 		},
 
 		/**

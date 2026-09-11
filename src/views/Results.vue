@@ -28,7 +28,7 @@
 
 		<!-- Showing submissions -->
 		<header>
-			<h2 dir="auto">
+			<h2 dir="auto" :style="{ textAlign: authorTextAlign }">
 				{{ formTitle }}
 			</h2>
 			<p>

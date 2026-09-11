@@ -58,6 +58,7 @@
 					class="question__header__title__text question__header__title__text__input"
 					type="text"
 					dir="auto"
+					:style="{ textAlign: formTextAlign }"
 					minlength="1"
 					:maxlength="maxStringLengths.questionText"
 					required
@@ -66,7 +67,8 @@
 					v-else-if="readOnly"
 					:id="titleId"
 					class="question__header__title__text"
-					dir="auto">
+					dir="auto"
+					:style="{ textAlign: formTextAlign }">
 					{{ computedText }}
 				</h3>
 				<div v-else class="question__header__title__text"></div>
@@ -144,6 +146,7 @@
 					v-if="!readOnly"
 					ref="description"
 					dir="auto"
+					:style="{ textAlign: formTextAlign }"
 					:value="description"
 					:placeholder="
 						t(
@@ -224,7 +227,11 @@ export default {
 		NcNoteCard,
 	},
 
-	inject: ['$markdownit'],
+	inject: {
+		$markdownit: { from: '$markdownit' },
+		// How to align the author's words; see ViewsMixin authorTextAlign.
+		formTextAlign: { from: 'formTextAlign', default: undefined },
+	},
 
 	props: {
 		index: {

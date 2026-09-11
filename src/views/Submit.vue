@@ -50,15 +50,21 @@
 					v-if="accentColor"
 					class="form-accent"
 					:style="{ backgroundColor: accentColor }" />
-				<!-- eslint-disable-next-line vue/no-unused-refs -->
-				<h2 ref="title" class="form-title" dir="auto">
+				<!-- eslint-disable vue/no-unused-refs -- the ref is read by ViewsMixin -->
+				<h2
+					ref="title"
+					class="form-title"
+					dir="auto"
+					:style="{ textAlign: authorTextAlign }">
 					{{ formTitle }}
 				</h2>
+				<!-- eslint-enable vue/no-unused-refs -->
 				<!-- eslint-disable vue/no-v-html -->
 				<div
 					v-if="!loading && !success && !!formDescription"
 					class="form-desc"
 					dir="auto"
+					:style="{ textAlign: authorTextAlign }"
 					v-html="formDescription" />
 				<!-- Show expiration message-->
 				<p v-if="form.expires && form.showExpiration" class="info-message">
@@ -143,9 +149,12 @@
 											: t('forms', 'Incorrect')
 									}}
 								</span>
-								<span class="quiz-result__text" dir="auto">{{
-									item.text
-								}}</span>
+								<span
+									class="quiz-result__text"
+									dir="auto"
+									:style="{ textAlign: authorTextAlign }"
+									>{{ item.text }}</span
+								>
 								<span class="quiz-result__points">
 									{{
 										t('forms', '{earned} of {points}', {
@@ -157,7 +166,8 @@
 								<p
 									v-if="item.feedback"
 									class="quiz-result__feedback"
-									dir="auto">
+									dir="auto"
+									:style="{ textAlign: authorTextAlign }">
 									{{ item.feedback }}
 								</p>
 							</li>
