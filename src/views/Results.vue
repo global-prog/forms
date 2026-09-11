@@ -256,16 +256,27 @@
 			v-else-if="activeResponseView.id === 'summary'"
 			:dir="formDirection"
 			:lang="formLanguage || undefined">
-			<QuizInsights
-				v-if="form.settings?.quizMode"
-				:submissions="submissions"
-				:questions="questions" />
-			<ResultsSummary
-				v-for="question in summaryQuestions"
-				:key="question.id"
-				:question="question"
-				:submissions="submissions"
-				:formLanguage="formLanguage" />
+			<SummaryFilter
+				v-if="submissions.length > 1"
+				v-model="summaryFilter"
+				:questions="summaryQuestions"
+				:shown="summarySubmissions.length"
+				:total="submissions.length" />
+			<p v-if="!summarySubmissions.length" class="summary-filter-empty">
+				{{ t('forms', 'No responses gave this answer.') }}
+			</p>
+			<template v-else>
+				<QuizInsights
+					v-if="form.settings?.quizMode"
+					:submissions="summarySubmissions"
+					:questions="questions" />
+				<ResultsSummary
+					v-for="question in summaryQuestions"
+					:key="question.id"
+					:question="question"
+					:submissions="summarySubmissions"
+					:formLanguage="formLanguage" />
+			</template>
 		</section>
 
 		<!-- Responses view for individual responses -->
@@ -336,6 +347,7 @@ import PillMenu from '../components/PillMenu.vue'
 import QuizInsights from '../components/Results/QuizInsights.vue'
 import ResultsSummary from '../components/Results/ResultsSummary.vue'
 import Submission from '../components/Results/Submission.vue'
+import SummaryFilter from '../components/Results/SummaryFilter.vue'
 import TopBar from '../components/TopBar.vue'
 import PermissionTypes from '../mixins/PermissionTypes.js'
 import ViewsMixin from '../mixins/ViewsMixin.js'
@@ -345,6 +357,7 @@ import { IconBack } from '../utils/DirectionalIcons.js'
 import logger from '../utils/Logger.js'
 import OcsResponse2Data from '../utils/OcsResponse2Data.js'
 import SetWindowTitle from '../utils/SetWindowTitle.js'
+import { applySummaryFilter } from '../utils/SummaryFilter.js'
 
 const SUPPORTED_FILE_FORMATS = {
 	ods: IconTable,
@@ -383,6 +396,7 @@ export default {
 		PillMenu,
 		QuizInsights,
 		ResultsSummary,
+		SummaryFilter,
 		Submission,
 		TopBar,
 	},
@@ -420,6 +434,8 @@ export default {
 
 			questions: [],
 			submissions: [],
+			/** the one answer the summary is narrowed to, or null for every response */
+			summaryFilter: null,
 			filteredSubmissionsCount: 0,
 
 			isDownloadActionOpened: false,
@@ -489,6 +505,11 @@ export default {
 			)
 		},
 
+		/** @return {object[]} the responses the summary describes */
+		summarySubmissions() {
+			return applySummaryFilter(this.submissions, this.summaryFilter)
+		},
+
 		isFormArchived() {
 			return this.form.state === FormState.FormArchived
 		},
@@ -549,6 +570,8 @@ export default {
 	watch: {
 		// Reload results when form changes
 		async hash() {
+			// Another form's questions: an answer chosen for this one means nothing there.
+			this.summaryFilter = null
 			await this.fetchFullForm(this.form.id)
 			this.loadFormResults()
 			SetWindowTitle(this.formTitle)
@@ -992,6 +1015,11 @@ export default {
 <style lang="scss" scoped>
 .forms-emptycontent {
 	height: 100%;
+}
+
+.summary-filter-empty {
+	color: var(--color-text-maxcontrast);
+	padding-inline: var(--default-clickable-area) 16px;
 }
 
 .app-content {
