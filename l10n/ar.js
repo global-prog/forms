@@ -512,6 +512,7 @@ OC.L10N.register(
     "You must answer this question" : "يجب الإجابة على هذا السؤال",
     "You scored {score} out of {max}" : "حصلت على {score} من {max}",
     "Scored {score} out of {max}" : "الدرجة {score} من {max}",
+    "Score (out of %s)" : "الدرجة (من %s)",
     "all rules" : "كل القواعد",
     "any rule" : "أي قاعدة",
     "avg. rank {average}" : "متوسط الرتبة {average}",

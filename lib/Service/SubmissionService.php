@@ -63,6 +63,7 @@ class SubmissionService {
 		private readonly IUrlGenerator $urlGenerator,
 		private readonly OptionMapper $optionMapper,
 		private readonly IEmailValidator $emailValidator,
+		private readonly QuizService $quizService,
 	) {
 		$this->currentUser = $userSession->getUser();
 	}
@@ -252,6 +253,21 @@ class SubmissionService {
 		$header[] = $this->l10n->t('User ID');
 		$header[] = $this->l10n->t('User display name');
 		$header[] = $this->l10n->t('Timestamp');
+
+		// A quiz is exported with each response's score next to when it was sent, since its
+		// spreadsheet is mostly read for the marks. Graded as the results grade it, so the
+		// two always agree. Left out when no question carries an answer key.
+		$quizQuestions = [];
+		$quizMax = 0.0;
+		if ($this->quizService->isQuiz($form)) {
+			$quizQuestions = $this->formsService->getQuestions($form->getId());
+			$quizMax = $this->quizService->gradeStored($quizQuestions, [])['max'];
+		}
+		if ($quizMax > 0) {
+			// TRANSLATORS Heading of the export column holding each response's quiz score; %s is the highest possible score
+			$header[] = $this->l10n->t('Score (out of %s)', [(string)round($quizMax, 2)]);
+		}
+
 		/** @var array<int, Question> $questionPerQuestionId */
 		$questionPerQuestionId = [];
 		/** @var array<int, array<int, string>> $gridRowsPerQuestionId */
@@ -326,8 +342,18 @@ class SubmissionService {
 			// Date
 			$row[] = date_format(date_timestamp_set(new DateTime(), $submission->getTimestamp())->setTimezone(new DateTimeZone($userTimezone)), 'c');
 
+			$answerEntities = $this->answerMapper->findBySubmission($submission->getId());
+
+			if ($quizMax > 0) {
+				$given = [];
+				foreach ($answerEntities as $answerEntity) {
+					$given[$answerEntity->getQuestionId()][] = $answerEntity->getText();
+				}
+				$row[] = round($this->quizService->gradeStored($quizQuestions, $given)['score'], 2);
+			}
+
 			// Answers, make sure we keep the question order
-			$answers = array_reduce($this->answerMapper->findBySubmission($submission->getId()),
+			$answers = array_reduce($answerEntities,
 				function (array $carry, Answer $answer) use ($questionPerQuestionId, $gridRowsPerQuestionId, $gridColumnsPerQuestionId, $rankingOptionsPerQuestionId, $optionPerOptionId) {
 					$questionId = $answer->getQuestionId();
 					$questionType = isset($questionPerQuestionId[$questionId]) ? $questionPerQuestionId[$questionId]->getType() : null;

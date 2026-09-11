@@ -21,6 +21,7 @@ use OCA\Forms\Db\Submission;
 use OCA\Forms\Db\SubmissionMapper;
 use OCA\Forms\Db\UploadedFileMapper;
 use OCA\Forms\Service\FormsService;
+use OCA\Forms\Service\QuizService;
 use OCA\Forms\Service\SubmissionService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\Files\File;
@@ -109,6 +110,7 @@ class SubmissionServiceTest extends TestCase {
 			$this->urlGenerator,
 			$this->optionMapper,
 			$this->emailValidator,
+			new QuizService(),
 		);
 	}
 
