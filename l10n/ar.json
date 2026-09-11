@@ -514,6 +514,7 @@
     "Show correct answers after submitting" : "إظهار الإجابات الصحيحة بعد الإرسال",
     "Anyone who submits can pass the answers on. Allow one response per person if that matters." : "يمكن لأي شخص يرسل إجابته أن ينقل الإجابات لغيره. اسمح برد واحد لكل شخص إذا كان ذلك مهمًا.",
     "Correct answer:" : "الإجابة الصحيحة:",
+    "Your score: %1$s out of %2$s" : "درجتك: %1$s من %2$s",
     "Submit another response" : "إرسال رد آخر",
     "Open at a set time" : "الفتح في وقت محدد",
     "Opens on {date}" : "يُفتح في {date}",

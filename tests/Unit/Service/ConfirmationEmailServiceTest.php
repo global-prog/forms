@@ -13,11 +13,13 @@ use OCA\Forms\Constants;
 use OCA\Forms\Db\Answer;
 use OCA\Forms\Db\AnswerMapper;
 use OCA\Forms\Db\Form;
+use OCA\Forms\Db\OptionMapper;
 use OCA\Forms\Db\Question;
 use OCA\Forms\Db\QuestionMapper;
 use OCA\Forms\Db\Submission;
 use OCA\Forms\Service\ConfigService;
 use OCA\Forms\Service\ConfirmationEmailService;
+use OCA\Forms\Service\QuizService;
 use OCP\AppFramework\Db\DoesNotExistException;
 use OCP\BackgroundJob\IJobList;
 use OCP\ICache;
@@ -90,6 +92,8 @@ class ConfirmationEmailServiceTest extends TestCase {
 			$this->cacheFactory,
 			$this->l10n,
 			$this->logger,
+			new QuizService(),
+			$this->createMock(OptionMapper::class),
 		);
 	}
 
@@ -355,6 +359,8 @@ class ConfirmationEmailServiceTest extends TestCase {
 			$this->cacheFactory,
 			$this->l10n,
 			$this->logger,
+			new QuizService(),
+			$this->createMock(OptionMapper::class),
 		);
 
 		$form = Form::fromParams([

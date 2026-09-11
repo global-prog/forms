@@ -11,6 +11,7 @@ namespace OCA\Forms\Service;
 use OCA\Forms\BackgroundJob\SendConfirmationMailJob;
 use OCA\Forms\Db\AnswerMapper;
 use OCA\Forms\Db\Form;
+use OCA\Forms\Db\OptionMapper;
 use OCA\Forms\Db\Question;
 use OCA\Forms\Db\QuestionMapper;
 use OCA\Forms\Db\Submission;
@@ -37,6 +38,8 @@ class ConfirmationEmailService {
 		ICacheFactory $cacheFactory,
 		private readonly IL10N $l10n,
 		private readonly LoggerInterface $logger,
+		private readonly QuizService $quizService,
+		private readonly OptionMapper $optionMapper,
 	) {
 		$this->rateLimitCache = $cacheFactory->createDistributed('forms_confirmation_email');
 	}
@@ -164,14 +167,28 @@ class ConfirmationEmailService {
 		if (empty($subject)) {
 			$subject = $this->l10n->t('Thank you for your submission');
 		}
+		// A quiz's email can carry the respondent's score, as {score} and {maxScore}; the
+		// default text gives it without being asked.
+		$grade = $this->gradeFor($form, $questions, $answerMap);
+
 		if (empty($body)) {
 			$body = $this->l10n->t('Thank you for submitting the form "%s".', [$form->getTitle()]);
+			if ($grade !== null) {
+				$body .= "\n\n" . $this->l10n->t('Your score: %1$s out of %2$s', [
+					$this->formatScore($grade['score']),
+					$this->formatScore($grade['max']),
+				]);
+			}
 		}
 
 		$replacements = [
 			'{formTitle}' => $form->getTitle(),
 			'{formDescription}' => $form->getDescription() ?? '',
 		];
+		if ($grade !== null) {
+			$replacements['{score}'] = $this->formatScore($grade['score']);
+			$replacements['{maxScore}'] = $this->formatScore($grade['max']);
+		}
 
 		foreach ($questions as $question) {
 			$fieldKey = !empty($question['name'] ?? '') ? $question['name'] : ($question['text'] ?? '');
@@ -194,6 +211,48 @@ class ConfirmationEmailService {
 			str_replace(array_keys($replacements), array_values($replacements), $subject),
 			str_replace(array_keys($replacements), array_values($replacements), $body),
 		];
+	}
+
+	/**
+	 * The response's quiz grade, when the form is a quiz with an answer key.
+	 *
+	 * Graded from the stored answers exactly as the results grade them, so the email,
+	 * the results and what the respondent was shown on submitting all agree.
+	 *
+	 * @param list<array<string, mixed>> $questions the form's questions, without options
+	 * @param array<int, string[]> $answerMap the stored answers, keyed by question id
+	 * @return ?array{score: float, max: float} the grade, or null when there is none
+	 */
+	private function gradeFor(Form $form, array $questions, array $answerMap): ?array {
+		if (!$this->quizService->isQuiz($form)) {
+			return null;
+		}
+		try {
+			$withOptions = array_map(function (array $question): array {
+				$question['options'] = array_map(
+					static fn ($option) => $option->read(),
+					$this->optionMapper->findByQuestion($question['id']),
+				);
+				return $question;
+			}, $questions);
+			$grade = $this->quizService->gradeStored($withOptions, $answerMap);
+		} catch (\Throwable $e) {
+			// The email still goes; only the score is left out.
+			$this->logger->warning('Could not grade response for confirmation email', [
+				'formId' => $form->getId(),
+				'exception' => $e,
+			]);
+			return null;
+		}
+		return $grade['max'] > 0 ? $grade : null;
+	}
+
+	/**
+	 * @param float $value a score
+	 * @return string the score without trailing zeros, so 4.0 reads as 4
+	 */
+	private function formatScore(float $value): string {
+		return (string)round($value, 2);
 	}
 
 	/**

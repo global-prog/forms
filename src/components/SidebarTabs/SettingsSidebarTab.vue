@@ -373,6 +373,9 @@
 				<p class="confirmation-email__placeholder-hint">
 					{{ t('forms', 'Available placeholders:') }}
 					<code>{formTitle}</code>, <code>{formDescription}</code>,
+					<template v-if="quizMode">
+						<code>{score}</code>, <code>{maxScore}</code>,
+					</template>
 					{{ t('forms', 'and field labels.') }}
 				</p>
 				<NcInputField
