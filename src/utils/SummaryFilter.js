@@ -63,21 +63,28 @@ export function filterableQuestions(questions) {
 }
 
 /**
- * The responses that gave the chosen answer.
+ * The responses that gave every chosen answer.
+ *
+ * Conditions narrow one another: asked for engineers, and for those who came in person,
+ * a summary describes the engineers who came in person.
  *
  * @param {object[]} submissions every response
- * @param {?{questionId: number, value: string}} filter the chosen answer, or none
+ * @param {?({questionId: number, value: string}[]|{questionId: number, value: string})} filter
+ *   the chosen answers, one or several, or none
  * @return {object[]} the responses to summarise
  */
 export function applySummaryFilter(submissions, filter) {
-	if (!filter) {
+	const conditions = (Array.isArray(filter) ? filter : [filter]).filter(Boolean)
+	if (!conditions.length) {
 		return submissions
 	}
 	return submissions.filter((submission) =>
-		(submission.answers ?? []).some(
-			(answer) =>
-				answer.questionId === filter.questionId
-				&& String(answer.text) === filter.value,
+		conditions.every((condition) =>
+			(submission.answers ?? []).some(
+				(answer) =>
+					answer.questionId === condition.questionId
+					&& String(answer.text) === condition.value,
+			),
 		),
 	)
 }

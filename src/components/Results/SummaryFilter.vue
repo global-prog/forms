@@ -4,9 +4,10 @@
 -->
 
 <!--
-  Narrow the summary to the responses that gave one answer, so every chart below it
+  Narrow the summary to the responses that gave certain answers, so every chart below it
   describes that group alone: how the engineers rated the service, what the first-year
-  students chose. The rules live in utils/SummaryFilter.js.
+  students who came in person chose. Each answer added narrows the one before it, and the
+  rules live in utils/SummaryFilter.js.
 -->
 <template>
 	<div v-if="questionOptions.length" class="summary-filter">
@@ -26,27 +27,31 @@
 				:inputLabel="t('forms', 'answered')"
 				:placeholder="t('forms', 'Choose an answer')"
 				:options="answerOptions"
-				:modelValue="selectedAnswer"
+				:modelValue="null"
 				:clearable="false"
 				label="label"
 				trackBy="id"
 				@update:modelValue="onAnswer" />
 		</div>
-		<p
-			v-if="modelValue && selectedQuestion && selectedAnswer"
-			class="summary-filter__printed">
-			<bdi dir="auto">{{
-				t(
-					'forms',
-					'Only responses where "{question}" was answered "{answer}"',
-					{
-						question: selectedQuestion.label,
-						answer: selectedAnswer.label,
-					},
-				)
-			}}</bdi>
+		<ul v-if="conditions.length" class="summary-filter__chips">
+			<li v-for="(condition, index) in conditions" :key="index">
+				<NcChip
+					:text="conditionLabel(condition)"
+					:ariaLabelClose="
+						t('forms', 'Stop filtering by {condition}', {
+							condition: conditionLabel(condition),
+						})
+					"
+					@close="removeCondition(index)" />
+			</li>
+		</ul>
+		<p v-if="conditions.length" class="summary-filter__printed">
+			<bdi dir="auto"
+				>{{ t('forms', 'Only responses that gave these answers:') }}
+				{{ printedConditions }}</bdi
+			>
 		</p>
-		<p v-if="modelValue" class="summary-filter__count" role="status">
+		<p v-if="conditions.length" class="summary-filter__count" role="status">
 			{{
 				n(
 					'forms',
@@ -61,6 +66,7 @@
 </template>
 
 <script>
+import NcChip from '@nextcloud/vue/components/NcChip'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import { filterableQuestions, filterAnswers } from '../../utils/SummaryFilter.js'
 
@@ -68,6 +74,7 @@ export default {
 	name: 'SummaryFilter',
 
 	components: {
+		NcChip,
 		NcSelect,
 	},
 
@@ -78,10 +85,10 @@ export default {
 			required: true,
 		},
 
-		/** The chosen answer, `{ questionId, value }`, or null for every response. */
+		/** The chosen answers, each `{ questionId, value }`; empty for every response. */
 		modelValue: {
-			type: Object,
-			default: null,
+			type: Array,
+			default: () => [],
 		},
 
 		/** How many responses the filter keeps. */
@@ -116,9 +123,14 @@ export default {
 			}))
 		},
 
-		/** @return {?number} the question chosen, applied or not */
+		/** @return {object[]} the conditions applied so far */
+		conditions() {
+			return this.modelValue ?? []
+		},
+
+		/** @return {?number} the question being answered in the picker */
 		questionId() {
-			return this.modelValue?.questionId ?? this.pendingQuestionId
+			return this.pendingQuestionId
 		},
 
 		/** @return {?object} the chosen question's option */
@@ -137,13 +149,11 @@ export default {
 			return question ? filterAnswers(question) : []
 		},
 
-		/** @return {?object} the chosen answer's option */
-		selectedAnswer() {
-			return (
-				this.answerOptions.find(
-					(option) => option.id === this.modelValue?.value,
-				) ?? null
-			)
+		/** @return {string} every condition in words, for a printed summary */
+		printedConditions() {
+			return this.conditions
+				.map((condition) => this.conditionLabel(condition))
+				.join(' · ')
 		},
 	},
 
@@ -153,22 +163,47 @@ export default {
 		 */
 		onQuestion(option) {
 			this.pendingQuestionId = option?.id ?? null
-			// A new question starts without an answer, so the summary goes back to
-			// every response until one is chosen.
-			this.$emit('update:modelValue', null)
 		},
 
 		/**
-		 * @param {?{id: string}} option the answer chosen
+		 * @param {?{id: string}} option the answer chosen, which adds a condition
 		 */
 		onAnswer(option) {
 			if (!option || this.questionId === null) {
 				return
 			}
-			this.$emit('update:modelValue', {
-				questionId: this.questionId,
-				value: option.id,
-			})
+			const added = { questionId: this.questionId, value: option.id }
+			const already = this.conditions.some(
+				(condition) =>
+					condition.questionId === added.questionId
+					&& condition.value === added.value,
+			)
+			if (!already) {
+				this.$emit('update:modelValue', [...this.conditions, added])
+			}
+			// Ready for the next condition rather than sitting on the one just added.
+			this.pendingQuestionId = null
+		},
+
+		/**
+		 * @param {number} index the condition to drop
+		 */
+		removeCondition(index) {
+			this.$emit(
+				'update:modelValue',
+				this.conditions.filter((condition, at) => at !== index),
+			)
+		},
+
+		/**
+		 * @param {{questionId: number, value: string}} condition one condition
+		 * @return {string} it in words, as "question: answer"
+		 */
+		conditionLabel(condition) {
+			const question = this.questions.find(
+				(candidate) => candidate.id === condition.questionId,
+			)
+			return `${question?.text ?? ''}: ${condition.value}`
 		},
 	},
 }
@@ -194,6 +229,15 @@ export default {
 		min-inline-size: 0;
 	}
 
+	&__chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 8px;
+		list-style: none;
+		margin-block: 8px 0;
+		padding: 0;
+	}
+
 	&__count {
 		color: var(--color-text-maxcontrast);
 		margin-block: 8px 0;
@@ -206,7 +250,8 @@ export default {
 
 // A printed summary names the group it describes in words; the fields are for the screen.
 @media print {
-	.summary-filter__fields {
+	.summary-filter__fields,
+	.summary-filter__chips {
 		display: none;
 	}
 

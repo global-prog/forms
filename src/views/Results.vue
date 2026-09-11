@@ -434,8 +434,8 @@ export default {
 
 			questions: [],
 			submissions: [],
-			/** the one answer the summary is narrowed to, or null for every response */
-			summaryFilter: null,
+			/** the answers the summary is narrowed to; empty describes every response */
+			summaryFilter: [],
 			filteredSubmissionsCount: 0,
 
 			isDownloadActionOpened: false,
@@ -571,7 +571,7 @@ export default {
 		// Reload results when form changes
 		async hash() {
 			// Another form's questions: an answer chosen for this one means nothing there.
-			this.summaryFilter = null
+			this.summaryFilter = []
 			await this.fetchFullForm(this.form.id)
 			this.loadFormResults()
 			SetWindowTitle(this.formTitle)

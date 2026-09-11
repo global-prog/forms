@@ -514,6 +514,8 @@
     "Show correct answers after submitting" : "إظهار الإجابات الصحيحة بعد الإرسال",
     "Anyone who submits can pass the answers on. Allow one response per person if that matters." : "يمكن لأي شخص يرسل إجابته أن ينقل الإجابات لغيره. اسمح برد واحد لكل شخص إذا كان ذلك مهمًا.",
     "Correct answer:" : "الإجابة الصحيحة:",
+    "Only responses that gave these answers:" : "الردود التي قدّمت هذه الإجابات فقط:",
+    "Stop filtering by {condition}" : "إلغاء التصفية حسب {condition}",
     "Break down by" : "التفصيل حسب",
     "One average for everyone" : "متوسط واحد للجميع",
     "Nobody answered both questions." : "لم يجب أحد عن كلا السؤالين.",
