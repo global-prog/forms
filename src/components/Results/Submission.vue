@@ -411,7 +411,14 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+// One response to a card, so where one ends and the next begins is plain.
 .submission {
+	background-color: var(--color-main-background);
+	border: 2px solid var(--color-border);
+	border-radius: var(--border-radius-large);
+	break-inside: avoid;
+	margin-block-end: 16px;
+	padding-block: 16px;
 	padding-inline: var(--default-clickable-area) 16px;
 
 	&-head {

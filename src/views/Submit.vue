@@ -283,6 +283,10 @@
 						ref="questions"
 						:key="question.id"
 						v-bind="question"
+						:class="{
+							'question--card':
+								!answerTypes[question.type].displayOnly,
+						}"
 						readOnly
 						:answerType="answerTypes[question.type]"
 						:index="index + 1"
@@ -1709,10 +1713,16 @@ export default {
 		flex-direction: column;
 	}
 
-	// Title & description header
+	// Title & description header, the first card of the form: the form's colour caps it,
+	// as a form usually announces itself before it starts asking.
 	header {
-		margin-block-end: 24px;
+		background-color: var(--color-main-background);
+		border: 2px solid var(--color-border);
+		border-radius: var(--border-radius-large);
+		margin-block-end: 16px;
 		margin-inline-start: var(--default-clickable-area);
+		// So the accent band's corners follow the card's.
+		overflow: hidden;
 		// The contents below are narrowed for small screens, but the header itself was
 		// still the full width plus that margin, so a phone scrolled sideways by it.
 		width: calc(100% - var(--default-clickable-area));
@@ -1734,7 +1744,7 @@ export default {
 			color: var(--color-main-text);
 			line-height: 34px;
 			min-height: 36px;
-			margin-block: 32px;
+			margin-block: 24px;
 			margin-inline: 0;
 			padding-block-end: 4px;
 			overflow: hidden;
@@ -1769,6 +1779,33 @@ export default {
 		.question {
 			// Less padding needed as submit view does not have drag handles
 			padding-inline: var(--default-clickable-area);
+		}
+
+		// Each question answered on its own surface, the way a paper form gives each its
+		// own box: it tells a respondent where one question ends and the next begins,
+		// which a long form on a phone otherwise leaves to guesswork. Sections, images
+		// and videos are not answered and stay flat, so they read as what they are --
+		// dividers between the cards rather than cards themselves.
+		.question--card {
+			background-color: var(--color-main-background);
+			border: 2px solid var(--color-border);
+			border-radius: var(--border-radius-large);
+			margin-block-end: 16px;
+			padding-block: 16px;
+			// The wide inline padding above is room for the editor's drag handles, which
+			// a respondent never sees.
+			padding-inline: 20px;
+			transition: border-color 0.1s ease-in-out;
+
+			:deep(.question__header__title__text) {
+				font-size: 17px !important;
+			}
+
+			// The question being answered stands out, in the form's own colour when it
+			// has one.
+			&:focus-within {
+				border-color: var(--form-accent, var(--color-primary-element));
+			}
 		}
 
 		.form-buttons {
@@ -1849,7 +1886,8 @@ export default {
 }
 
 .form-header-image {
-	border-radius: var(--border-radius-large);
+	// Inside the header card its corners are the card's, so it is square-cut itself.
+	border-radius: 0;
 	max-height: 220px;
 	object-fit: cover;
 	width: 100%;
@@ -1858,9 +1896,11 @@ export default {
 .form-accent {
 	// A band across the top of the form, as a form's own colour is usually shown. It was
 	// a 72px underline, easy to miss, which made the setting look like it did nothing.
-	border-radius: var(--border-radius-large);
+	// It sits on the header card, so only its own top corners are rounded.
+	border-start-start-radius: var(--border-radius-large);
+	border-start-end-radius: var(--border-radius-large);
 	height: 10px;
-	margin-block: 0 16px;
+	margin-block: 0;
 	width: 100%;
 }
 

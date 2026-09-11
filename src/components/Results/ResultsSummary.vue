@@ -1236,7 +1236,15 @@ export default {
 // The chart palette lives in css/forms.css, so every chart in the results -- these and the
 // quiz overview -- draws from the one validated set.
 
+// One question to a card, as on the form itself: a summary is read question by question,
+// and a run of charts with nothing between them is hard to follow.
 .question-summary {
+	background-color: var(--color-main-background);
+	border: 2px solid var(--color-border);
+	border-radius: var(--border-radius-large);
+	break-inside: avoid;
+	margin-block-end: 16px;
+	padding-block: 16px;
 	padding-inline: var(--default-clickable-area) 16px;
 
 	h3 {
