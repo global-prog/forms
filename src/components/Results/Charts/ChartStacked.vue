@@ -147,6 +147,11 @@ export default {
 .chart-stacked {
 	&__canvas {
 		inline-size: 100%;
+
+		// See ChartFigure: the chart mirrors itself, the drawing must not mirror again.
+		:deep(svg) {
+			direction: ltr;
+		}
 	}
 
 	&__legend {

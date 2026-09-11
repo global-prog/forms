@@ -257,7 +257,7 @@
 			:dir="formDirection"
 			:lang="formLanguage || undefined">
 			<ResultsSummary
-				v-for="question in questions"
+				v-for="question in summaryQuestions"
 				:key="question.id"
 				:question="question"
 				:submissions="submissions" />
@@ -468,6 +468,20 @@ export default {
 	},
 
 	computed: {
+		/**
+		 * The questions that have results to summarise.
+		 *
+		 * Sections, images and videos are part of the form but take no answer, so a
+		 * summary of one could only ever say that nobody answered it.
+		 *
+		 * @return {object[]} the answerable questions, in form order
+		 */
+		summaryQuestions() {
+			return this.questions.filter(
+				(question) => !answerTypes[question.type]?.displayOnly,
+			)
+		},
+
 		isFormArchived() {
 			return this.form.state === FormState.FormArchived
 		},

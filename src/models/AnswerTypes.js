@@ -469,6 +469,8 @@ export default {
 		label: t('forms', 'Image'),
 		predefined: false,
 		mediaKind: 'image',
+		// Shows something, takes no answer: kept out of the results.
+		displayOnly: true,
 		validate: () => true,
 
 		titlePlaceholder: t('forms', 'Image caption'),
@@ -486,6 +488,8 @@ export default {
 		label: t('forms', 'Video'),
 		predefined: false,
 		mediaKind: 'video',
+		// Shows something, takes no answer: kept out of the results.
+		displayOnly: true,
 		validate: () => true,
 
 		titlePlaceholder: t('forms', 'Video caption'),
@@ -502,6 +506,8 @@ export default {
 		icon: IconSection,
 		label: t('forms', 'Section break'),
 		predefined: false,
+		// Shows something, takes no answer: kept out of the results.
+		displayOnly: true,
 		// A section only ever needs a title, which Question.vue already enforces.
 		validate: () => true,
 

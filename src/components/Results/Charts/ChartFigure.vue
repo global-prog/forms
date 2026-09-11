@@ -135,6 +135,23 @@ export default {
 
 	methods: {
 		/**
+		 * One colour for every bar, grey for a muted one.
+		 *
+		 * Deliberately not the mixin's `seriesColours`, which gives each row its own
+		 * categorical hue. That is right for a ring, where colour is how a slice is
+		 * matched to its legend entry, and wrong here: a bar's length already says how
+		 * big it is and its label says what it is, so a hue per bar spends a second
+		 * channel on nothing and invites the reader to look for a meaning in it.
+		 *
+		 * @param {object} theme the resolved palette and chrome colours
+		 * @return {string[]} a colour per row, aligned to items
+		 */
+		magnitudeColours(theme) {
+			const hue = theme.series[0] ?? theme.ink
+			return this.items.map((item) => (item.muted ? theme.muted : hue))
+		},
+
+		/**
 		 * @param {object} theme the resolved palette and chrome colours
 		 * @param {number} width the plot's measured width
 		 * @return {object} the ECharts option
@@ -157,13 +174,13 @@ export default {
 			if (this.effectiveForm === 'columns') {
 				return columnOption({
 					...shared,
-					colours: this.seriesColours(theme),
+					colours: this.magnitudeColours(theme),
 					width,
 				})
 			}
 			return barOption({
 				...shared,
-				colours: this.seriesColours(theme),
+				colours: this.magnitudeColours(theme),
 				width,
 			})
 		},
@@ -175,6 +192,16 @@ export default {
 .chart-figure {
 	&__canvas {
 		inline-size: 100%;
+
+		// ECharts mirrors a right-to-left chart itself, from the direction this box
+		// reports -- it inverts the axes and moves the labels across. The SVG it draws
+		// must not ALSO inherit that direction: in SVG, `direction` changes what
+		// text-anchor "start" means, so every label would then run away from its anchor,
+		// into the bars instead of into its gutter, and be drawn over. The box keeps the
+		// form's direction for the chart to read; only the drawing is held left to right.
+		:deep(svg) {
+			direction: ltr;
+		}
 	}
 
 	&__fallback {

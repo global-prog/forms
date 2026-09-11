@@ -171,6 +171,11 @@ export default {
 		block-size: 190px;
 		flex: 0 0 auto;
 		inline-size: 190px;
+
+		// See ChartFigure: the chart mirrors itself, the drawing must not mirror again.
+		:deep(svg) {
+			direction: ltr;
+		}
 	}
 
 	&__legend {
