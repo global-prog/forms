@@ -12,6 +12,11 @@
 		:isTriggerQuestion="isTriggerQuestion"
 		v-on="commonListeners">
 		<div class="question__content">
+			<!-- A respondent's answer takes the direction of whatever they type. In the
+			     editor the field is only a preview holding the interface's placeholder,
+			     and it follows the form's direction instead: the input-type button sits on
+			     the form's end edge, and a placeholder free to run the other way began
+			     underneath it. -->
 			<input
 				ref="input"
 				:aria-labelledby="titleId"
@@ -24,7 +29,7 @@
 				:required="isRequired"
 				:value="values[0]"
 				class="question__input"
-				dir="auto"
+				:dir="readOnly ? 'auto' : undefined"
 				:maxlength="maxStringLengths.answerText"
 				minlength="1"
 				:type="validationObject.inputType"
