@@ -16,6 +16,16 @@
 					<NcIconSvgWrapper :svg="IconPlus" />
 				</template>
 			</NcAppNavigationNew>
+			<NcButton
+				v-if="canCreateForms"
+				class="forms-navigation__template"
+				variant="tertiary"
+				@click="showTemplates = true">
+				<template #icon>
+					<NcIconSvgWrapper :svg="IconTemplate" />
+				</template>
+				{{ t('forms', 'Start from a template') }}
+			</NcButton>
 
 			<!-- Form-Owner-->
 			<template v-if="ownedForms.length > 0">
@@ -94,6 +104,9 @@
 					<NcButton variant="primary" @click="onNewForm">
 						{{ t('forms', 'Create a form') }}
 					</NcButton>
+					<NcButton variant="secondary" @click="showTemplates = true">
+						{{ t('forms', 'Start from a template') }}
+					</NcButton>
 				</template>
 			</NcEmptyContent>
 
@@ -111,6 +124,9 @@
 				<template v-if="canCreateForms" #action>
 					<NcButton variant="primary" @click="onNewForm">
 						{{ t('forms', 'Create new form') }}
+					</NcButton>
+					<NcButton variant="secondary" @click="showTemplates = true">
+						{{ t('forms', 'Start from a template') }}
 					</NcButton>
 				</template>
 			</NcEmptyContent>
@@ -142,12 +158,17 @@
 			v-model:open="showArchivedForms"
 			:forms="archivedForms"
 			@clone="onCloneForm" />
+		<TemplatePicker
+			v-if="canCreateForms"
+			v-model:open="showTemplates"
+			@created="onTemplateCreated" />
 	</NcContent>
 </template>
 
 <script>
 import IconPlus from '@material-symbols/svg-400/outlined/add.svg?raw'
 import IconArchive from '@material-symbols/svg-400/outlined/archive.svg?raw'
+import IconTemplate from '@material-symbols/svg-400/outlined/dashboard_customize.svg?raw'
 import axios from '@nextcloud/axios'
 import { showError } from '@nextcloud/dialogs'
 import { emit, subscribe, unsubscribe } from '@nextcloud/event-bus'
@@ -168,6 +189,7 @@ import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import AppNavigationForm from './components/AppNavigationForm.vue'
 import ArchivedFormsModal from './components/ArchivedFormsModal.vue'
+import TemplatePicker from './components/TemplatePicker.vue'
 import Sidebar from './views/Sidebar.vue'
 import FormsIcon from '../img/forms-dark.svg?raw'
 import PermissionTypes from './mixins/PermissionTypes.js'
@@ -183,6 +205,7 @@ export default {
 
 	components: {
 		AppNavigationForm,
+		TemplatePicker,
 		ArchivedFormsModal,
 		NcIconSvgWrapper,
 		NcAppContent,
@@ -402,6 +425,20 @@ export default {
 			loading.value = false
 		}
 
+		// Whether the template picker is open.
+		const showTemplates = ref(false)
+
+		/**
+		 * A template has built a form: list it and open it for editing, as a new form does.
+		 *
+		 * @param {object} form the form that was created
+		 */
+		const onTemplateCreated = (form) => {
+			forms.value.unshift(form)
+			router.push({ name: 'edit', params: { hash: form.hash } })
+			mobileCloseNavigation()
+		}
+
 		const onNewForm = async () => {
 			try {
 				const response = await axios.post(
@@ -512,6 +549,9 @@ export default {
 			loadForms,
 			fetchPartialForm,
 			onNewForm,
+			showTemplates,
+			onTemplateCreated,
+			IconTemplate,
 			onCloneForm,
 			onDeleteForm,
 			onLastUpdatedByEventBus,
