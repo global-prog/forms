@@ -1652,14 +1652,19 @@ export default {
 		 * Submit the form after the browser validated it 🚀 or show confirmation modal if empty
 		 */
 		async onSubmit() {
-			const validation = (this.$refs.questions ?? []).map(
+			const components = this.$refs.questions ?? []
+			const validation = components.map(
 				async (question) => await question.validate(),
 			)
 
 			try {
 				// wait for all to be validated
 				const result = await Promise.all(validation)
-				if (result.some((v) => !v)) {
+				const firstBad = result.findIndex((valid) => !valid)
+				if (firstBad !== -1) {
+					// Saying "some answers are not valid" and leaving the respondent to
+					// hunt for which is no help on a long form, so take them to it.
+					await this.goToQuestion(components[firstBad])
 					throw new Error('One question did not validate sucessfully')
 				}
 
@@ -1679,6 +1684,34 @@ export default {
 				logger.debug('One question is not valid', { error })
 				showError(t('forms', 'Some answers are not valid'))
 			}
+		},
+
+		/**
+		 * Put a question in front of the respondent: its own page if the form has pages,
+		 * then in view, with the cursor in it.
+		 *
+		 * @param {object} question the question component that needs attention
+		 */
+		async goToQuestion(question) {
+			if (!question?.$el) {
+				return
+			}
+			const page = this.questionPages[question.id]
+			if (page !== undefined && page !== this.currentPage) {
+				this.currentPage = page
+				await this.$nextTick()
+			}
+			const gently = !window.matchMedia?.('(prefers-reduced-motion: reduce)')
+				?.matches
+			question.$el.scrollIntoView({
+				block: 'center',
+				behavior: gently ? 'smooth' : 'auto',
+			})
+			question.$el
+				.querySelector(
+					'input, textarea, select, [tabindex]:not([tabindex="-1"])',
+				)
+				?.focus()
 		},
 
 		/**
