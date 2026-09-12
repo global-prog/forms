@@ -84,11 +84,6 @@
 				<p v-if="infoMessage" class="info-message">
 					<bdi>{{ infoMessage }}</bdi>
 				</p>
-				<!-- An asterisk means nothing on its own; said once here rather than
-				     repeated on every question that carries one. -->
-				<p v-if="hasRequiredQuestions" class="info-message">
-					<bdi>{{ t('forms', '* indicates a required question') }}</bdi>
-				</p>
 				<!-- Printed only. On paper nothing can evaluate a display condition, so
 				     the sheet carries every question and has to say so; otherwise a
 				     reader answers a follow-up that was never meant for them. -->
@@ -887,11 +882,6 @@ export default {
 		},
 
 		/** @return {boolean} whether the reader can edit this form */
-		/** @return {boolean} whether any question must be answered, so the legend is shown */
-		hasRequiredQuestions() {
-			return this.orderedQuestions.some((question) => question.isRequired)
-		},
-
 		/**
 		 * @return {boolean} whether any question is shown only in response to another,
 		 *   which is what the printed copy has to warn about
