@@ -190,7 +190,8 @@
 						:rows="crossTab.rows"
 						:columns="crossTab.columns"
 						:cells="crossTab.cells"
-						:caption="crossTabCaption" />
+						:caption="crossTabCaption"
+						wrapLabels />
 					<p class="question-summary__compare-counts">
 						{{ crossTabCounts }}
 					</p>

@@ -21,7 +21,7 @@
   value is always present as text, which is what carries the data.
 -->
 <template>
-	<div class="chart-heatmap">
+	<div class="chart-heatmap" :class="{ 'chart-heatmap--wrap-labels': wrapLabels }">
 		<table class="chart-heatmap__table">
 			<caption v-if="caption" class="chart-heatmap__caption" dir="auto">
 				{{
@@ -94,6 +94,12 @@ export default {
 			required: false,
 			default: '',
 		},
+
+		/** Whether the labels are long enough to need wrapping, as a cross-tab's are */
+		wrapLabels: {
+			type: Boolean,
+			default: false,
+		},
 	},
 
 	computed: {
@@ -150,11 +156,25 @@ export default {
 		text-align: start;
 	}
 
+	// A cross-tab's labels are whole question options, which can be sentences. They wrap
+	// within a sane width rather than stretching the table off the screen. A grid's
+	// headers are short by nature and are left at the width they have always had.
+	&--wrap-labels &__column-head,
+	&--wrap-labels &__row-head {
+		max-inline-size: 22ch;
+		overflow-wrap: break-word;
+	}
+
 	&__row-head {
 		// Keep the row label readable while the matrix scrolls under it.
 		background-color: var(--color-main-background);
 		inset-inline-start: 0;
 		position: sticky;
+	}
+
+	&--wrap-labels &__row-head {
+		// Wide enough to read, narrow enough to leave room for the matrix on a phone.
+		min-inline-size: 8rem;
 	}
 
 	&__cell {

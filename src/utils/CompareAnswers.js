@@ -133,6 +133,10 @@ export function isChoiceQuestion(question) {
  * Every option keeps its row even when nobody chose it - an empty row is a finding - but a
  * column nobody chose is dropped, since it would only be a blank stripe.
  *
+ * Answers are stored as the option's text, not its id, so two options worded identically
+ * are one row and one column here, holding the sum of both. Nothing can separate them
+ * after the fact; the stored answer does not say which was clicked.
+ *
  * @param {object[]} submissions the responses to describe
  * @param {object} groupQuestion the question whose answers head the columns
  * @param {object} valueQuestion the question whose answers name the rows
