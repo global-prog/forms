@@ -84,6 +84,17 @@
 				<p v-if="infoMessage" class="info-message">
 					<bdi>{{ infoMessage }}</bdi>
 				</p>
+				<!-- Printed only. On paper nothing can evaluate a display condition, so
+				     the sheet carries every question and has to say so; otherwise a
+				     reader answers a follow-up that was never meant for them. -->
+				<p v-if="hasConditionalQuestions" class="print-note">
+					<bdi>{{
+						t(
+							'forms',
+							'Some questions here are asked only in response to an earlier answer. This printed copy shows all of them.',
+						)
+					}}</bdi>
+				</p>
 			</header>
 
 			<!-- Screen-reader-only live region for submission success announcement -->
@@ -864,6 +875,18 @@ export default {
 		},
 
 		/** @return {boolean} whether the reader can edit this form */
+		/**
+		 * @return {boolean} whether any question is shown only in response to another,
+		 *   which is what the printed copy has to warn about
+		 */
+		hasConditionalQuestions() {
+			return this.orderedQuestions.some(
+				(question) =>
+					(question.extraSettings?.displayCondition?.rules ?? []).length
+					> 0,
+			)
+		},
+
 		canEditForm() {
 			return this.form.permissions?.includes('edit') === true
 		},
@@ -2099,5 +2122,65 @@ export default {
 .form-pagination__progress {
 	flex: 1 1 auto;
 	height: 4px;
+}
+// Hidden on screen; the print block below reveals it.
+.print-note {
+	display: none;
+}
+
+/*
+ * The form on paper, whole.
+ *
+ * Handing out a paper copy, keeping a record of exactly what was asked, or answering away
+ * from a screen all need the entire form at once, and a paginated one shows a single page.
+ * The pages are only hidden with v-show - every question is already in the document - so
+ * this is a matter of overriding an inline display:none rather than rendering anything
+ * differently, which keeps printing off the path a respondent walks.
+ */
+@media print {
+	.print-note {
+		color: #555;
+		display: block;
+		margin-block-start: 8px;
+	}
+
+	form > ul > .question {
+		display: list-item !important;
+		// A question split over a page turn is hard to answer on paper.
+		break-inside: avoid;
+	}
+
+	// Controls rather than content: none of it can be used on a sheet of paper.
+	.form-pagination,
+	.form-buttons,
+	.form-header-image,
+	.draft-note {
+		display: none !important;
+	}
+
+	// Room to write. On screen these carry the app's field styling, which prints as a
+	// faint outline that is hard to tell from the paper.
+	:deep(input[type='text']),
+	:deep(input[type='number']),
+	:deep(input[type='date']),
+	:deep(input[type='time']),
+	:deep(input[type='email']) {
+		border: 0 !important;
+		border-block-end: 1px solid #666 !important;
+		border-radius: 0 !important;
+		min-block-size: 1.8em;
+	}
+
+	:deep(textarea) {
+		border: 1px solid #666 !important;
+		min-block-size: 5em;
+	}
+
+	// A radio or a checkbox is the thing being ticked, so its outline has to survive the
+	// browser's default of dropping colour when printing.
+	:deep(.checkbox-radio-switch__icon) {
+		print-color-adjust: exact;
+		-webkit-print-color-adjust: exact;
+	}
 }
 </style>

@@ -16,6 +16,22 @@
 			:options="availableViews"
 			:groupLabel="t('forms', 'View mode')"
 			@update:active="onChangeView" />
+		<!-- Printing a web app is something people forget is possible, and the form and
+		     the report are both things that get handed round on paper. Ctrl+P still does
+		     the same thing; this only says so. Not offered on the editor, where what would
+		     print is the editing furniture. -->
+		<NcButton
+			v-if="canPrint"
+			:aria-label="printLabel"
+			variant="tertiary"
+			@click="onPrint">
+			<template #icon>
+				<NcIconSvgWrapper :svg="IconPrint" />
+			</template>
+			<template v-if="!isMobile" #default>
+				{{ t('forms', 'Print') }}
+			</template>
+		</NcButton>
 		<NcButton
 			v-if="canShare && !sidebarOpened"
 			:aria-label="isMobile ? t('forms', 'Share form') : null"
@@ -34,6 +50,7 @@
 <script>
 import IconBarChart from '@material-symbols/svg-400/outlined/bar_chart.svg?raw'
 import IconEdit from '@material-symbols/svg-400/outlined/edit.svg?raw'
+import IconPrint from '@material-symbols/svg-400/outlined/print.svg?raw'
 import IconShareVariant from '@material-symbols/svg-400/outlined/share.svg?raw'
 import IconVisibility from '@material-symbols/svg-400/outlined/visibility.svg?raw'
 import { t } from '@nextcloud/l10n'
@@ -109,6 +126,7 @@ export default {
 			t,
 
 			isMobile: useIsMobile(),
+			IconPrint,
 			IconShareVariant,
 		}
 	},
@@ -153,6 +171,21 @@ export default {
 			)
 		},
 
+		/**
+		 * @return {boolean} whether printing this view would produce something useful.
+		 *   currentView is the view definition, not its id.
+		 */
+		canPrint() {
+			return ['submit', 'results'].includes(this.currentView?.id)
+		},
+
+		/** @return {string} what the button will print, for a screen reader */
+		printLabel() {
+			return this.currentView?.id === 'results'
+				? t('forms', 'Print responses')
+				: t('forms', 'Print form')
+		},
+
 		canShare() {
 			// This probably can get a permission of itself
 			return this.canEdit
@@ -168,6 +201,11 @@ export default {
 	},
 
 	methods: {
+		/** Hand the page to the browser's own print dialog. */
+		onPrint() {
+			window.print()
+		},
+
 		/**
 		 * Router methods
 		 *
