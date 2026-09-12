@@ -2068,9 +2068,9 @@ export default {
 			padding-inline: 20px;
 			transition: border-color 0.1s ease-in-out;
 
-			// A form's type scale, on a 16px base in steps of a major third:
-			//   16 body and options - 20 question title - 28 form title - 32 display.
-			// The question title was 17px, one pixel above the options beneath it, so
+			// A form's type scale, on Nextcloud's 15px base:
+			//   15 body and options - 20 question - 24 section - 28 form title - 32 display.
+			// The question title was 17px, two pixels above the options beneath it, so
 			// the most important line on the page did not read as a heading at all.
 			// Respondent view only: this rule sits inside `form`, so the editor keeps
 			// the tighter sizing that suits a page of controls.
@@ -2083,6 +2083,18 @@ export default {
 			// has one.
 			&:focus-within {
 				border-color: var(--form-accent, var(--color-primary-element));
+			}
+		}
+
+		// A section introduces the questions beneath it. The card rule above deliberately
+		// skips sections, so this one was left at the app's default and came out SMALLER
+		// than the 20px questions it heads - the hierarchy upside down. Images and videos
+		// are left alone: their title labels a block rather than heading a group, and
+		// reading quieter than the questions is right for it.
+		.question:has(.question-section) {
+			:deep(.question__header__title__text) {
+				font-size: 24px !important;
+				line-height: 1.3;
 			}
 		}
 
