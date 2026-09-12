@@ -108,14 +108,10 @@
 			<!-- The same numbers within each answer to another question: the average
 			     rating by department, by year group, by whatever was asked. -->
 			<div v-if="groupingQuestions.length" class="question-summary__compare">
-				<NcSelect
-					class="question-summary__compare-select"
-					:inputLabel="t('forms', 'Break down by')"
-					:placeholder="t('forms', 'One average for everyone')"
+				<BreakdownPicker
 					:options="groupingOptions"
 					:modelValue="selectedGrouping"
-					label="label"
-					trackBy="id"
+					:placeholder="t('forms', 'One average for everyone')"
 					@update:modelValue="onGroupingChosen" />
 				<ChartFigure
 					v-if="comparisonBars.length"
@@ -176,14 +172,10 @@
 			     by department, by year group. The two nodes below are deliberately
 			     adjacent: a v-else-if has to sit next to its v-if. -->
 			<div v-if="groupingQuestions.length" class="question-summary__compare">
-				<NcSelect
-					class="question-summary__compare-select"
-					:inputLabel="t('forms', 'Break down by')"
-					:placeholder="t('forms', 'One total for everyone')"
+				<BreakdownPicker
 					:options="groupingOptions"
 					:modelValue="selectedGrouping"
-					label="label"
-					trackBy="id"
+					:placeholder="t('forms', 'One total for everyone')"
 					@update:modelValue="onGroupingChosen" />
 				<template v-if="crossTab.columns.length">
 					<ChartHeatmap
@@ -293,7 +285,7 @@ import IconFile from '@material-symbols/svg-400/outlined/draft.svg?raw'
 import { generateUrl } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
-import NcSelect from '@nextcloud/vue/components/NcSelect'
+import BreakdownPicker from './BreakdownPicker.vue'
 import ChartDonut from './Charts/ChartDonut.vue'
 import ChartFigure from './Charts/ChartFigure.vue'
 import ChartFormPicker from './Charts/ChartFormPicker.vue'
@@ -316,13 +308,13 @@ export default {
 	name: 'ResultsSummary',
 
 	components: {
+		BreakdownPicker,
 		ChartDonut,
 		ChartFigure,
 		ChartFormPicker,
 		ChartHeatmap,
 		ChartStacked,
 		NcButton,
-		NcSelect,
 		NcIconSvgWrapper,
 	},
 
@@ -1386,11 +1378,6 @@ export default {
 		margin-block: 16px 8px;
 	}
 
-	&__compare-select {
-		max-inline-size: 360px;
-		min-inline-size: 0;
-	}
-
 	&__compare-counts {
 		color: var(--color-text-maxcontrast);
 		margin-block-start: 4px;
@@ -1546,11 +1533,8 @@ export default {
 		display: list-item;
 	}
 
-	// The picker is a control, not a finding; on paper the table's caption already
-	// says which question the breakdown is by.
 	.question-summary__text-toggle,
-	.question-summary__download,
-	.question-summary__compare-select {
+	.question-summary__download {
 		display: none;
 	}
 }

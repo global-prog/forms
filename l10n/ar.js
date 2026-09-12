@@ -526,6 +526,7 @@ OC.L10N.register(
     "Only responses that gave these answers:" : "الردود التي قدّمت هذه الإجابات فقط:",
     "Stop filtering by {condition}" : "إلغاء التصفية حسب {condition}",
     "Break down by" : "التفصيل حسب",
+    "Break down by…" : "التفصيل حسب…",
     "One total for everyone" : "إجمالي واحد للجميع",
     "Percentages are of the people in each column." : "النسب المئوية محسوبة من الأشخاص في كل عمود.",
     "{question} by {group}" : "{question} حسب {group}",
