@@ -26,6 +26,7 @@ use OCA\Forms\Exception\NoSuchFormException;
 use OCA\Forms\ResponseDefinitions;
 use OCA\Forms\Service\ConfigService;
 use OCA\Forms\Service\ConfirmationEmailService;
+use OCA\Forms\Service\DraftService;
 use OCA\Forms\Service\FormsService;
 use OCA\Forms\Service\QuizService;
 use OCA\Forms\Service\SubmissionService;
@@ -83,6 +84,7 @@ class ApiController extends OCSController {
 		private readonly SubmissionMapper $submissionMapper,
 		private readonly ConfirmationEmailService $confirmationEmailService,
 		private readonly QuizService $quizService,
+		private readonly DraftService $draftService,
 		private readonly ConfigService $configService,
 		private readonly FormsService $formsService,
 		private readonly SubmissionService $submissionService,
@@ -1789,6 +1791,11 @@ class ApiController extends OCSController {
 			}
 		}
 
+		// The response is stored; the draft of it has served its purpose.
+		if ($this->currentUser !== null) {
+			$this->draftService->clear($this->currentUser->getUID(), $formId);
+		}
+
 		return new DataResponse($quizResult, Http::STATUS_CREATED);
 	}
 
@@ -2321,6 +2328,85 @@ class ApiController extends OCSController {
 	/**
 	 * Throws if forbidden keys are present in update
 	 */
+	/**
+	 * Read the answers kept for whoever is signed in, so a form begun on one device can be
+	 * finished on another.
+	 *
+	 * @param int $formId the form
+	 * @return DataResponse<Http::STATUS_OK, array<string, mixed>, array{}>
+	 * @throws OCSForbiddenException Nobody is signed in, or the form keeps no drafts
+	 *
+	 * 200: the answers so far, empty when there is no draft
+	 */
+	#[CORS()]
+	#[NoAdminRequired()]
+	#[ApiRoute(verb: 'GET', url: '/api/v3/forms/{formId}/draft')]
+	public function getDraft(int $formId): DataResponse {
+		$form = $this->draftableForm($formId);
+
+		return new DataResponse([
+			'answers' => $this->draftService->read($this->currentUser->getUID(), $form->getId()),
+		]);
+	}
+
+	/**
+	 * Keep the answers given so far, until the response is sent.
+	 *
+	 * @param int $formId the form
+	 * @param array<string, mixed> $answers the answers so far, keyed by question id
+	 * @return DataResponse<Http::STATUS_OK, bool, array{}>
+	 * @throws OCSForbiddenException Nobody is signed in, or the form keeps no drafts
+	 * @throws OCSBadRequestException The draft is too large to keep
+	 *
+	 * 200: true
+	 */
+	#[CORS()]
+	#[NoAdminRequired()]
+	#[ApiRoute(verb: 'PUT', url: '/api/v3/forms/{formId}/draft')]
+	public function saveDraft(int $formId, array $answers): DataResponse {
+		$form = $this->draftableForm($formId);
+
+		if (!$this->draftService->write($this->currentUser->getUID(), $form->getId(), $answers)) {
+			throw new OCSBadRequestException('Draft is too large to keep');
+		}
+
+		return new DataResponse(true);
+	}
+
+	/**
+	 * Forget the draft, as the form was cleared or the response sent from elsewhere.
+	 *
+	 * @param int $formId the form
+	 * @return DataResponse<Http::STATUS_OK, bool, array{}>
+	 * @throws OCSForbiddenException Nobody is signed in, or the form keeps no drafts
+	 *
+	 * 200: true
+	 */
+	#[CORS()]
+	#[NoAdminRequired()]
+	#[ApiRoute(verb: 'DELETE', url: '/api/v3/forms/{formId}/draft')]
+	public function deleteDraft(int $formId): DataResponse {
+		$form = $this->draftableForm($formId);
+		$this->draftService->clear($this->currentUser->getUID(), $form->getId());
+
+		return new DataResponse(true);
+	}
+
+	/**
+	 * The form, if this respondent may keep a draft of it.
+	 *
+	 * @param int $formId the form
+	 * @return Form the form
+	 * @throws OCSForbiddenException Nobody is signed in, or the form stores responses anonymously
+	 */
+	private function draftableForm(int $formId): Form {
+		$form = $this->formsService->loadFormForSubmission($formId, '');
+		if (!$this->draftService->isAllowed($form, $this->currentUser?->getUID())) {
+			throw new OCSForbiddenException('This form keeps no drafts');
+		}
+		return $form;
+	}
+
 	private function checkForbiddenKeys(array $keyValuePairs): void {
 		$forbiddenKeys = [
 			'id', 'hash', 'ownerId', 'created', 'lastUpdated', 'lockedBy', 'lockedUntil', 'accessEnum'

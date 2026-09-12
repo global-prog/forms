@@ -434,6 +434,7 @@ import { emit } from '@nextcloud/event-bus'
 import { loadState } from '@nextcloud/initial-state'
 import moment from '@nextcloud/moment'
 import { generateOcsUrl, generateUrl } from '@nextcloud/router'
+import debounce from 'debounce'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
@@ -991,6 +992,23 @@ export default {
 			)
 		},
 
+		/**
+		 * Whether an unfinished response may be kept for this respondent. A form that
+		 * stores responses anonymously keeps none: a draft is held under the respondent's
+		 * name, and keeping their unsent answers under it would undo that promise.
+		 *
+		 * @return {boolean} true when drafts are kept
+		 */
+		canKeepDraft() {
+			return (
+				this.isLoggedIn
+				&& !this.publicView
+				&& !this.submissionId
+				&& this.form.isAnonymous !== true
+				&& !!this.form.id
+			)
+		},
+
 		/** @return {boolean} whether to offer another response once one is in */
 		canSubmitAnother() {
 			return (
@@ -1080,6 +1098,7 @@ export default {
 			}
 		}
 		this.applyPrefilledAnswers()
+		await this.loadDraft()
 
 		SetWindowTitle(this.formTitle)
 	},
@@ -1477,6 +1496,84 @@ export default {
 		onUpdate(question, values) {
 			this.answers = { ...this.answers, [question.id]: values }
 			this.addFormFieldToLocalStorage(question)
+			this.saveDraft()
+		},
+
+		/**
+		 * Read back the answers kept for this respondent on the server, so a form begun on
+		 * one device can be finished on another. What is already in hand wins: a draft
+		 * must not overwrite what was just typed, or what a pre-filled link carried.
+		 */
+		async loadDraft() {
+			if (!this.canKeepDraft) {
+				return
+			}
+			try {
+				const response = await axios.get(
+					generateOcsUrl('apps/forms/api/v3/forms/{id}/draft', {
+						id: this.form.id,
+					}),
+				)
+				const draft = OcsResponse2Data(response)?.answers ?? {}
+				const answers = { ...this.answers }
+				let restored = false
+				for (const [questionId, values] of Object.entries(draft)) {
+					const current = answers[questionId]
+					if (Array.isArray(current) ? current.length > 0 : current) {
+						continue
+					}
+					answers[questionId] = values
+					restored = true
+				}
+				if (restored) {
+					this.answers = answers
+					this.answersAtOpen = JSON.stringify(answers)
+				}
+			} catch (error) {
+				// A form that keeps no drafts answers plainly that it does not; anything
+				// else is worth a line in the log but must not stop the form being filled.
+				if (error.response?.status !== 403) {
+					logger.debug('Could not read the draft', { error })
+				}
+			}
+		},
+
+		/** Keep the answers so far, a moment after the last one changes. */
+		saveDraft: debounce(function () {
+			if (!this.canKeepDraft) {
+				return
+			}
+			axios
+				.put(
+					generateOcsUrl('apps/forms/api/v3/forms/{id}/draft', {
+						id: this.form.id,
+					}),
+					{ answers: this.answers },
+				)
+				.catch((error) => {
+					if (error.response?.status !== 403) {
+						logger.debug('Could not keep the draft', { error })
+					}
+				})
+		}, 1500),
+
+		/** Forget the draft, once the response is sent or the form cleared. */
+		async clearDraft() {
+			if (!this.canKeepDraft) {
+				return
+			}
+			this.saveDraft.clear?.()
+			try {
+				await axios.delete(
+					generateOcsUrl('apps/forms/api/v3/forms/{id}/draft', {
+						id: this.form.id,
+					}),
+				)
+			} catch (error) {
+				if (error.response?.status !== 403) {
+					logger.debug('Could not forget the draft', { error })
+				}
+			}
 		},
 
 		/**
@@ -1614,6 +1711,9 @@ export default {
 				this.submitForm = true
 				this.success = true
 				this.deleteFormFieldFromLocalStorage()
+				// The server forgot the draft as it stored the response; cancel any save
+				// still waiting, or it would write the draft straight back.
+				this.saveDraft.clear?.()
 				emit('forms:last-updated:set', this.form.id)
 			} catch (error) {
 				const errorMessage = error.response?.data?.ocs?.meta?.message
@@ -1641,6 +1741,7 @@ export default {
 
 		onResetSubmission() {
 			this.deleteFormFieldFromLocalStorage()
+			this.clearDraft()
 			this.resetData()
 		},
 
