@@ -2068,8 +2068,15 @@ export default {
 			padding-inline: 20px;
 			transition: border-color 0.1s ease-in-out;
 
+			// A form's type scale, on a 16px base in steps of a major third:
+			//   16 body and options - 20 question title - 28 form title - 32 display.
+			// The question title was 17px, one pixel above the options beneath it, so
+			// the most important line on the page did not read as a heading at all.
+			// Respondent view only: this rule sits inside `form`, so the editor keeps
+			// the tighter sizing that suits a page of controls.
 			:deep(.question__header__title__text) {
-				font-size: 17px !important;
+				font-size: 20px !important;
+				line-height: 1.35;
 			}
 
 			// The question being answered stands out, in the form's own colour when it
@@ -2116,7 +2123,7 @@ export default {
 	text-align: center;
 
 	&__score {
-		font-size: 1.1em;
+		font-size: 20px;
 		font-weight: bold;
 	}
 
@@ -2167,7 +2174,7 @@ export default {
 
 	&__percent {
 		color: var(--color-text-maxcontrast);
-		font-size: 2em;
+		font-size: 32px;
 	}
 }
 
