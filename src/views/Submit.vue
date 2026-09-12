@@ -43,7 +43,7 @@
 					alt=""
 					aria-hidden="true"
 					referrerpolicy="no-referrer"
-					loading="lazy" />
+					fetchpriority="high" />
 				<!-- Accent is applied to a band rather than to Nextcloud's primary colour:
 				     overriding that would restyle every button and can silently break
 				     contrast against text. -->
