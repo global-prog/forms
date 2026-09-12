@@ -232,9 +232,12 @@ export default {
 
 <style lang="scss" scoped>
 .quiz-insights {
-	border-block-end: 1px solid var(--color-border);
-	margin-block-end: 24px;
-	padding-block-end: 24px;
+	background-color: var(--color-main-background);
+	border: 2px solid var(--color-border);
+	border-radius: var(--border-radius-large);
+	break-inside: avoid;
+	margin-block-end: 16px;
+	padding-block: 16px;
 	padding-inline: 20px;
 
 	&__title {

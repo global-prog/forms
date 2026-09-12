@@ -211,9 +211,8 @@ export default {
 
 <style lang="scss" scoped>
 .summary-filter {
-	border-block-end: 1px solid var(--color-border);
-	margin-block-end: 24px;
-	padding-block-end: 16px;
+	margin-block-end: 16px;
+	padding-block-end: 8px;
 	padding-inline: 20px;
 
 	&__fields {

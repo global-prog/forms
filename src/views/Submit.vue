@@ -1822,7 +1822,8 @@ export default {
 
 		.submit-button {
 			margin: 5px;
-			margin-block-end: 160px;
+			// Room to scroll past the button on a phone, without a screenful of nothing.
+			margin-block-end: 64px;
 			padding-inline-start: 20px;
 		}
 	}
