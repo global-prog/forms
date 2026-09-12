@@ -1492,7 +1492,7 @@ class ApiController extends OCSController {
 	#[NoAdminRequired()]
 	#[BruteForceProtection(action: 'form')]
 	#[ApiRoute(verb: 'GET', url: '/api/v3/forms/{formId}/submissions')]
-	public function getSubmissions(int $formId, ?string $query = null, ?int $limit = null, int $offset = 0, ?string $fileFormat = null): DataResponse|DataDownloadResponse {
+	public function getSubmissions(int $formId, ?string $query = null, ?int $limit = null, int $offset = 0, ?string $fileFormat = null, ?string $filter = null): DataResponse|DataDownloadResponse {
 		$form = $this->formsService->getFormIfAllowed($formId, Constants::PERMISSION_RESULTS);
 		$permissions = $this->formsService->getPermissions($form);
 		$canSeeAllSubmissions = in_array(Constants::PERMISSION_RESULTS, $permissions, true);
@@ -1502,7 +1502,12 @@ class ApiController extends OCSController {
 				throw new NoSuchFormException('The current user has no permission to get the results for this form', Http::STATUS_FORBIDDEN);
 			}
 
-			$submissionsData = $this->submissionService->getSubmissionsData($form, $fileFormat);
+			$submissionsData = $this->submissionService->getSubmissionsData(
+				$form,
+				$fileFormat,
+				null,
+				$this->exportConditions($filter),
+			);
 			$fileName = $this->formsService->getFileName($form, $fileFormat);
 
 			return new DataDownloadResponse($submissionsData, $fileName, Constants::SUPPORTED_EXPORT_FORMATS[$fileFormat]);
@@ -2405,6 +2410,40 @@ class ApiController extends OCSController {
 			throw new OCSForbiddenException('This form keeps no drafts');
 		}
 		return $form;
+	}
+
+	/**
+	 * The answers an exported response must have given, as the results page asked for them.
+	 *
+	 * Read from a query parameter, so anything malformed simply exports everything rather
+	 * than failing a download the user is waiting for.
+	 *
+	 * @param ?string $filter the conditions, as JSON
+	 * @return list<array{questionId: int, value: string}> the conditions worth applying
+	 */
+	private function exportConditions(?string $filter): array {
+		if ($filter === null || $filter === '') {
+			return [];
+		}
+		try {
+			$decoded = json_decode($filter, true, 8, JSON_THROW_ON_ERROR);
+		} catch (\JsonException $e) {
+			$this->logger->debug('Unreadable export filter, exporting everything', ['exception' => $e]);
+			return [];
+		}
+		$conditions = [];
+		foreach (is_array($decoded) ? $decoded : [] as $condition) {
+			if (is_array($condition)
+				&& isset($condition['questionId'], $condition['value'])
+				&& is_numeric($condition['questionId'])
+				&& is_scalar($condition['value'])) {
+				$conditions[] = [
+					'questionId' => (int)$condition['questionId'],
+					'value' => (string)$condition['value'],
+				];
+			}
+		}
+		return $conditions;
 	}
 
 	private function checkForbiddenKeys(array $keyValuePairs): void {

@@ -213,9 +213,11 @@ class SubmissionService {
 	 * @param Form $form Form to export
 	 * @param string $fileFormat Format to export to
 	 * @param File|null $file File with already exported submissions to append to
+	 * @param list<array{questionId: int, value: string}> $conditions answers a response must
+	 *        have given to be included; every one of them must hold. Empty exports them all.
 	 * @return string File content
 	 */
-	public function getSubmissionsData(Form $form, string $fileFormat, ?File $file = null): string {
+	public function getSubmissionsData(Form $form, string $fileFormat, ?File $file = null, array $conditions = []): string {
 		if (!isset(Constants::SUPPORTED_EXPORT_FORMATS[$fileFormat])) {
 			throw new \InvalidArgumentException('Invalid file format');
 		}
@@ -325,6 +327,7 @@ class SubmissionService {
 
 		// Process each answers
 		foreach ($submissionEntities as $submission) {
+			$answerEntities = $this->answerMapper->findBySubmission($submission->getId());
 			$row = [];
 
 			// User
@@ -342,14 +345,19 @@ class SubmissionService {
 			// Date
 			$row[] = date_format(date_timestamp_set(new DateTime(), $submission->getTimestamp())->setTimezone(new DateTimeZone($userTimezone)), 'c');
 
-			$answerEntities = $this->answerMapper->findBySubmission($submission->getId());
-
 			if ($quizMax > 0) {
 				$given = [];
 				foreach ($answerEntities as $answerEntity) {
 					$given[$answerEntity->getQuestionId()][] = $answerEntity->getText();
 				}
 				$row[] = round($this->quizService->gradeStored($quizQuestions, $given)['score'], 2);
+			}
+
+			// A filtered summary exports what it describes: a response that did not give
+			// every chosen answer is left out. The linked spreadsheet never passes
+			// conditions, so it stays a copy of everything.
+			if ($conditions !== [] && !$this->matchesConditions($answerEntities, $conditions)) {
+				continue;
 			}
 
 			// Answers, make sure we keep the question order
@@ -421,6 +429,30 @@ class SubmissionService {
 		}
 
 		return $this->exportData($header, $data, $fileFormat, $file);
+	}
+
+	/**
+	 * Did this response give every one of these answers?
+	 *
+	 * @param list<Answer> $answers the response's answers
+	 * @param list<array{questionId: int, value: string}> $conditions the answers required
+	 * @return bool true when all of them are there
+	 */
+	private function matchesConditions(array $answers, array $conditions): bool {
+		foreach ($conditions as $condition) {
+			$found = false;
+			foreach ($answers as $answer) {
+				if ($answer->getQuestionId() === $condition['questionId']
+					&& (string)$answer->getText() === $condition['value']) {
+					$found = true;
+					break;
+				}
+			}
+			if (!$found) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**

@@ -780,6 +780,11 @@ export default {
 			position: sticky;
 			inset-block-end: 0px;
 			padding-block-end: 16px;
+			// It floats over whatever is beneath it, so it carries its own ground rather
+			// than letting a question's words run under the buttons.
+			background-color: var(--color-main-background);
+			border-radius: var(--border-radius-large);
+			box-shadow: 0 0 0 8px var(--color-main-background);
 			// Above other menus
 			z-index: 55;
 			display: flex;

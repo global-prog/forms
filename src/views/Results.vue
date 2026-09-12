@@ -694,6 +694,12 @@ export default {
 		},
 
 		async onDownloadFile(fileFormat) {
+			// A filtered summary downloads what it describes, so the spreadsheet and the
+			// page on screen say the same thing. The linked file is untouched by this: it
+			// stays a copy of every response.
+			const filter = this.summaryFilter?.length
+				? '&filter=' + encodeURIComponent(JSON.stringify(this.summaryFilter))
+				: ''
 			const exportUrl =
 				generateOcsUrl('apps/forms/api/v3/forms/{id}/submissions', {
 					id: this.form.id,
@@ -702,6 +708,7 @@ export default {
 				+ encodeURIComponent(getRequestToken())
 				+ '&fileFormat='
 				+ fileFormat
+				+ filter
 			window.open(exportUrl, '_self')
 		},
 
