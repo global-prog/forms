@@ -543,6 +543,24 @@ export default {
 
 	&--editable {
 		padding-inline-start: 56px; // add 12px for the title input box
+
+		// The same card as the form itself, so what is being written looks like what will
+		// be answered. The border is always drawn and only changes colour, so nothing
+		// shifts as the pointer moves down the list.
+		border: 2px solid transparent;
+		border-radius: var(--border-radius-large);
+		margin-block-end: 24px;
+		padding-block: 8px;
+		padding-inline-end: 8px;
+		transition: border-color 0.1s ease-in-out;
+
+		&:hover {
+			border-color: var(--color-border);
+		}
+
+		&:focus-within {
+			border-color: var(--color-primary-element);
+		}
 	}
 
 	> * {

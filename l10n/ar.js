@@ -516,6 +516,7 @@ OC.L10N.register(
     "Show correct answers after submitting" : "إظهار الإجابات الصحيحة بعد الإرسال",
     "Anyone who submits can pass the answers on. Allow one response per person if that matters." : "يمكن لأي شخص يرسل إجابته أن ينقل الإجابات لغيره. اسمح برد واحد لكل شخص إذا كان ذلك مهمًا.",
     "Correct answer:" : "الإجابة الصحيحة:",
+    "Your answers are kept as you go, so you can finish this form later on any device." : "تُحفظ إجاباتك أولًا بأول، فيمكنك إكمال هذا النموذج لاحقًا من أي جهاز.",
     "Only responses that gave these answers:" : "الردود التي قدّمت هذه الإجابات فقط:",
     "Stop filtering by {condition}" : "إلغاء التصفية حسب {condition}",
     "Break down by" : "التفصيل حسب",

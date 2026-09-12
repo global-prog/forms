@@ -317,6 +317,14 @@
 							:style="{ inlineSize: `${progressPercent}%` }" />
 					</div>
 				</div>
+				<p v-if="canKeepDraft" class="draft-note">
+					{{
+						t(
+							'forms',
+							'Your answers are kept as you go, so you can finish this form later on any device.',
+						)
+					}}
+				</p>
 				<div class="form-buttons">
 					<NcButton
 						v-if="pageCount > 1 && currentPage > 0"
@@ -1919,6 +1927,12 @@ export default {
 			flex-wrap: wrap;
 			gap: 4px;
 			justify-content: flex-end;
+		}
+
+		.draft-note {
+			color: var(--color-text-maxcontrast);
+			margin-block: 4px 8px;
+			padding-inline: 20px;
 		}
 
 		.submit-button {
