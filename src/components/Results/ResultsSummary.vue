@@ -171,6 +171,36 @@
 				:items="optionBars"
 				:form="chartForm"
 				:max="submissions.length" />
+
+			<!-- The same answers within each answer to another question: who said what,
+			     by department, by year group. The two nodes below are deliberately
+			     adjacent: a v-else-if has to sit next to its v-if. -->
+			<div v-if="groupingQuestions.length" class="question-summary__compare">
+				<NcSelect
+					class="question-summary__compare-select"
+					:inputLabel="t('forms', 'Break down by')"
+					:placeholder="t('forms', 'One total for everyone')"
+					:options="groupingOptions"
+					:modelValue="selectedGrouping"
+					label="label"
+					trackBy="id"
+					@update:modelValue="onGroupingChosen" />
+				<template v-if="crossTab.columns.length">
+					<ChartHeatmap
+						:rows="crossTab.rows"
+						:columns="crossTab.columns"
+						:cells="crossTab.cells"
+						:caption="crossTabCaption" />
+					<p class="question-summary__compare-counts">
+						{{ crossTabCounts }}
+					</p>
+				</template>
+				<p
+					v-else-if="groupBy !== null"
+					class="question-summary__ranking-description">
+					{{ t('forms', 'Nobody answered both questions.') }}
+				</p>
+			</div>
 		</div>
 
 		<div
@@ -273,6 +303,8 @@ import { GridCellType, OptionType } from '../../models/Constants.ts'
 import { readChartForm, writeChartForm } from '../../utils/ChartPreferences.js'
 import {
 	compareByAnswer,
+	crossTabByAnswer,
+	isChoiceQuestion,
 	groupingQuestions as questionsThatGroup,
 } from '../../utils/CompareAnswers.js'
 import { groupTextAnswers } from '../../utils/TextAnswers.js'
@@ -1002,9 +1034,12 @@ export default {
 			return [noResponse, ...listed]
 		},
 
-		/** @return {object[]} the questions this one's numbers can be broken down by */
+		/**
+		 * @return {object[]} the questions this one can be broken down by: an average per
+		 *   group for a number, a cross-tab for a set of fixed answers
+		 */
 		groupingQuestions() {
-			return this.numericStats
+			return this.numericStats || isChoiceQuestion(this.question)
 				? questionsThatGroup(this.questions, this.question)
 				: []
 		},
@@ -1046,6 +1081,54 @@ export default {
 					note: n('forms', '%n response', '%n responses', group.count),
 				}),
 			)
+		},
+
+		/**
+		 * This question's answers within each answer to the chosen question.
+		 *
+		 * @return {object} rows, columns and cells, in the shape ChartHeatmap expects
+		 */
+		crossTab() {
+			const grouping = this.groupingQuestions.find(
+				(question) => question.id === this.groupBy,
+			)
+			if (!grouping) {
+				return { rows: [], columns: [], cells: [] }
+			}
+			return crossTabByAnswer(this.submissions, grouping, this.question, {
+				other: t('forms', 'Other'),
+				noAnswer: t('forms', 'No response'),
+			})
+		},
+
+		/** @return {string} what the cross-tab shows, for anyone reading it out */
+		crossTabCaption() {
+			const grouping = this.groupingQuestions.find(
+				(question) => question.id === this.groupBy,
+			)
+			return grouping
+				? t('forms', '{question} by {group}', {
+						question: this.question.text,
+						group: grouping.text,
+					})
+				: ''
+		},
+
+		/**
+		 * The size of each column, and what the percentages are of. Without this the
+		 * reader cannot tell 100% of two people from 100% of two hundred, and a checkbox
+		 * question's columns total past 100% with no explanation.
+		 *
+		 * @return {string} the groups and their sizes
+		 */
+		crossTabCounts() {
+			const sizes = this.crossTab.columns
+				.map(
+					(column) =>
+						`${column.label}: ${n('forms', '%n response', '%n responses', column.respondents)}`,
+				)
+				.join(' · ')
+			return `${t('forms', 'Percentages are of the people in each column.')} ${sizes}`
 		},
 
 		/**
@@ -1462,8 +1545,11 @@ export default {
 		display: list-item;
 	}
 
+	// The picker is a control, not a finding; on paper the table's caption already
+	// says which question the breakdown is by.
 	.question-summary__text-toggle,
-	.question-summary__download {
+	.question-summary__download,
+	.question-summary__compare-select {
 		display: none;
 	}
 }

@@ -23,6 +23,11 @@
 <template>
 	<div class="chart-heatmap">
 		<table class="chart-heatmap__table">
+			<caption v-if="caption" class="chart-heatmap__caption" dir="auto">
+				{{
+					caption
+				}}
+			</caption>
 			<thead>
 				<tr>
 					<th class="chart-heatmap__corner" scope="col"></th>
@@ -82,6 +87,13 @@ export default {
 			type: Array,
 			required: true,
 		},
+
+		/** What the table shows, read out before it; omitted when the heading says so */
+		caption: {
+			type: String,
+			required: false,
+			default: '',
+		},
 	},
 
 	computed: {
@@ -117,6 +129,12 @@ export default {
 .chart-heatmap {
 	// A 39-row grid is wider than any phone; scroll the table, never the page.
 	overflow-x: auto;
+
+	&__caption {
+		color: var(--color-text-maxcontrast);
+		margin-block-end: 8px;
+		text-align: start;
+	}
 
 	&__table {
 		border-collapse: separate;
