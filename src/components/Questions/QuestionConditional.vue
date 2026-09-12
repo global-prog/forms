@@ -1235,10 +1235,15 @@ export default {
 	border-inline-start: 3px solid var(--color-primary-element);
 }
 
+// Only opacity and transform change between the states below; naming them keeps `all`
+// from animating whatever else shifts as a branch is pulled out of the flow, and keeps
+// the work on the compositor.
 .branch-list-move,
 .branch-list-enter-active,
 .branch-list-leave-active {
-	transition: all var(--animation-slow) ease;
+	transition:
+		opacity var(--animation-slow) ease,
+		transform var(--animation-slow) ease;
 }
 
 .branch-list-enter-from,

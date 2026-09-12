@@ -267,10 +267,17 @@ export default {
 	margin: 0;
 }
 
+// Only opacity and transform actually change between the states below, and naming
+// them is not pedantry: `all` also animates whatever else moves when an item is
+// pulled out of the flow to be reordered, which is where the squashing on a
+// reordering list comes from. These two are also the pair a compositor can animate
+// without laying the page out again.
 .question-list-move,
 .question-list-enter-active,
 .question-list-leave-active {
-	transition: all var(--animation-slow) ease;
+	transition:
+		opacity var(--animation-slow) ease,
+		transform var(--animation-slow) ease;
 }
 
 .question-list-enter-from,

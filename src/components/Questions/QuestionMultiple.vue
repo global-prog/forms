@@ -671,10 +671,17 @@ export default {
 	min-height: var(--default-clickable-area);
 }
 
+// Only opacity and transform actually change between the states below, and naming
+// them is not pedantry: `all` also animates whatever else moves when an item is
+// pulled out of the flow to be reordered, which is where the squashing on a
+// reordering list comes from. These two are also the pair a compositor can animate
+// without laying the page out again.
 .options-list-transition-move,
 .options-list-transition-enter-active,
 .options-list-transition-leave-active {
-	transition: all var(--animation-slow) ease;
+	transition:
+		opacity var(--animation-slow) ease,
+		transform var(--animation-slow) ease;
 }
 
 .options-list-transition-enter-from,
