@@ -62,17 +62,21 @@
 					<tr>
 						<th class="first-column"></th>
 
-						<th v-for="column of gridColumns" :key="column.id">
+						<th
+							v-for="column of gridColumns"
+							:key="column.id"
+							scope="col">
 							{{ column.text }}
 						</th>
 					</tr>
 				</thead>
 				<tbody>
 					<tr v-for="row of gridRows" :key="row.id">
-						<td class="first-column">{{ row.text }}</td>
+						<th class="first-column" scope="row">{{ row.text }}</th>
 						<td v-for="column of gridColumns" :key="column.id">
 							<template v-if="gridCellType === 'radio'">
 								<NcCheckboxRadioSwitch
+									:aria-label="`${row.text}: ${column.text}`"
 									:modelValue="gridValue[row.id]"
 									:name="`${row.id}-answer`"
 									:value="column.id.toString()"
@@ -82,6 +86,7 @@
 
 							<template v-if="gridCellType === 'checkbox'">
 								<NcCheckboxRadioSwitch
+									:aria-label="`${row.text}: ${column.text}`"
 									:modelValue="gridValue[row.id] || []"
 									:name="`${row.id}-answer`"
 									:value="column.id.toString()"
@@ -300,6 +305,8 @@ export default {
 		}
 
 		.first-column {
+			// A heading for the row, so the table can be read out; still plain to look at.
+			font-weight: normal;
 			min-width: 200px;
 			text-align: start;
 			position: sticky;

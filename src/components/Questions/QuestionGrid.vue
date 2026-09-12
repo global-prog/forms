@@ -25,7 +25,8 @@
 
 							<th
 								v-for="column in columns"
-								:key="column.local ? 'option-local' : column.id">
+								:key="column.local ? 'option-local' : column.id"
+								scope="col">
 								{{ column.text }}
 							</th>
 						</tr>
@@ -34,7 +35,7 @@
 						<tr
 							v-for="row in rows"
 							:key="row.local ? 'option-local' : row.id">
-							<td class="first-column">{{ row.text }}</td>
+							<th class="first-column" scope="row">{{ row.text }}</th>
 							<td
 								v-for="column in columns"
 								:key="column.local ? 'option-local' : column.id">
@@ -44,6 +45,7 @@
 											hasError ? errorId : undefined
 										"
 										:aria-invalid="hasError ? 'true' : undefined"
+										:aria-label="cellLabel(row, column)"
 										:modelValue="values[row.id]"
 										:value="column.id.toString()"
 										:name="`${row.id}-answer`"
@@ -59,6 +61,7 @@
 											hasError ? errorId : undefined
 										"
 										:aria-invalid="hasError ? 'true' : undefined"
+										:aria-label="cellLabel(row, column)"
 										:modelValue="values[row.id] || []"
 										:value="column.id.toString()"
 										:name="`${row.id}-answer`"
@@ -71,6 +74,7 @@
 								<template v-if="questionType === 'number'">
 									<NcInputField
 										type="number"
+										:aria-label="cellLabel(row, column)"
 										:modelValue="plainValues[row.id][column.id]"
 										@update:modelValue="
 											onChangeTextNumber(
@@ -311,6 +315,22 @@ export default {
 			})
 		},
 
+		/**
+		 * What a cell of the grid is called, since the cell shows only a control: without
+		 * this a screen reader announces "radio button" with no idea which row or column it
+		 * belongs to.
+		 *
+		 * @param {object} row the row the cell is in
+		 * @param {object} column the column the cell is in
+		 * @return {string} the cell's name
+		 */
+		cellLabel(row, column) {
+			return t('forms', '{row}: {column}', {
+				row: row.text,
+				column: column.text,
+			})
+		},
+
 		onChangeCheckboxRadio(rowId, value) {
 			const values = { ...this.values }
 			values[rowId] = value
@@ -442,6 +462,9 @@ export default {
 	}
 
 	.first-column {
+		// A row's label is a heading now, so a screen reader can say which row a cell is
+		// in; it should still read as the plain text it looked like before.
+		font-weight: normal;
 		min-width: 200px;
 		text-align: start;
 		position: sticky;
