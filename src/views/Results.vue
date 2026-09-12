@@ -265,6 +265,7 @@
 				{{ t('forms', 'No responses gave this answer.') }}
 			</p>
 			<div v-else :dir="formDirection" :lang="formLanguage || undefined">
+				<ResponseTimeline :submissions="summarySubmissions" />
 				<QuizInsights
 					v-if="form.settings?.quizMode"
 					:submissions="summarySubmissions"
@@ -345,6 +346,7 @@ import NcTextField from '@nextcloud/vue/components/NcTextField'
 import PaginationToolbar from '../components/PaginationToolbar.vue'
 import PillMenu from '../components/PillMenu.vue'
 import QuizInsights from '../components/Results/QuizInsights.vue'
+import ResponseTimeline from '../components/Results/ResponseTimeline.vue'
 import ResultsSummary from '../components/Results/ResultsSummary.vue'
 import Submission from '../components/Results/Submission.vue'
 import SummaryFilter from '../components/Results/SummaryFilter.vue'
@@ -395,6 +397,7 @@ export default {
 		NcLoadingIcon,
 		PillMenu,
 		QuizInsights,
+		ResponseTimeline,
 		ResultsSummary,
 		SummaryFilter,
 		Submission,
