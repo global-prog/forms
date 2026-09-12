@@ -28,7 +28,7 @@
 			v-show="ready"
 			ref="chart"
 			class="chart-stacked__canvas"
-			role="img"
+			aria-hidden="true"
 			:style="{ blockSize: `${height}px` }" />
 		<!-- eslint-enable vue/no-unused-refs -->
 
@@ -46,7 +46,11 @@
 		</ol>
 
 		<!-- The whole matrix as text, for when the library cannot load. -->
-		<table v-if="failed" class="chart-stacked__fallback">
+		<!-- The same counts as a table: what a screen reader reads instead of the chart,
+		     and what everyone sees if the library cannot load. -->
+		<table
+			class="chart-stacked__fallback"
+			:class="{ 'hidden-visually': !failed }">
 			<thead>
 				<tr>
 					<td />

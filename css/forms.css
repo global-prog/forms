@@ -97,3 +97,17 @@ html {
 		--chart-series-7: #9085e9;
 	}
 }
+
+/*
+ * A reader who has asked their system for less motion gets none of ours: the cards still
+ * change colour as they are hovered or answered, but they change at once rather than
+ * easing into it. The charts follow the same setting from EchartMixin.
+ */
+@media (prefers-reduced-motion: reduce) {
+	.question,
+	.question-summary,
+	.template-picker__item,
+	.submission {
+		transition: none !important;
+	}
+}

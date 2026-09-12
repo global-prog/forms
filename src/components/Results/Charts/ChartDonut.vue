@@ -18,8 +18,15 @@
 -->
 <template>
 	<div class="chart-donut">
-		<!-- eslint-disable-next-line vue/no-unused-refs -- read by EchartMixin -->
-		<div v-show="ready" ref="chart" class="chart-donut__ring" role="img" />
+		<!-- The legend beside it names every segment with its share, so the ring itself
+		     carries nothing a screen reader needs. -->
+		<!-- eslint-disable vue/no-unused-refs -- the ref is read by EchartMixin -->
+		<div
+			v-show="ready"
+			ref="chart"
+			class="chart-donut__ring"
+			aria-hidden="true" />
+		<!-- eslint-enable vue/no-unused-refs -->
 
 		<ol class="chart-donut__legend">
 			<li

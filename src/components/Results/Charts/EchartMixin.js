@@ -163,9 +163,15 @@ export default {
 			if (width !== this.plotWidth) {
 				this.plotWidth = width
 			}
+			// A reader who has asked for less motion gets the finished chart, not the
+			// animation into it.
+			const option = this.chartOption(theme, width)
+			if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) {
+				option.animation = false
+			}
 			// `notMerge` so a series that has gone away is removed rather than lingering
 			// underneath the new one.
-			this.chart.setOption(this.chartOption(theme, width), { notMerge: true })
+			this.chart.setOption(option, { notMerge: true })
 		},
 
 		/** Watch for the two things that invalidate a painted chart: size and theme. */

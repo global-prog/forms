@@ -29,14 +29,17 @@
 			v-show="ready"
 			ref="chart"
 			class="chart-figure__canvas"
-			role="img"
+			aria-hidden="true"
 			:style="{ blockSize: `${height}px` }" />
 		<!-- eslint-enable vue/no-unused-refs -->
 
 		<!-- Every value the chart would draw, as text. This is the fallback when the
 		     library cannot load, and it is also what satisfies the requirement that no
 		     number is carried by colour alone. -->
-		<dl v-if="failed" class="chart-figure__fallback">
+		<!-- Every value the chart draws, in words. Read aloud in place of the drawing,
+		     which a screen reader can make nothing of, and shown to everyone when the
+		     library cannot load. -->
+		<dl class="chart-figure__fallback" :class="{ 'hidden-visually': !failed }">
 			<template v-for="(item, index) in items" :key="item.key ?? index">
 				<dt dir="auto">{{ item.label }}</dt>
 				<dd>
