@@ -1893,7 +1893,8 @@ export default {
 
 		.form-title,
 		.form-desc,
-		.info-message {
+		.info-message,
+		.print-note {
 			// Inset to match the question cards' padding, since the card itself now spans
 			// the full width.
 			width: 100%;
