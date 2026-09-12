@@ -328,13 +328,18 @@
 							:style="{ inlineSize: `${progressPercent}%` }" />
 					</div>
 				</div>
-				<p v-if="canKeepDraft" class="draft-note">
-					{{
-						t(
-							'forms',
-							'Your answers are kept as you go, so you can finish this form later on any device.',
-						)
-					}}
+				<p
+					v-if="canKeepDraft"
+					class="draft-note"
+					role="status"
+					aria-live="polite">
+					<NcIconSvgWrapper
+						v-if="draftEverSaved"
+						class="draft-note__mark"
+						:svg="IconCheckSvg"
+						:size="18"
+						inline />
+					{{ draftMessage }}
 				</p>
 				<div class="form-buttons">
 					<NcButton
@@ -574,6 +579,13 @@ export default {
 			 * can tell "kept" from "not kept yet" rather than assuming either.
 			 */
 			draftIsCurrent: true,
+
+			/**
+			 * Whether anything has ever reached the server for this response. Sticky, so
+			 * the line settles on "saved" rather than flicking back to the promise for
+			 * the second and a half between a keystroke and the save that follows it.
+			 */
+			draftEverSaved: false,
 
 			/** the answers as the page opened with them, from a saved draft or a link */
 			answersAtOpen: null,
@@ -882,6 +894,28 @@ export default {
 		},
 
 		/** @return {boolean} whether the reader can edit this form */
+		/**
+		 * What the form can honestly say about the answers so far.
+		 *
+		 * The form promised that answers are kept as you go, and then never mentioned it
+		 * again - the respondent had to take it on faith. Once something has actually
+		 * reached the server the line says so, which is the whole point of making the
+		 * promise in the first place.
+		 *
+		 * @return {string} the reassurance, before and after there is anything to report
+		 */
+		draftMessage() {
+			return this.draftEverSaved
+				? t(
+						'forms',
+						'Answers saved. You can finish this form later on any device.',
+					)
+				: t(
+						'forms',
+						'Your answers are kept as you go, so you can finish this form later on any device.',
+					)
+		},
+
 		/**
 		 * @return {boolean} whether any question is shown only in response to another,
 		 *   which is what the printed copy has to warn about
@@ -1616,6 +1650,7 @@ export default {
 				if (JSON.stringify(this.answers) === sent) {
 					this.draftIsCurrent = true
 				}
+				this.draftEverSaved = true
 				return true
 			} catch (error) {
 				if (error.response?.status !== 403) {
@@ -1649,6 +1684,7 @@ export default {
 			this.saveDraft.clear?.()
 			// Nothing on either side now, so the two agree again.
 			this.draftIsCurrent = true
+			this.draftEverSaved = false
 			try {
 				await axios.delete(
 					generateOcsUrl('apps/forms/api/v3/forms/{id}/draft', {
@@ -2053,9 +2089,17 @@ export default {
 		}
 
 		.draft-note {
+			align-items: center;
 			color: var(--color-text-maxcontrast);
+			display: flex;
+			gap: 6px;
 			margin-block: 4px 8px;
 			padding-inline: 20px;
+
+			&__mark {
+				color: var(--color-element-success);
+				flex-shrink: 0;
+			}
 		}
 
 		.submit-button {
