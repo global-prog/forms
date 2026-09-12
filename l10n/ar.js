@@ -527,6 +527,7 @@ OC.L10N.register(
     "Only responses that gave these answers:" : "الردود التي قدّمت هذه الإجابات فقط:",
     "Stop filtering by {condition}" : "إلغاء التصفية حسب {condition}",
     "Break down by" : "التفصيل حسب",
+    "* indicates a required question" : "* يشير إلى سؤال مطلوب",
     "Asked of {asked} of the {total} people who responded; the figures below are out of {asked}." : "طُرح على {asked} من أصل {total} ممن استجابوا؛ الأرقام أدناه محسوبة من {asked}.",
     "Print" : "طباعة",
     "Print form" : "طباعة الاستمارة",

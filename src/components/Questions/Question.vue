@@ -69,7 +69,13 @@
 					class="question__header__title__text"
 					dir="auto"
 					:style="{ textAlign: formTextAlign }">
-					{{ computedText }}
+					{{ text
+					}}<span
+						v-if="isRequired"
+						class="question__header__title__required"
+						aria-hidden="true"
+						>&nbsp;*</span
+					>
 				</h3>
 				<span
 					v-if="quizPoints !== null"
@@ -388,18 +394,6 @@ export default {
 
 	computed: {
 		/**
-		 * Extend text with asterisk if question is required
-		 *
-		 * @return {boolean}
-		 */
-		computedText() {
-			if (this.isRequired) {
-				return this.text + ' *'
-			}
-			return this.text
-		},
-
-		/**
 		 * What this question is worth, shown to respondents of a quiz as a quiz form
 		 * usually does. A respondent's copy of the question carries no answer key, so the
 		 * server marks the scored ones; the author's copy has the key itself.
@@ -630,6 +624,16 @@ export default {
 		width: auto;
 
 		&__title {
+			// The asterisk is the only thing marking a question as required, so it is
+			// given a colour of its own rather than reading as punctuation in the title.
+			// It carries no meaning for a screen reader - the field's own `required`
+			// says it in words - so it is hidden from one and explained once, in the
+			// legend under the form title.
+			&__required {
+				color: var(--color-error-text, var(--color-element-error));
+				font-weight: normal;
+			}
+
 			display: flex;
 			min-height: 44px;
 
