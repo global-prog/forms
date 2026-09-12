@@ -117,3 +117,46 @@ html {
 		transition: none !important;
 	}
 }
+
+/*
+ * Paper is white whatever the screen was.
+ *
+ * The app prints with the palette it is being read in, and Nextcloud's dark theme sets a
+ * near-white --color-main-text. The print rules already forced a white page background, so
+ * a report or a form printed from dark mode came out as near-white text on white paper --
+ * legible on screen, all but blank on paper, and nothing in the preview says so.
+ *
+ * Rather than restate a colour on every printed element, the handful of tokens that carry
+ * text and edges are redefined for print, which the components already read. The chart
+ * series stay as they are: css/forms.css defines the light palette on :root and the dark
+ * one under [data-theme-dark], so the same override brings the light series back with it.
+ */
+@media print {
+	:root,
+	body,
+	[data-theme-dark],
+	[data-theme-dark-highcontrast],
+	[data-theme-default] {
+		--color-main-background: #fff;
+		--color-main-background-blur: #fff;
+		--color-background-hover: #fff;
+		--color-background-dark: #fff;
+		--color-background-darker: #f0f0f0;
+		--color-main-text: #000;
+		--color-text-maxcontrast: #555;
+		--color-border: #999;
+		--color-border-dark: #777;
+		--chart-series-1: #2a78d6;
+		--chart-series-2: #d4551f;
+		--chart-series-3: #12805d;
+		--chart-series-4: #9a6a00;
+		--chart-series-5: #c4456f;
+		--chart-series-6: #008300;
+		--chart-series-7: #4a3aa7;
+	}
+
+	body {
+		background: #fff !important;
+		color: #000 !important;
+	}
+}
