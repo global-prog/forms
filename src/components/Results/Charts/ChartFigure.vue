@@ -26,7 +26,7 @@
 	<div class="chart-figure">
 		<!-- eslint-disable vue/no-unused-refs -- the ref is read by EchartMixin -->
 		<div
-			v-show="ready"
+			v-show="!failed"
 			ref="chart"
 			class="chart-figure__canvas"
 			aria-hidden="true"

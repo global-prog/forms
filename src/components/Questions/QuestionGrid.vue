@@ -449,6 +449,19 @@ export default {
 		text-align: center;
 		padding: 8px 4px;
 
+		// A grid cell is a tap target, and a mis-tap here does not just miss - it puts
+		// the answer on the wrong row. A finger needs more room than a pointer, so the
+		// rows grow only where the pointer is coarse; on a desktop the grid keeps the
+		// size it has always had.
+		@media (pointer: coarse) {
+			min-height: 44px;
+
+			.checkbox-radio-switch {
+				align-items: center;
+				min-block-size: 44px;
+			}
+		}
+
 		.checkbox-radio-switch {
 			display: flex;
 			justify-content: center;

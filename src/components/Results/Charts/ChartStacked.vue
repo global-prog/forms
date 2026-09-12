@@ -25,7 +25,7 @@
 	<div class="chart-stacked">
 		<!-- eslint-disable vue/no-unused-refs -- the ref is read by EchartMixin -->
 		<div
-			v-show="ready"
+			v-show="!failed"
 			ref="chart"
 			class="chart-stacked__canvas"
 			aria-hidden="true"

@@ -22,7 +22,7 @@
 		     carries nothing a screen reader needs. -->
 		<!-- eslint-disable vue/no-unused-refs -- the ref is read by EchartMixin -->
 		<div
-			v-show="ready"
+			v-show="!failed"
 			ref="chart"
 			class="chart-donut__ring"
 			aria-hidden="true" />

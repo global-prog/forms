@@ -186,7 +186,15 @@
 			<NcNoteCard v-if="hasInfo" :id="infoId" type="info">
 				<bdi>{{ infoMessage }}</bdi>
 			</NcNoteCard>
-			<NcNoteCard v-if="hasError" :id="errorId" type="error">
+			<!-- Short-answer and number questions validate as they are typed in, so an
+			     error can appear without focus moving and without anything being said.
+			     Polite rather than assertive: submitting can raise several of these at
+			     once, and the respondent is already being taken to the first of them. -->
+			<NcNoteCard
+				v-if="hasError"
+				:id="errorId"
+				type="error"
+				aria-live="polite">
 				<bdi>{{ errorMessage }}</bdi>
 			</NcNoteCard>
 		</div>

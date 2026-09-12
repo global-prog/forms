@@ -74,7 +74,9 @@ function fileNameFor(title) {
  *
  * A chart starts drawing only as it comes near the screen, or when the page is printed;
  * see chartScheduler.js. Its box keeps its height meanwhile, so nothing moves when it
- * draws.
+ * draws -- which means the box is hidden on `failed`, never on `ready`. Hiding it until
+ * the drawing arrived collapsed it to nothing, and a page of them shifted under the
+ * reader one card at a time as they scrolled.
  */
 export default {
 	props: {
