@@ -516,6 +516,7 @@ OC.L10N.register(
     "Show correct answers after submitting" : "إظهار الإجابات الصحيحة بعد الإرسال",
     "Anyone who submits can pass the answers on. Allow one response per person if that matters." : "يمكن لأي شخص يرسل إجابته أن ينقل الإجابات لغيره. اسمح برد واحد لكل شخص إذا كان ذلك مهمًا.",
     "Correct answer:" : "الإجابة الصحيحة:",
+    "Jump to question" : "الانتقال إلى سؤال",
     "{row}: {column}" : "{row}: {column}",
     "When responses arrived" : "متى وردت الردود",
     "First response" : "أول رد",

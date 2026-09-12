@@ -4,7 +4,10 @@
 -->
 
 <template>
-	<div class="section question-summary" :dir="questionDirection">
+	<div
+		:id="`question-summary-${question.id}`"
+		class="section question-summary"
+		:dir="questionDirection">
 		<h3 dir="auto" :style="{ textAlign: formTextAlign }">
 			{{ question.text }}
 		</h3>
@@ -190,18 +193,6 @@
 				:cells="gridHeatmap.cells" />
 		</div>
 
-		<!-- The bars, columns or line as a picture, titled, for a report or a slide. -->
-		<NcButton
-			v-if="hasDownloadableChart"
-			class="question-summary__download"
-			variant="tertiary"
-			@click="downloadChart">
-			<template #icon>
-				<NcIconSvgWrapper :svg="IconDownload" />
-			</template>
-			{{ t('forms', 'Download chart') }}
-		</NcButton>
-
 		<!-- Typed answers are grouped by what they say, most frequent first; the long tail
 		     waits behind a button on screen but is always printed. -->
 		<ul v-else class="question-summary__text">
@@ -235,6 +226,20 @@
 				}}</span>
 			</li>
 		</ul>
+		<!-- The bars, columns or line as a picture, titled, for a report or a slide.
+		     It must come after the list above: a v-else has to sit next to its v-if, and
+		     with this button between them the list attached itself to the button instead,
+		     so every card that offers no download showed the raw answers under its chart. -->
+		<NcButton
+			v-if="hasDownloadableChart"
+			class="question-summary__download"
+			variant="tertiary"
+			@click="downloadChart">
+			<template #icon>
+				<NcIconSvgWrapper :svg="IconDownload" />
+			</template>
+			{{ t('forms', 'Download chart') }}
+		</NcButton>
 		<NcButton
 			v-if="hiddenAnswerCount > 0"
 			class="question-summary__text-toggle"

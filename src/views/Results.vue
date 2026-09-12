@@ -261,6 +261,18 @@
 				:questions="summaryQuestions"
 				:shown="summarySubmissions.length"
 				:total="submissions.length" />
+			<!-- A form with many questions makes a long page; this jumps down it. -->
+			<div v-if="summaryQuestions.length >= 8" class="summary-jump">
+				<NcSelect
+					class="summary-jump__select"
+					:inputLabel="t('forms', 'Jump to question')"
+					:placeholder="t('forms', 'Choose a question')"
+					:options="jumpOptions"
+					:modelValue="null"
+					label="label"
+					trackBy="id"
+					@update:modelValue="onJumpToQuestion" />
+			</div>
 			<p v-if="!summarySubmissions.length" class="summary-filter-empty">
 				{{ t('forms', 'No responses gave this answer.') }}
 			</p>
@@ -342,6 +354,7 @@ import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import PaginationToolbar from '../components/PaginationToolbar.vue'
 import PillMenu from '../components/PillMenu.vue'
@@ -395,6 +408,7 @@ export default {
 		PaginationToolbar,
 		NcEmptyContent,
 		NcLoadingIcon,
+		NcSelect,
 		PillMenu,
 		QuizInsights,
 		ResponseTimeline,
@@ -506,6 +520,14 @@ export default {
 			return this.questions.filter(
 				(question) => !answerTypes[question.type]?.displayOnly,
 			)
+		},
+
+		/** @return {{id: number, label: string}[]} the questions, for the jump list */
+		jumpOptions() {
+			return this.summaryQuestions.map((question) => ({
+				id: question.id,
+				label: question.text,
+			}))
 		},
 
 		/** @return {object[]} the responses the summary describes */
@@ -950,6 +972,23 @@ export default {
 			return submissions
 		},
 
+		/**
+		 * @param {?{id: number}} option the question to jump to
+		 */
+		onJumpToQuestion(option) {
+			if (!option) {
+				return
+			}
+			const gently = !window.matchMedia?.('(prefers-reduced-motion: reduce)')
+				?.matches
+			document
+				.getElementById(`question-summary-${option.id}`)
+				?.scrollIntoView({
+					block: 'start',
+					behavior: gently ? 'smooth' : 'auto',
+				})
+		},
+
 		getPicker() {
 			if (this.picker !== null) {
 				return this.picker
@@ -1025,6 +1064,16 @@ export default {
 <style lang="scss" scoped>
 .forms-emptycontent {
 	height: 100%;
+}
+
+.summary-jump {
+	margin-block-end: 16px;
+	padding-inline: 20px;
+
+	&__select {
+		max-inline-size: 360px;
+		min-inline-size: 0;
+	}
 }
 
 .summary-filter-empty {
