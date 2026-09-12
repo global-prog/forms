@@ -419,7 +419,7 @@ export default {
 	break-inside: avoid;
 	margin-block-end: 16px;
 	padding-block: 16px;
-	padding-inline: var(--default-clickable-area) 16px;
+	padding-inline: 20px;
 
 	&-head {
 		display: flex;

@@ -214,7 +214,7 @@ export default {
 	border-block-end: 1px solid var(--color-border);
 	margin-block-end: 24px;
 	padding-block-end: 16px;
-	padding-inline: var(--default-clickable-area) 16px;
+	padding-inline: 20px;
 
 	&__fields {
 		align-items: flex-end;

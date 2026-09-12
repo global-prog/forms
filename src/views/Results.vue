@@ -1019,7 +1019,7 @@ export default {
 
 .summary-filter-empty {
 	color: var(--color-text-maxcontrast);
-	padding-inline: var(--default-clickable-area) 16px;
+	padding-inline: 20px;
 }
 
 .app-content {

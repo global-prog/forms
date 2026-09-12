@@ -1716,26 +1716,25 @@ export default {
 		border: 2px solid var(--color-border);
 		border-radius: var(--border-radius-large);
 		margin-block-end: 16px;
-		margin-inline-start: var(--default-clickable-area);
 		// The clipping below would otherwise let this flex item shrink past its contents:
 		// a flex item whose overflow is not visible has an automatic minimum size of zero,
 		// and the column squeezed the card to a few pixels, hiding the title entirely.
 		flex-shrink: 0;
 		// So the accent band's corners follow the card's.
 		overflow: hidden;
-		// The contents below are narrowed for small screens, but the header itself was
-		// still the full width plus that margin, so a phone scrolled sideways by it.
-		width: calc(100% - var(--default-clickable-area));
+		// The card spans the same width as the question cards below it, so their edges
+		// line up rather than stepping in and out.
+		width: 100%;
 
 		.form-title,
 		.form-desc,
 		.info-message {
-			width: calc(
-				100% - 58px
-			); // margin of header, needed if screen is < 806px (max-width + margin-left)
+			// Inset to match the question cards' padding, since the card itself now spans
+			// the full width.
+			width: 100%;
 			font-size: 100%;
 			padding-block: 0;
-			padding-inline: 18px;
+			padding-inline: 20px;
 			border: none;
 		}
 		.form-title {
