@@ -268,6 +268,12 @@ class SubmissionService {
 		if ($quizMax > 0) {
 			// TRANSLATORS Heading of the export column holding each response's quiz score; %s is the highest possible score
 			$header[] = $this->l10n->t('Score (out of %s)', [(string)round($quizMax, 2)]);
+			// Marks are read against grade boundaries, which are expressed as percentages,
+			// so the spreadsheet carries the percentage rather than leaving every reader
+			// to write the same formula down a column. No per-cent sign in the string:
+			// it is passed through a formatter that would read one as a placeholder.
+			// TRANSLATORS Heading of the export column holding each response's quiz score as a percentage
+			$header[] = $this->l10n->t('Score as a percentage');
 		}
 
 		/** @var array<int, Question> $questionPerQuestionId */
@@ -345,19 +351,23 @@ class SubmissionService {
 			// Date
 			$row[] = date_format(date_timestamp_set(new DateTime(), $submission->getTimestamp())->setTimezone(new DateTimeZone($userTimezone)), 'c');
 
+			// A filtered summary exports what it describes: a response that did not give
+			// every chosen answer is left out. The linked spreadsheet never passes
+			// conditions, so it stays a copy of everything. Tested before the row is
+			// graded below, since grading a response only to discard it is work for
+			// nothing - on a filtered export of a large quiz, once per excluded response.
+			if ($conditions !== [] && !$this->matchesConditions($answerEntities, $conditions)) {
+				continue;
+			}
+
 			if ($quizMax > 0) {
 				$given = [];
 				foreach ($answerEntities as $answerEntity) {
 					$given[$answerEntity->getQuestionId()][] = $answerEntity->getText();
 				}
-				$row[] = round($this->quizService->gradeStored($quizQuestions, $given)['score'], 2);
-			}
-
-			// A filtered summary exports what it describes: a response that did not give
-			// every chosen answer is left out. The linked spreadsheet never passes
-			// conditions, so it stays a copy of everything.
-			if ($conditions !== [] && !$this->matchesConditions($answerEntities, $conditions)) {
-				continue;
+				$score = $this->quizService->gradeStored($quizQuestions, $given)['score'];
+				$row[] = round($score, 2);
+				$row[] = round(100 * $score / $quizMax);
 			}
 
 			// Answers, make sure we keep the question order
