@@ -2159,6 +2159,13 @@ export default {
 		display: none !important;
 	}
 
+	// Try to submit an unfinished form and every unanswered question is marked; print
+	// from there and the sheet carries red validation notes about answers the person
+	// holding it has not been asked for yet. They are guidance for the screen.
+	:deep(.notecard--error) {
+		display: none !important;
+	}
+
 	// Room to write. On screen these carry the app's field styling, which prints as a
 	// faint outline that is hard to tell from the paper.
 	:deep(input[type='text']),
