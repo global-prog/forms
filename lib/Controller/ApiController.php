@@ -1540,8 +1540,16 @@ class ApiController extends OCSController {
 		$isQuiz = $this->quizService->isQuiz($form);
 		$questionList = array_values($questions);
 
+		// Which questions each respondent was never put, so the summary can divide by the
+		// people who were actually asked rather than by everyone who answered the form.
+		// Empty for a form that neither branches nor conditions anything.
+		$hiddenQuestions = $this->submissionService->hiddenQuestionsPerSubmission($questionList, $submissions);
+
 		// Append Display Names
-		$submissions = array_map(function (array $submission) use ($questions, $isQuiz, $questionList) {
+		$submissions = array_map(function (array $submission) use ($questions, $isQuiz, $questionList, $hiddenQuestions) {
+			if (!empty($hiddenQuestions[$submission['id']])) {
+				$submission['hiddenQuestions'] = $hiddenQuestions[$submission['id']];
+			}
 			if ($isQuiz) {
 				$given = [];
 				foreach ($submission['answers'] ?? [] as $answer) {

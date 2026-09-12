@@ -14,6 +14,9 @@
 		<p class="question-summary__detail">
 			{{ questionTypeLabel }}
 		</p>
+		<p v-if="askedNote" class="question-summary__detail">
+			{{ askedNote }}
+		</p>
 
 		<!-- Ranking questions: Borda count with average rank -->
 		<div v-if="question.type === 'ranking'" class="question-summary__statistic">
@@ -166,7 +169,7 @@
 				ref="figure"
 				:items="optionBars"
 				:form="chartForm"
-				:max="submissions.length" />
+				:max="askedCount" />
 
 			<!-- The same answers within each answer to another question: who said what,
 			     by department, by year group. The two nodes below are deliberately
@@ -452,7 +455,7 @@ export default {
 				return []
 			}
 			const values = []
-			for (const submission of this.submissions) {
+			for (const submission of this.askedSubmissions) {
 				for (const answer of submission.answers ?? []) {
 					if (answer.questionId !== this.question.id) {
 						continue
@@ -692,7 +695,7 @@ export default {
 			})
 
 			// Go through submissions to check which options have how many responses
-			this.submissions.forEach((submission) => {
+			this.askedSubmissions.forEach((submission) => {
 				const answers = submission.answers.filter(
 					(answer) => answer.questionId === this.question.id,
 				)
@@ -735,7 +738,7 @@ export default {
 			questionOptionsStats.forEach((questionOptionsStat) => {
 				// Fill percentage values
 				questionOptionsStat.percentage = Math.round(
-					(100 * questionOptionsStat.count) / this.submissions.length,
+					(100 * questionOptionsStat.count) / this.askedCount,
 				)
 				// Mark all best results
 				const maxCount = Math.max(
@@ -850,7 +853,7 @@ export default {
 				}
 			}
 
-			for (const submission of this.submissions) {
+			for (const submission of this.askedSubmissions) {
 				const answer = submission.answers.find(
 					(a) => a.questionId === this.question.id,
 				)
@@ -885,7 +888,7 @@ export default {
 
 		maxBordaScore() {
 			const n = this.question.options.length
-			return n * this.submissions.length
+			return n * this.askedCount
 		},
 
 		gridColumns() {
@@ -915,7 +918,7 @@ export default {
 			}
 
 			const answers = []
-			this.submissions.forEach((submission) => {
+			this.askedSubmissions.forEach((submission) => {
 				submission.answers.forEach((answer) => {
 					if (answer.questionId === this.question.id) {
 						answers.push(answer)
@@ -975,7 +978,7 @@ export default {
 
 			for (const rowId of Object.keys(matrix)) {
 				for (const columnId of Object.keys(matrix[rowId])) {
-					let totalAnswersCount = this.submissions.length
+					let totalAnswersCount = this.askedCount
 					if (
 						this.question.extraSettings.questionType
 						=== GridCellType.Checkbox
@@ -1028,6 +1031,46 @@ export default {
 		},
 
 		/**
+		 * The responses from people this question was actually put to.
+		 *
+		 * A question behind a display condition, or on a page a branch skipped, was never
+		 * shown to some of the people who answered the form. Counting them as having
+		 * declined understates every option and inflates "No response" - so they are not
+		 * counted at all. The server says who was asked, using the same rules that decided
+		 * it at the time; a form with no routing marks nobody, and this is the whole list.
+		 *
+		 * @return {object[]} the submissions this question was put to
+		 */
+		askedSubmissions() {
+			return this.submissions.filter(
+				(submission) =>
+					!(submission.hiddenQuestions ?? []).includes(this.question.id),
+			)
+		},
+
+		/** @return {number} how many people were asked, and never zero: it is a divisor */
+		askedCount() {
+			return Math.max(this.askedSubmissions.length, 1)
+		},
+
+		/**
+		 * @return {?string} a note saying the figures are out of fewer people than
+		 *   answered the form, or null when everyone was asked
+		 */
+		askedNote() {
+			const asked = this.askedSubmissions.length
+			const total = this.submissions.length
+			if (asked === total) {
+				return null
+			}
+			return t(
+				'forms',
+				'Asked of {asked} of the {total} people who responded; the figures below are out of {asked}.',
+				{ asked, total },
+			)
+		},
+
+		/**
 		 * @return {object[]} the questions this one can be broken down by: an average per
 		 *   group for a number, a cross-tab for a set of fixed answers
 		 */
@@ -1065,15 +1108,17 @@ export default {
 			if (!grouping) {
 				return []
 			}
-			return compareByAnswer(this.submissions, grouping, this.question).map(
-				(group) => ({
-					key: group.key,
-					label: group.label,
-					value: group.mean,
-					percentage: 0,
-					note: n('forms', '%n response', '%n responses', group.count),
-				}),
-			)
+			return compareByAnswer(
+				this.askedSubmissions,
+				grouping,
+				this.question,
+			).map((group) => ({
+				key: group.key,
+				label: group.label,
+				value: group.mean,
+				percentage: 0,
+				note: n('forms', '%n response', '%n responses', group.count),
+			}))
 		},
 
 		/**
@@ -1088,7 +1133,7 @@ export default {
 			if (!grouping) {
 				return { rows: [], columns: [], cells: [] }
 			}
-			return crossTabByAnswer(this.submissions, grouping, this.question, {
+			return crossTabByAnswer(this.askedSubmissions, grouping, this.question, {
 				other: t('forms', 'Other'),
 				noAnswer: t('forms', 'No response'),
 			})
@@ -1177,7 +1222,7 @@ export default {
 			let noResponseCount = 0
 
 			// Go through submissions to check which options have how many responses
-			this.submissions.forEach((submission) => {
+			this.askedSubmissions.forEach((submission) => {
 				const answers = submission.answers.filter(
 					(answer) => answer.questionId === this.question.id,
 				)
@@ -1218,7 +1263,7 @@ export default {
 
 			// Calculate no response percentage
 			const noResponsePercentage = Math.round(
-				(100 * noResponseCount) / this.submissions.length,
+				(100 * noResponseCount) / this.askedCount,
 			)
 			answersModels.unshift({
 				id: 0,

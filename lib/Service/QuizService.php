@@ -142,6 +142,22 @@ class QuizService {
 	 * @return array the grade, shaped as grade() returns it
 	 */
 	public function gradeStored(array $questions, array $stored): array {
+		return $this->grade($questions, $this->answersFromStored($questions, $stored));
+	}
+
+	/**
+	 * Rebuild the answers as they were submitted, from the answers as they were stored.
+	 *
+	 * A choice answer is stored as the option's text, while everything that reasons about
+	 * answers - grading, display conditions, branching - names options by id. Anything that
+	 * re-examines a stored response has to map back first, and has to do it the same way, so
+	 * it is done here once.
+	 *
+	 * @param list<array> $questions the form's questions
+	 * @param array<int, list<string>> $stored answer texts, keyed by question id
+	 * @return array<int, mixed> answers keyed by question id, as the submit view sends them
+	 */
+	public function answersFromStored(array $questions, array $stored): array {
 		$answers = [];
 		foreach ($questions as $question) {
 			$texts = $stored[$question['id']] ?? [];
@@ -170,7 +186,7 @@ class QuizService {
 				$texts,
 			);
 		}
-		return $this->grade($questions, $answers);
+		return $answers;
 	}
 
 	/**

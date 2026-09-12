@@ -1346,6 +1346,73 @@ class SubmissionService {
 	 * @param array $answers the submitted answers, keyed by question id
 	 * @return array<int, bool> question id => whether it was reachable
 	 */
+	/**
+	 * Which questions each respondent was never shown.
+	 *
+	 * A summary divides by the number of people who answered the form, which is the wrong
+	 * number for a question only some of them were asked: everyone who was branched past it,
+	 * or whose earlier answer kept it hidden, is counted as having declined to answer. On a
+	 * form with any routing that understates every option and inflates "No response".
+	 *
+	 * Worked out here rather than in the browser, by the same two methods that decided what
+	 * to show at the time, so the results cannot drift from the submission rules.
+	 *
+	 * A stored answer overrules the reconstruction. A trigger option renamed or deleted after
+	 * the fact no longer matches, so the condition reads false and the question looks as
+	 * though it was never asked - while the answer to it is still there to be counted. Left
+	 * alone that yields more answers than askings, and a percentage above 100. Direct
+	 * evidence wins: if it was answered, it was asked.
+	 *
+	 * @param list<array> $questions the form's questions, in order
+	 * @param list<array> $submissions the stored submissions, with their answers
+	 * @return array<int, list<int>> submission id => ids of questions never put to them
+	 */
+	public function hiddenQuestionsPerSubmission(array $questions, array $submissions): array {
+		// Nothing is hidden on a form that neither branches nor conditions anything, which
+		// is most of them, so that case costs one pass over the questions and no more.
+		$routes = false;
+		foreach ($questions as $question) {
+			if (!empty($question['extraSettings']['displayCondition']['rules'])
+				|| !empty($question['extraSettings']['branching']['byOption'])) {
+				$routes = true;
+				break;
+			}
+		}
+		if (!$routes) {
+			return [];
+		}
+
+		$questionsById = [];
+		foreach ($questions as $question) {
+			$questionsById[$question['id']] = $question;
+		}
+
+		$hidden = [];
+		foreach ($submissions as $submission) {
+			$stored = [];
+			foreach ($submission['answers'] ?? [] as $answer) {
+				$stored[$answer['questionId']][] = $answer['text'];
+			}
+			$answers = $this->quizService->answersFromStored($questions, $stored);
+			$reachable = $this->getReachableQuestions($questions, $answers);
+
+			$never = [];
+			foreach ($questions as $question) {
+				$questionId = $question['id'];
+				if (array_key_exists($questionId, $stored)) {
+					// Answered, so it was asked, whatever the rules now say.
+					continue;
+				}
+				if (empty($reachable[$questionId])
+					|| !$this->isQuestionVisible($question, $questionsById, $answers)) {
+					$never[] = $questionId;
+				}
+			}
+			$hidden[$submission['id']] = $never;
+		}
+		return $hidden;
+	}
+
 	public function getReachableQuestions(array $questions, array $answers): array {
 		// Split into pages at section breaks, mirroring the submit view.
 		$pages = [];
