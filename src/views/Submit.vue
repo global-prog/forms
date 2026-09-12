@@ -568,6 +568,13 @@ export default {
 			pageHistory: [],
 			/** the graded result of a quiz, returned by the server on submit */
 			quizResult: null,
+			/**
+			 * Whether the draft on the server matches the answers on screen. False from
+			 * the moment one changes until the save that follows it succeeds, so leaving
+			 * can tell "kept" from "not kept yet" rather than assuming either.
+			 */
+			draftIsCurrent: true,
+
 			/** the answers as the page opened with them, from a saved draft or a link */
 			answersAtOpen: null,
 			/** fixed for this page load, so the order does not change while answering */
@@ -1527,6 +1534,9 @@ export default {
 		onUpdate(question, values) {
 			this.answers = { ...this.answers, [question.id]: values }
 			this.addFormFieldToLocalStorage(question)
+			if (this.canKeepDraft) {
+				this.draftIsCurrent = false
+			}
 			this.saveDraft()
 		},
 
@@ -1571,22 +1581,55 @@ export default {
 
 		/** Keep the answers so far, a moment after the last one changes. */
 		saveDraft: debounce(function () {
+			this.writeDraft()
+		}, 1500),
+
+		/**
+		 * Write the answers to the server now.
+		 *
+		 * @return {Promise<boolean>} whether the server has them
+		 */
+		async writeDraft() {
 			if (!this.canKeepDraft) {
-				return
+				return false
 			}
-			axios
-				.put(
+			// Read before the request, compared after: an answer changed while it was in
+			// flight leaves the draft behind again, and must not be reported as kept.
+			const sent = JSON.stringify(this.answers)
+			try {
+				await axios.put(
 					generateOcsUrl('apps/forms/api/v3/forms/{id}/draft', {
 						id: this.form.id,
 					}),
 					{ answers: this.answers },
 				)
-				.catch((error) => {
-					if (error.response?.status !== 403) {
-						logger.debug('Could not keep the draft', { error })
-					}
-				})
-		}, 1500),
+				if (JSON.stringify(this.answers) === sent) {
+					this.draftIsCurrent = true
+				}
+				return true
+			} catch (error) {
+				if (error.response?.status !== 403) {
+					logger.debug('Could not keep the draft', { error })
+				}
+				return false
+			}
+		},
+
+		/**
+		 * Store anything still waiting on the debounce, for someone about to leave.
+		 *
+		 * @return {Promise<boolean>} whether the answers are on the server
+		 */
+		async flushDraft() {
+			if (!this.canKeepDraft) {
+				return false
+			}
+			if (this.draftIsCurrent) {
+				return true
+			}
+			this.saveDraft.clear?.()
+			return await this.writeDraft()
+		},
 
 		/** Forget the draft, once the response is sent or the form cleared. */
 		async clearDraft() {
@@ -1594,6 +1637,8 @@ export default {
 				return
 			}
 			this.saveDraft.clear?.()
+			// Nothing on either side now, so the two agree again.
+			this.draftIsCurrent = true
 			try {
 				await axios.delete(
 					generateOcsUrl('apps/forms/api/v3/forms/{id}/draft', {
@@ -1635,6 +1680,11 @@ export default {
 		 * Methods for catching unwanted unload events
 		 */
 		beforeWindowUnload(e) {
+			// Nothing to lose once the draft is current; unlike the in-app guard this one
+			// cannot await a save, so a pending one still counts as unsaved.
+			if (this.canKeepDraft && this.draftIsCurrent) {
+				return
+			}
 			if (this.isActive && !this.submitForm && this.hasChangesSinceOpen) {
 				// Cancel the window unload event
 				e.preventDefault()
@@ -1657,18 +1707,24 @@ export default {
 		 * @return {Promise<boolean>|boolean} - Returns a promise that resolves with the value
 		 * passed to the confirm button callback if the dialog is shown, otherwise returns true.
 		 */
-		confirmLeaveForm() {
-			if (this.isActive && !this.submitForm && this.hasChangesSinceOpen) {
-				this.showConfirmLeaveDialog = true
-				return new Promise((resolve) => {
-					this.confirmButtonCallback = (val) => {
-						this.showConfirmLeaveDialog = false
-						resolve(val)
-					}
-				})
+		async confirmLeaveForm() {
+			// Answers on a draftable form are held for this respondent, so leaving costs
+			// them nothing and there is nothing to ask about. Anything still waiting on
+			// the debounce is written first - without that the last few keystrokes would
+			// be the one thing the reassurance did not cover.
+			if (!this.isActive || this.submitForm || !this.hasChangesSinceOpen) {
+				return true
 			}
-
-			return true
+			if (this.canKeepDraft && (await this.flushDraft())) {
+				return true
+			}
+			this.showConfirmLeaveDialog = true
+			return new Promise((resolve) => {
+				this.confirmButtonCallback = (val) => {
+					this.showConfirmLeaveDialog = false
+					resolve(val)
+				}
+			})
 		},
 
 		/**

@@ -124,6 +124,7 @@ OC.L10N.register(
     "Move question up" : "رفع السؤال لأعلى",
     "Move question down" : "خفض السؤال لأسفل",
     "Title of question number {index}" : "رقم عنوان السؤال {index}",
+    "Description of question number {index}" : "وصف السؤال رقم {index}",
     "Required" : "مطلوب",
     "Technical name of the question" : "الاسم الفني للسؤال",
     "Technical name" : "الاسم الفني",

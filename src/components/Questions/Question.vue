@@ -159,6 +159,11 @@
 							'Description (formatting using Markdown is supported)',
 						)
 					"
+					:aria-label="
+						t('forms', 'Description of question number {index}', {
+							index,
+						})
+					"
 					:maxlength="maxStringLengths.questionDescription"
 					class="question__header__description__input"
 					@input="onDescriptionChange" />

@@ -39,7 +39,11 @@
 				{{ alt || url }}
 			</a>
 
-			<p v-else class="question-media__empty">
+			<!-- A prompt for whoever is building the form. Someone filling it in can do
+			     nothing about a missing address, and the app's own language is not
+			     necessarily the form's, so they would be told in the wrong one. Kept as
+			     a v-else-if so the chain above still ends on this element. -->
+			<p v-else-if="!readOnly" class="question-media__empty">
 				<bdi>{{
 					isImage
 						? t('forms', 'No image address set yet.')
