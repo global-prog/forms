@@ -60,11 +60,17 @@ html {
 */
 .question-summary,
 .quiz-insights {
+	/*
+	  Measured against white, where every one of these must stand out as a shape: the
+	  three that did not -- a mint green at 2.8:1, an amber at 2.2:1 and a pink at 2.7:1 --
+	  are now darker versions of the same hues, so the order that keeps neighbours apart
+	  still holds. The dark palette below is measured against its own ground.
+	*/
 	--chart-series-1: #2a78d6;
-	--chart-series-2: #eb6834;
-	--chart-series-3: #1baf7a;
-	--chart-series-4: #eda100;
-	--chart-series-5: #e87ba4;
+	--chart-series-2: #d4551f;
+	--chart-series-3: #12805d;
+	--chart-series-4: #9a6a00;
+	--chart-series-5: #c4456f;
 	--chart-series-6: #008300;
 	--chart-series-7: #4a3aa7;
 	/* Grey carries "not a choice": an unanswered question, or a folded tail. */
