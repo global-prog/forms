@@ -2177,6 +2177,13 @@ export default {
 		min-block-size: 5em;
 	}
 
+	// A placeholder is a hint to someone typing. Printed onto the rule it looks like an
+	// answer somebody has already written there.
+	:deep(input::placeholder),
+	:deep(textarea::placeholder) {
+		color: transparent !important;
+	}
+
 	// A radio or a checkbox is the thing being ticked, so its outline has to survive the
 	// browser's default of dropping colour when printing.
 	:deep(.checkbox-radio-switch__icon) {
