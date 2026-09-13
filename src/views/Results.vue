@@ -318,6 +318,14 @@
 			:name="t('forms', 'Delete responses')"
 			:message="t('forms', 'Are you sure you want to delete all responses?')"
 			:buttons="confirmDeleteButtons" />
+
+		<!-- Deleting all of them asked first; deleting one did not, though it destroys
+		     somebody's answers just as permanently. -->
+		<NcDialog
+			v-model:open="showConfirmDeleteOneDialog"
+			:name="t('forms', 'Delete response')"
+			:message="confirmDeleteOneMessage"
+			:buttons="confirmDeleteOneButtons" />
 	</NcAppContent>
 </template>
 
@@ -463,6 +471,10 @@ export default {
 			picker: null,
 			showConfirmDeleteDialog: false,
 
+			/** The response the delete dialog is asking about, or null when it is closed */
+			submissionPendingDelete: null,
+			showConfirmDeleteOneDialog: false,
+
 			submissionSearch: '',
 			limit: 20,
 			offset: 0,
@@ -504,10 +516,56 @@ export default {
 					},
 				},
 			],
+
+			confirmDeleteOneButtons: [
+				{
+					label: t('forms', 'Cancel'),
+					icon: IconCancel,
+					variant: 'tertiary',
+					callback: () => {
+						this.submissionPendingDelete = null
+					},
+				},
+				{
+					label: t('forms', 'Delete response'),
+					icon: IconDelete,
+					variant: 'error',
+					callback: () => {
+						this.deleteSubmissionConfirmed()
+					},
+				},
+			],
 		}
 	},
 
 	computed: {
+		/**
+		 * Which response is about to be deleted, said in full. A list of responses is a
+		 * column of near-identical rows, and "are you sure?" does not tell the reader
+		 * which one they opened the menu on.
+		 *
+		 * @return {string} the question to put before deleting it
+		 */
+		confirmDeleteOneMessage() {
+			const submission = this.submissions.find(
+				(candidate) => candidate.id === this.submissionPendingDelete,
+			)
+			if (!submission) {
+				return t(
+					'forms',
+					'This response will be deleted. It cannot be undone.',
+				)
+			}
+			return t(
+				'forms',
+				'The response from {respondent}, sent {date}, will be deleted. It cannot be undone.',
+				{
+					respondent: submission.userDisplayName,
+					date: moment(submission.timestamp, 'X').format('LLL'),
+				},
+			)
+		},
+
 		/**
 		 * The questions that have results to summarise.
 		 *
@@ -884,7 +942,19 @@ export default {
 			)
 		},
 
-		async deleteSubmission(id) {
+		deleteSubmission(id) {
+			this.submissionPendingDelete = id
+			this.showConfirmDeleteOneDialog = true
+		},
+
+		/** Delete the response the dialog named, once it has been agreed to. */
+		async deleteSubmissionConfirmed() {
+			const id = this.submissionPendingDelete
+			this.submissionPendingDelete = null
+			this.showConfirmDeleteOneDialog = false
+			if (id === null) {
+				return
+			}
 			this.loadingResults = true
 
 			try {
