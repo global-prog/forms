@@ -2126,6 +2126,13 @@ export default {
 			flex-wrap: wrap;
 			gap: 4px;
 			justify-content: flex-end;
+
+			// Fourteen pixels separated "clear everything I typed" from "send it", which
+			// on a touch screen is one slip. The gap belongs before the button that ends
+			// the form, not between every pair, so the navigation buttons stay grouped.
+			button[type='submit'] {
+				margin-inline-start: 24px;
+			}
 		}
 
 		.draft-note {
