@@ -40,6 +40,40 @@ export const PAPER = {
 }
 
 /**
+ * A colour reduced to the three numbers it is, so two spellings of it compare equal.
+ *
+ * A stylesheet says `#3987e5` and getComputedStyle says `rgb(57, 135, 229)`; both are the
+ * same colour and neither string matches the other.
+ *
+ * @param {string} value a hex or rgb() colour
+ * @return {string} "r,g,b", or the input lowercased if it is neither
+ */
+export function colourKey(value) {
+	const text = String(value ?? '')
+		.trim()
+		.toLowerCase()
+	const hex = text.match(/^#([0-9a-f]{3,8})$/)
+	if (hex) {
+		const digits = hex[1]
+		const parts =
+			digits.length <= 4
+				? [...digits].slice(0, 3).map((digit) => digit + digit)
+				: [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 6)]
+		return parts.map((part) => parseInt(part, 16)).join(',')
+	}
+	const rgb = text.match(/^rgba?\(([^)]+)\)$/)
+	if (rgb) {
+		return rgb[1]
+			.split(/[\s,/]+/)
+			.filter(Boolean)
+			.slice(0, 3)
+			.map((part) => Math.round(parseFloat(part)))
+			.join(',')
+	}
+	return text
+}
+
+/**
  * Break a title into lines that fit a given width.
  *
  * @param {CanvasRenderingContext2D} context the context whose font the text is measured in

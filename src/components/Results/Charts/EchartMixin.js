@@ -4,18 +4,10 @@
  */
 
 import logger from '../../../utils/Logger.js'
-import { fileNameFor, PAPER, wrapText } from './chartImage.js'
+import { colourKey, fileNameFor, PAPER, wrapText } from './chartImage.js'
 import { forget, onThemeChange, whenNearView } from './chartScheduler.js'
 import { loadEcharts, readChartTheme } from './echartsLoader.js'
 
-/**
- * Break a title into lines that fit a width.
- *
- * @param {CanvasRenderingContext2D} context measures the text in its current font
- * @param {string} text the title
- * @param {number} width the widest a line may be
- * @return {string[]} the lines
- */
 export default {
 	props: {
 		/** `{ key?, label, value, percentage, note?, best?, muted? }`, ordered by the caller */
@@ -165,18 +157,22 @@ export default {
 			// The key is read off the screen, so its swatches carry the screen's series
 			// colours while the drawing above is now in the paper ones - the same hues,
 			// tuned for a different ground, but not the same values. Matched back by
-			// position; anything that is not a series colour (a muted row) is left alone.
-			const screenSeries = readChartTheme(this.$refs.chart).series
-			const toPaper = (colour) => {
-				const canonical = (value) =>
-					String(value).replace(/\s+/g, '').toLowerCase()
-				const index = screenSeries.findIndex(
-					(candidate) => canonical(candidate) === canonical(colour),
-				)
-				return index === -1
-					? colour
-					: PAPER.series[index % PAPER.series.length]
-			}
+			// position, and by colour rather than by spelling: the stylesheet says
+			// `#3987e5` and the swatch reads back `rgb(57, 135, 229)`. Compared as text
+			// those never matched, so every key went out in the screen colours under a
+			// drawing already on paper - a picture disagreeing with its own key. The
+			// grey a folded tail or an unanswered slice wears is mapped for the same
+			// reason: the ring draws that in PAPER.muted.
+			const screen = readChartTheme(this.$refs.chart)
+			const paperFor = new Map(
+				screen.series.map((colour, index) => [
+					colourKey(colour),
+					PAPER.series[index % PAPER.series.length],
+				]),
+			)
+			paperFor.set(colourKey(screen.muted), PAPER.muted)
+			// Anything that is not one of ours is left as it is.
+			const toPaper = (colour) => paperFor.get(colourKey(colour)) ?? colour
 			const legend = (this.legendRows?.() ?? []).map((row) => ({
 				...row,
 				colour: toPaper(row.colour),
