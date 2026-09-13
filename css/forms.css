@@ -77,7 +77,16 @@ html {
 	--chart-muted: #898781;
 }
 
-/* An explicitly chosen dark theme wins outright; the default theme follows the OS. */
+/*
+ * An explicitly chosen dark theme wins outright; the default theme follows the OS.
+ *
+ * Six of these are lighter siblings of the values above, tuned for this ground. The
+ * seventh, series 6, was left at its light value and so came out at 3.63:1 against the
+ * card while the rest sit between 4.54 and 5.84 - it cleared the 3:1 a chart shape needs,
+ * but read visibly dimmer than its neighbours, an emphasis nobody asked for. Same hue,
+ * lightened to match: 5.18:1. The light value stays as it is, and so does the copy in
+ * chartImage.js that downloads are drawn with - those land on white.
+ */
 [data-theme-dark] .question-summary,
 [data-theme-dark] .quiz-insights,
 [data-theme-dark-highcontrast] .question-summary,
@@ -87,7 +96,7 @@ html {
 	--chart-series-3: #199e70;
 	--chart-series-4: #c98500;
 	--chart-series-5: #d55181;
-	--chart-series-6: #008300;
+	--chart-series-6: #14a014;
 	--chart-series-7: #9085e9;
 }
 
@@ -99,7 +108,7 @@ html {
 		--chart-series-3: #199e70;
 		--chart-series-4: #c98500;
 		--chart-series-5: #d55181;
-		--chart-series-6: #008300;
+		--chart-series-6: #14a014;
 		--chart-series-7: #9085e9;
 	}
 }
@@ -114,6 +123,28 @@ html {
 	.question-summary,
 	.template-picker__item,
 	.submission {
+		transition: none !important;
+	}
+
+	/*
+	 * The list transitions move things, which is the part of this setting that matters:
+	 * reordering options, adding or removing one, opening a branch - each slid its
+	 * neighbours into place, and one of them enters from a translateX. Only four
+	 * selectors were listed above, all of them colour fades, so every actual movement in
+	 * the app carried on regardless of the request not to move.
+	 *
+	 * Named rather than matched by a wildcard: these are Vue's own transition classes and
+	 * the names are the contract. They are declared inside scoped blocks in five
+	 * components, which is why they are gathered here instead.
+	 */
+	.options-list-transition-move,
+	.options-list-transition-enter-active,
+	.options-list-transition-leave-active,
+	.question-list-move,
+	.question-list-enter-active,
+	.question-list-leave-active,
+	.branch-list-enter-active,
+	.branch-list-leave-active {
 		transition: none !important;
 	}
 }
