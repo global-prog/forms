@@ -142,7 +142,9 @@
 						</template>
 						{{ t('forms', 'Copy question') }}
 					</NcActionButton>
-					<NcActionButton @click="onDelete">
+					<!-- closeAfterClick: on a form with answers this opens a confirmation
+					     instead of deleting at once, and the menu would sit over it. -->
+					<NcActionButton closeAfterClick @click="onDelete">
 						<template #icon>
 							<NcIconSvgWrapper :svg="IconDelete" />
 						</template>
