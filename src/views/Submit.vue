@@ -996,7 +996,7 @@ export default {
 		confirmEmptyModalButtons() {
 			return [
 				{
-					label: t('forms', 'Abort'),
+					label: t('forms', 'Cancel'),
 					icon: IconCancel,
 					callback: () => {},
 				},
@@ -1015,7 +1015,7 @@ export default {
 		confirmLeaveFormButtons() {
 			return [
 				{
-					label: t('forms', 'Abort'),
+					label: t('forms', 'Cancel'),
 					icon: IconCancel,
 					callback: () => this.confirmButtonCallback(false),
 				},
@@ -1051,7 +1051,7 @@ export default {
 		confirmClearFormButtons() {
 			return [
 				{
-					label: t('forms', 'Abort'),
+					label: t('forms', 'Cancel'),
 					icon: IconCancel,
 					callback: () => {},
 				},

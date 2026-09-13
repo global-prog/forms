@@ -683,8 +683,21 @@ export default {
 		}
 	}
 
+	// The option's own words, beside the destination they lead to. Growing to 40% of the
+	// row put "Yes" against one edge and its dropdown against the other, with a third of
+	// a dialog of nothing between them - and which option led where is the whole point of
+	// this list. A floor keeps the dropdowns lined up under one another when the options
+	// are short, which is most of the time; a ceiling stops a long one taking the row.
 	&__option {
-		flex: 1 1 40%;
+		flex: 0 1 auto;
+		max-inline-size: 40%;
+		min-inline-size: 96px;
+	}
+
+	// Only in a branch row. A condition rule's controls still share the width between
+	// them, or the question picker is squeezed to an unreadable sliver.
+	&__row select {
+		flex: 0 1 auto;
 	}
 
 	&__empty {
