@@ -1391,13 +1391,24 @@ export default {
 	padding-block: 16px;
 	padding-inline: 20px;
 
+	// A question, at the size a question is everywhere else. It was the browser's
+	// default h3 - 24px, the size this app uses for a section and for the panels that
+	// head the whole page, so a single question's card shouted as loudly as "When
+	// responses arrived" did, and louder than the same question does to the person
+	// answering it. The card's own padding sets the space above; the heading no longer
+	// brings 24px of its own.
 	h3 {
+		font-size: 20px;
 		font-weight: bold;
+		line-height: 1.35;
+		margin-block: 0 4px;
 	}
 
 	&__detail {
 		color: var(--color-text-lighter);
-		margin-block-start: -8px;
+		// No longer pulling itself up under a heading that overshot: the heading's own
+		// margin is now 4px and this sits directly beneath it.
+		margin-block-start: 0;
 	}
 
 	&__text,

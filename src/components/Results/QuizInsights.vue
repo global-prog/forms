@@ -240,9 +240,10 @@ export default {
 	padding-block: 16px;
 	padding-inline: 20px;
 
+	// As with the timeline: 24px heads the page, and the card supplies the space above.
 	&__title {
 		font-weight: bold;
-		margin-block-end: 0;
+		margin-block: 0;
 	}
 
 	&__detail {

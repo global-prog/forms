@@ -190,9 +190,11 @@ export default {
 	padding-block: 16px;
 	padding-inline: 20px;
 
+	// Stays at the browser's 24px: this heads the whole page, above the question cards,
+	// which are 20px. Only the default 24px top margin goes - the card already pads.
 	&__title {
 		font-weight: bold;
-		margin-block-end: 12px;
+		margin-block: 0 12px;
 	}
 
 	&__figures {
