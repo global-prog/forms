@@ -4,6 +4,7 @@
  */
 
 import logger from '../../../utils/Logger.js'
+import { fileNameFor, wrapText } from './chartImage.js'
 import { forget, onThemeChange, whenNearView } from './chartScheduler.js'
 import { loadEcharts, readChartTheme } from './echartsLoader.js'
 
@@ -14,69 +15,6 @@ import { loadEcharts, readChartTheme } from './echartsLoader.js'
  * @param {string} text the title
  * @param {number} width the widest a line may be
  * @return {string[]} the lines
- */
-function wrapText(context, text, width) {
-	const lines = []
-	let line = ''
-	for (const word of String(text ?? '')
-		.trim()
-		.split(/\s+/)
-		.filter(Boolean)) {
-		const candidate = line ? `${line} ${word}` : word
-		if (line && context.measureText(candidate).width > width) {
-			lines.push(line)
-			line = word
-		} else {
-			line = candidate
-		}
-	}
-	if (line) {
-		lines.push(line)
-	}
-	return lines
-}
-
-/**
- * A file name from a question, keeping its words - Arabic included - but none of the
- * characters a file system refuses.
- *
- * @param {string} title the question
- * @return {string} the name, without extension
- */
-function fileNameFor(title) {
-	const name = String(title ?? '')
-		// eslint-disable-next-line no-control-regex -- control characters are what it removes
-		.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ')
-		.replace(/\s+/g, ' ')
-		.trim()
-		.slice(0, 80)
-	return name || 'chart'
-}
-
-/**
- * Shared lifecycle for the ECharts-backed summary charts.
- *
- * A component using this supplies `chartOption(theme)` and renders one element with
- * `ref="chart"`. Everything else -- loading the library, first paint, re-paint on new
- * data, resizing, following the instance theme, and tearing down -- happens here, so the
- * chart components stay a description of what to draw.
- *
- * Three things this exists to get right, each of which is a silent bug when missed:
- *
- *   The chart instance is held on a plain property, NOT in `data()`. Vue would wrap it
- *     in a reactive proxy, and ECharts keeps internal state that misbehaves when every
- *     property access is intercepted.
- *   The theme is re-read and the chart repainted when the instance theme changes. The
- *     series hues come from CSS, so a chart painted under the light theme keeps light
- *     colours on a dark ground until something tells it to look again.
- *   A chart mounted into a zero-height container draws nothing and never recovers on
- *     its own, so size is observed rather than measured once.
- *
- * A chart starts drawing only as it comes near the screen, or when the page is printed;
- * see chartScheduler.js. Its box keeps its height meanwhile, so nothing moves when it
- * draws -- which means the box is hidden on `failed`, never on `ready`. Hiding it until
- * the drawing arrived collapsed it to nothing, and a page of them shifted under the
- * reader one card at a time as they scrolled.
  */
 export default {
 	props: {

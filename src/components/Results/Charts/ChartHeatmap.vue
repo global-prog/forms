@@ -22,7 +22,7 @@
 -->
 <template>
 	<div class="chart-heatmap" :class="{ 'chart-heatmap--wrap-labels': wrapLabels }">
-		<table class="chart-heatmap__table">
+		<table ref="table" class="chart-heatmap__table">
 			<caption v-if="caption" class="chart-heatmap__caption" dir="auto">
 				{{
 					caption
@@ -65,6 +65,8 @@
  * on top of it in both themes -- the shading is a wayfinding aid, not the data.
  */
 const MAX_TINT = 0.55
+
+import { savePng, startChartCanvas } from './chartImage.js'
 
 export default {
 	name: 'ChartHeatmap',
@@ -112,6 +114,76 @@ export default {
 				}
 			}
 			return peak > 0 ? peak : 1
+		},
+	},
+
+	methods: {
+		/**
+		 * Save the table as a PNG, titled, the way the other charts can be saved.
+		 *
+		 * There is no chart library here to ask for a drawing - a heatmap is a real
+		 * table - so the picture is painted from the table as rendered: every cell's
+		 * measured position, its own background (tint included) and its own text. Reading
+		 * the layout back rather than recomputing it means the image cannot drift from
+		 * what the reader is looking at, and it comes out right in both directions
+		 * without knowing which one it is in.
+		 *
+		 * @param {string} title the question, written above the table and naming the file
+		 * @param {string} direction 'rtl' or 'ltr', how the title reads
+		 */
+		async downloadImage(title, direction = 'ltr') {
+			const table = this.$refs.table
+			if (!table) {
+				return
+			}
+			const style = window.getComputedStyle(table)
+			const origin = table.getBoundingClientRect()
+			// scrollWidth, not the box: a wide matrix scrolls inside its container on
+			// screen, and all of it belongs in the picture.
+			const width = Math.ceil(table.scrollWidth)
+			const height = Math.ceil(table.scrollHeight)
+
+			const { canvas, context, padding, titleHeight, ink } = startChartCanvas({
+				width,
+				height,
+				title,
+				direction,
+				style,
+			})
+
+			for (const cell of table.querySelectorAll('th, td')) {
+				const rect = cell.getBoundingClientRect()
+				if (!rect.width || !rect.height) {
+					continue
+				}
+				const cellStyle = window.getComputedStyle(cell)
+				const x = rect.left - origin.left + padding
+				const y = rect.top - origin.top + padding + titleHeight
+
+				const fill = cellStyle.backgroundColor
+				if (fill && !/rgba?\((?:0, ?){3}0\)|transparent/.test(fill)) {
+					context.fillStyle = fill
+					context.fillRect(x, y, rect.width, rect.height)
+				}
+
+				const text = cell.textContent.replace(/\s+/g, ' ').trim()
+				if (!text) {
+					continue
+				}
+				context.fillStyle = cellStyle.color || ink
+				context.font = `${cellStyle.fontWeight} ${cellStyle.fontSize} ${cellStyle.fontFamily}`
+				context.textBaseline = 'middle'
+				const centred = cellStyle.textAlign === 'center'
+				context.textAlign = centred ? 'center' : 'start'
+				const textX = centred
+					? x + rect.width / 2
+					: direction === 'rtl'
+						? x + rect.width - 4
+						: x + 4
+				context.fillText(text, textX, y + rect.height / 2)
+			}
+
+			await savePng(canvas, title)
 		},
 	},
 

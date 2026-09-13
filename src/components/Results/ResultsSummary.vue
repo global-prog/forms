@@ -218,6 +218,7 @@
 				:columns="gridHeatmap.columns" />
 			<ChartHeatmap
 				v-else
+				ref="figure"
 				:rows="gridHeatmap.rows"
 				:columns="gridHeatmap.columns"
 				:cells="gridHeatmap.cells" />
@@ -1206,13 +1207,9 @@ export default {
 			if (this.numericStats) {
 				return this.numericStats.buckets.length > 0
 			}
-			// A grid drawn as stacked bars and a ring both carry their key in the page
-			// rather than in the drawing; they are downloadable now that the image takes
-			// the key with it. The grid's heatmap is a table, not a drawing - there is no
-			// chart to render - so it stays off, and its numbers come out in the export.
-			if (this.question.type === 'grid') {
-				return this.chartForm === 'stacked'
-			}
+			// Every chart view can be saved. A ring and a stacked bar keep their key in
+			// the page rather than in the drawing, and the image takes it with them; the
+			// heatmap has no drawing at all and paints itself from the rendered table.
 			return this.answerTypes[this.question.type]?.predefined === true
 		},
 
