@@ -867,18 +867,23 @@ export default {
 
 		.question-menu {
 			position: sticky;
-			inset-block-end: 0px;
-			padding-block-end: 16px;
+			inset-block-end: 16px;
 			// It floats over whatever is beneath it, so it carries its own ground rather
-			// than letting a question's words run under the buttons.
+			// than letting a question's words run under the buttons. A patch of the page
+			// colour alone read as a hole punched in the form: an outline and a shadow
+			// say the bar is in front of the questions rather than cut out of them.
 			background-color: var(--color-main-background);
+			border: 1px solid var(--color-border);
 			border-radius: var(--border-radius-large);
-			box-shadow: 0 0 0 8px var(--color-main-background);
+			box-shadow: 0 2px 12px rgba(var(--color-box-shadow-rgb, 0, 0, 0), 0.25);
+			padding: 6px;
 			// Above other menus
 			z-index: 55;
 			display: flex;
 			align-items: center;
 			align-self: flex-start;
+			gap: 4px;
+			margin-block-end: 16px;
 
 			// To align with text
 			margin-inline-start: var(--default-clickable-area);

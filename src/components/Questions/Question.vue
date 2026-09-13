@@ -82,7 +82,6 @@
 					class="question__header__title__points">
 					{{ n('forms', '%n point', '%n points', quizPoints) }}
 				</span>
-				<div v-else class="question__header__title__text"></div>
 				<div
 					v-if="!readOnly && !questionValid"
 					:title="warningInvalid"

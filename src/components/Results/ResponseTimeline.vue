@@ -84,6 +84,17 @@ export default {
 			)
 		},
 
+		/** @return {string} what the busiest figure is counting */
+		busiestLabel() {
+			if (this.timeline.step === 'month') {
+				return t('forms', 'Busiest month')
+			}
+			if (this.timeline.step === 'day') {
+				return t('forms', 'Busiest day')
+			}
+			return t('forms', 'Busiest hour')
+		},
+
 		/** @return {object[]} the first and last response, and the busiest step */
 		figures() {
 			const times = [...this.timestamps].sort((a, b) => a - b)
@@ -105,9 +116,12 @@ export default {
 				},
 				{
 					key: 'busiest',
-					label: t('forms', 'Busiest'),
+					// Which unit is busiest depends on how far apart the responses
+					// are, and the reader cannot tell from the moment alone whether
+					// "10" arrived in that hour, that day or that month.
+					label: this.busiestLabel,
 					value: busiest
-						? `${this.stepLabel(busiest.at)} (${busiest.count})`
+						? `${this.figureMoment(busiest.at)} (${busiest.count})`
 						: '',
 				},
 			]
@@ -123,6 +137,28 @@ export default {
 			return moment(timestamp, 'X')
 				.locale(window.OC.getLanguage())
 				.format('lll')
+		},
+
+		/**
+		 * A step written out for the figures rather than for the chart.
+		 *
+		 * The axis needs its labels short - a dozen of them share one line - so it uses
+		 * its own compact form. The figures sit beside the first and last response, and
+		 * a row reading "Sep 11, 2026 7:07 PM" next to "11 Sep, 19:00" is two date
+		 * styles and two clocks in three words. These follow the locale, like the rest.
+		 *
+		 * @param {Date} at the start of a step
+		 * @return {string} the step, in the same style as the other two figures
+		 */
+		figureMoment(at) {
+			const when = moment(at).locale(window.OC.getLanguage())
+			if (this.timeline.step === 'month') {
+				return when.format('MMMM YYYY')
+			}
+			if (this.timeline.step === 'day') {
+				return when.format('ll')
+			}
+			return when.format('lll')
 		},
 
 		/**
