@@ -527,6 +527,8 @@ OC.L10N.register(
     "Only responses that gave these answers:" : "الردود التي قدّمت هذه الإجابات فقط:",
     "Stop filtering by {condition}" : "إلغاء التصفية حسب {condition}",
     "Break down by" : "التفصيل حسب",
+    "\"{question}\" and any answers given to it in the {count} responses already received will be deleted. It cannot be undone." : "سيتم حذف \"{question}\" وأي إجابات عليه ضمن {count} من الردود المستلمة. لا يمكن التراجع عن ذلك.",
+    "This question and any answers given to it in the {count} responses already received will be deleted. It cannot be undone." : "سيتم حذف هذا السؤال وأي إجابات عليه ضمن {count} من الردود المستلمة. لا يمكن التراجع عن ذلك.",
     "Delete response" : "حذف الرد",
     "This response will be deleted. It cannot be undone." : "سيتم حذف هذا الرد. لا يمكن التراجع عن ذلك.",
     "The response from {respondent}, sent {date}, will be deleted. It cannot be undone." : "سيتم حذف الرد المُرسَل من {respondent} بتاريخ {date}. لا يمكن التراجع عن ذلك.",
