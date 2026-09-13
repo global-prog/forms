@@ -150,10 +150,9 @@ export default {
 			const width = this.$refs.chart.clientWidth
 			const height = this.$refs.chart.clientHeight
 			const style = window.getComputedStyle(this.$refs.chart)
-			const background =
-				style.getPropertyValue('--color-main-background').trim() || '#ffffff'
-			const ink =
-				style.getPropertyValue('--color-main-text').trim() || '#222222'
+			// Paper, like the drawing above it and like the printed report.
+			const background = PAPER.surface
+			const ink = PAPER.ink
 
 			const canvas = document.createElement('canvas')
 			const context = canvas.getContext('2d')
@@ -163,7 +162,25 @@ export default {
 			// A ring and a stacked bar keep their key in the page rather than in the
 			// drawing, so a picture of the drawing alone is unlabelled colour. A chart
 			// that has one hands it over and it is drawn underneath.
-			const legend = this.legendRows?.() ?? []
+			// The key is read off the screen, so its swatches carry the screen's series
+			// colours while the drawing above is now in the paper ones - the same hues,
+			// tuned for a different ground, but not the same values. Matched back by
+			// position; anything that is not a series colour (a muted row) is left alone.
+			const screenSeries = readChartTheme(this.$refs.chart).series
+			const toPaper = (colour) => {
+				const canonical = (value) =>
+					String(value).replace(/\s+/g, '').toLowerCase()
+				const index = screenSeries.findIndex(
+					(candidate) => canonical(candidate) === canonical(colour),
+				)
+				return index === -1
+					? colour
+					: PAPER.series[index % PAPER.series.length]
+			}
+			const legend = (this.legendRows?.() ?? []).map((row) => ({
+				...row,
+				colour: toPaper(row.colour),
+			}))
 			const legendLine = 22
 			const legendHeight = legend.length
 				? legend.length * legendLine + padding
@@ -199,7 +216,16 @@ export default {
 					height,
 				})
 				offscreen.setOption(
-					this.chartOption({ ...PAPER, rtl: direction === 'rtl' }, width),
+					{
+						...this.chartOption(
+							{ ...PAPER, rtl: direction === 'rtl' },
+							width,
+						),
+						// renderToSVGString takes the frame as it stands, and frame one
+						// of an animated pie is a ring of zero radius - the centre total
+						// appeared in the picture and the ring did not.
+						animation: false,
+					},
 					{ notMerge: true },
 				)
 				svg = offscreen.renderToSVGString()
