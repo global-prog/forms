@@ -423,7 +423,7 @@
 			<NcDialog
 				v-model:open="showClearFormDialog"
 				:name="t('forms', 'Clear form')"
-				:message="t('forms', 'Do you want to clear all answers?')"
+				:message="clearFormMessage"
 				:buttons="confirmClearFormButtons"
 				noClose
 				:closeOnClickOutside="false" />
@@ -448,6 +448,7 @@
 import IconCancel from '@material-symbols/svg-400/outlined/block.svg?raw'
 import IconCheck from '@material-symbols/svg-400/outlined/check.svg?raw'
 import IconClose from '@material-symbols/svg-400/outlined/close.svg?raw'
+import IconDelete from '@material-symbols/svg-400/outlined/delete.svg?raw'
 import IconLink from '@material-symbols/svg-400/outlined/link.svg?raw'
 import IconRefresh from '@material-symbols/svg-400/outlined/refresh.svg?raw'
 import IconSchedule from '@material-symbols/svg-400/outlined/schedule.svg?raw'
@@ -1030,6 +1031,23 @@ export default {
 		/**
 		 * Buttons for the "confirm clear form" dialog
 		 */
+		/**
+		 * What clearing the form will cost, which is more than it used to be: on a form
+		 * that keeps drafts it also throws away the copy held for this respondent, and
+		 * they have just been told that copy is safe. Saying "all answers" alone would
+		 * be true and still misleading.
+		 *
+		 * @return {string} the question to put before wiping the answers
+		 */
+		clearFormMessage() {
+			return this.canKeepDraft
+				? t(
+						'forms',
+						'This clears every answer here and the copy kept for you, on this and any other device. It cannot be undone.',
+					)
+				: t('forms', 'Do you want to clear all answers?')
+		},
+
 		confirmClearFormButtons() {
 			return [
 				{
@@ -1038,9 +1056,12 @@ export default {
 					callback: () => {},
 				},
 				{
+					// The button that throws the answers away was the primary one, in the
+					// accent colour, carrying a tick - the shape of the reassuring choice.
+					// It is the dangerous one, and now looks like it.
 					label: t('forms', 'Clear'),
-					icon: IconCheck,
-					variant: 'primary',
+					icon: IconDelete,
+					variant: 'error',
 					callback: () => this.onResetSubmission(),
 				},
 			]
