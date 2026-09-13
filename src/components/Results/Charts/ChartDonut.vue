@@ -216,24 +216,32 @@ export default {
 	}
 
 	&__legend {
-		display: flex;
-		flex: 1 1 240px;
-		flex-direction: column;
-		gap: 6px;
+		// Three columns - swatch, label, count - shared by every row, so the counts
+		// line up under one another and each one still sits beside the label it
+		// belongs to. It used to be a row per line with the count pushed to the far
+		// end, which on a wide card left "Yes" against one edge and "6 (55%)" against
+		// the other with half a screen of nothing between them.
+		column-gap: 16px;
+		display: grid;
+		flex: 0 1 auto;
+		grid-template-columns: auto minmax(0, max-content) max-content;
 		list-style: none;
 		margin: 0;
-		// The count is pushed to the end of the row, so on a wide card the key read
-		// "Yes" against one edge and "6 (55%)" against the other, half a screen apart.
-		// Held to the width of a field, the label and its number stay one thing.
 		max-inline-size: 360px;
 		min-inline-size: 0;
 		padding: 0;
+		row-gap: 6px;
 	}
 
 	&__legend-item {
 		align-items: baseline;
-		display: flex;
-		gap: 8px;
+		display: grid;
+		gap: 0 8px;
+		// Falls back to a row of its own where subgrid is not understood: the columns
+		// stop agreeing between rows, which is the layout it had before.
+		grid-column: 1 / -1;
+		grid-template-columns: auto minmax(0, max-content) max-content;
+		grid-template-columns: subgrid;
 	}
 
 	&__swatch {
@@ -253,7 +261,6 @@ export default {
 	&__legend-value {
 		font-variant-numeric: tabular-nums;
 		font-weight: 600;
-		margin-inline-start: auto;
 		white-space: nowrap;
 	}
 
