@@ -1251,12 +1251,29 @@ export default {
 	}
 
 	// Let the content occupy the sheet instead of the app's scroll pane.
+	//
+	// Releasing `overflow` alone was not enough and the report printed as a single page:
+	// Nextcloud holds the app inside `body#body-user` > `#content.app-forms` >
+	// `#content-vue` > `#app-content-vue`, and those are `position: fixed` with a
+	// viewport height, with `overflow: clip` on one of them. A fixed box one screen tall
+	// has exactly one screen to give the printer however much is inside it. Every clamp
+	// has to come off - position, height and overflow - or the sheet stops at the fold.
+	// Measured on a 13-card summary: the document went from 695px to 6,570px.
+	html,
+	body,
+	#body-user,
+	#content,
 	#content-vue,
+	.app-forms,
 	#app-content-vue,
 	.app-content,
 	.app-content-wrapper {
+		position: static !important;
 		display: block !important;
 		inline-size: 100% !important;
+		block-size: auto !important;
+		min-block-size: 0 !important;
+		max-block-size: none !important;
 		margin: 0 !important;
 		overflow: visible !important;
 	}

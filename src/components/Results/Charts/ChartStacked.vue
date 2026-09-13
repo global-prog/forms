@@ -108,6 +108,25 @@ export default {
 
 	methods: {
 		/**
+		 * The key as the page shows it, for the downloaded image.
+		 *
+		 * Read back out of the rendered legend rather than rebuilt from the data, so the
+		 * picture cannot disagree with the page about which colour meant what.
+		 *
+		 * @return {{colour: string, label: string}[]} one row per series
+		 */
+		legendRows() {
+			return [...this.$el.querySelectorAll('.chart-stacked__legend-item')].map(
+				(item) => ({
+					colour: getComputedStyle(
+						item.querySelector('.chart-stacked__swatch'),
+					).backgroundColor,
+					label: item.textContent.replace(/\s+/g, ' ').trim(),
+				}),
+			)
+		},
+
+		/**
 		 * The legend swatch for a column.
 		 *
 		 * Given as the CSS custom property rather than a resolved colour, so it follows

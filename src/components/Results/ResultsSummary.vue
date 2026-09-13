@@ -163,7 +163,10 @@
 				:forms="chartForms"
 				:questionId="question.id"
 				@update:modelValue="onChartFormChosen" />
-			<ChartDonut v-if="chartForm === 'ring'" :items="optionBars" />
+			<ChartDonut
+				v-if="chartForm === 'ring'"
+				ref="figure"
+				:items="optionBars" />
 			<ChartFigure
 				v-else
 				ref="figure"
@@ -210,6 +213,7 @@
 				@update:modelValue="onChartFormChosen" />
 			<ChartStacked
 				v-if="chartForm === 'stacked'"
+				ref="figure"
 				:items="gridStacked"
 				:columns="gridHeatmap.columns" />
 			<ChartHeatmap
@@ -1202,11 +1206,14 @@ export default {
 			if (this.numericStats) {
 				return this.numericStats.buckets.length > 0
 			}
-			return (
-				this.answerTypes[this.question.type]?.predefined === true
-				&& this.question.type !== 'grid'
-				&& this.chartForm !== 'ring'
-			)
+			// A grid drawn as stacked bars and a ring both carry their key in the page
+			// rather than in the drawing; they are downloadable now that the image takes
+			// the key with it. The grid's heatmap is a table, not a drawing - there is no
+			// chart to render - so it stays off, and its numbers come out in the export.
+			if (this.question.type === 'grid') {
+				return this.chartForm === 'stacked'
+			}
+			return this.answerTypes[this.question.type]?.predefined === true
 		},
 
 		/** @return {number} how many answers wait behind the button */

@@ -222,8 +222,17 @@ export default {
 			context.font = `bold 16px ${style.fontFamily || 'sans-serif'}`
 			const lines = wrapText(context, title, width).slice(0, 3)
 			const titleHeight = lines.length ? lines.length * 22 + padding : 0
+			// A ring and a stacked bar keep their key in the page rather than in the
+			// drawing, so a picture of the drawing alone is unlabelled colour. A chart
+			// that has one hands it over and it is drawn underneath.
+			const legend = this.legendRows?.() ?? []
+			const legendLine = 22
+			const legendHeight = legend.length
+				? legend.length * legendLine + padding
+				: 0
 			canvas.width = (width + 2 * padding) * scale
-			canvas.height = (height + titleHeight + 2 * padding) * scale
+			canvas.height =
+				(height + titleHeight + legendHeight + 2 * padding) * scale
 			context.scale(scale, scale)
 			context.fillStyle = background
 			context.fillRect(0, 0, canvas.width, canvas.height)
@@ -258,6 +267,33 @@ export default {
 				)
 			} finally {
 				URL.revokeObjectURL(url)
+			}
+
+			// The key, under the drawing: a swatch in the series colour and the words the
+			// page shows beside it.
+			if (legend.length) {
+				const swatch = 12
+				context.font = `14px ${style.fontFamily || 'sans-serif'}`
+				context.textBaseline = 'middle'
+				legend.forEach((row, index) => {
+					const y =
+						padding
+						+ titleHeight
+						+ height
+						+ padding / 2
+						+ index * legendLine
+						+ legendLine / 2
+					const boxX =
+						direction === 'rtl' ? width + padding - swatch : padding
+					context.fillStyle = row.colour || ink
+					context.fillRect(boxX, y - swatch / 2, swatch, swatch)
+					context.fillStyle = ink
+					const textX =
+						direction === 'rtl'
+							? width + padding - swatch - 8
+							: padding + swatch + 8
+					context.fillText(row.label, textX, y)
+				})
 			}
 
 			const blob = await new Promise((resolve) =>
