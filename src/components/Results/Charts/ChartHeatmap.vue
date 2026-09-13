@@ -151,6 +151,11 @@ export default {
 				style,
 			})
 
+			// The cells are painted from their computed styles, so the palette is swapped
+			// on the element for the length of the loop. Nothing is awaited inside it, so
+			// the browser never paints the intermediate state and the page does not
+			// flicker.
+			table.classList.add('chart-heatmap__table--paper')
 			for (const cell of table.querySelectorAll('th, td')) {
 				const rect = cell.getBoundingClientRect()
 				if (!rect.width || !rect.height) {
@@ -183,6 +188,8 @@ export default {
 				context.fillText(text, textX, y + rect.height / 2)
 			}
 
+			table.classList.remove('chart-heatmap__table--paper')
+
 			await savePng(canvas, title)
 		},
 
@@ -210,6 +217,17 @@ export default {
 		color: var(--color-text-maxcontrast);
 		margin-block-end: 8px;
 		text-align: start;
+	}
+
+	// Worn only while the table is being drawn into a picture; see downloadImage.
+	&__table--paper {
+		--color-main-background: #ffffff;
+		--color-main-text: #222222;
+		--color-text-maxcontrast: #555555;
+		--color-border: #999999;
+		--chart-series-1: #2a78d6;
+
+		color: #222222;
 	}
 
 	&__table {
