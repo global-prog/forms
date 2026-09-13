@@ -363,6 +363,15 @@ export default {
 			align-items: center;
 			justify-content: center;
 
+			// The number is a label for its own radio, so it selects when clicked - but
+			// it was only as wide as the digit, leaving a dead gutter between one option
+			// and the next. Stretched across the column, the whole thing is live and the
+			// target clears the 24px minimum in both directions.
+			label {
+				align-self: stretch;
+				text-align: center;
+			}
+
 			@media (max-width: 768px) {
 				flex-direction: row-reverse;
 			}

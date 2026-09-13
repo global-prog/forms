@@ -67,7 +67,11 @@
 						:checked="star === currentValue"
 						:required="isRequired && !currentValue"
 						@change="onPick(star)" />
+					<!-- Larger than the default 20px: five outline glyphs that size, set
+					     in a 44px target, read as decoration beside the question rather
+					     than as the control the respondent is meant to use. -->
 					<NcIconSvgWrapper
+						:size="28"
 						:svg="star <= currentValue ? iconFull : iconEmpty" />
 				</label>
 				<NcButton
