@@ -170,11 +170,22 @@
 					:formId="form.id"
 					@imported="onQuestionsImported" />
 			</section>
+
+			<!-- Deleting a question takes every answer given to it with it. While the form
+			     is still being written there is nothing to lose and nothing to ask about;
+			     once people have answered, there is. -->
+			<NcDialog
+				v-model:open="showConfirmDeleteQuestion"
+				:name="t('forms', 'Delete question')"
+				:message="confirmDeleteQuestionMessage"
+				:buttons="confirmDeleteQuestionButtons" />
 		</template>
 	</NcAppContent>
 </template>
 
 <script>
+import IconCancel from '@material-symbols/svg-400/outlined/block.svg?raw'
+import IconDelete from '@material-symbols/svg-400/outlined/delete.svg?raw'
 import IconImport from '@material-symbols/svg-400/outlined/library_add.svg?raw'
 import IconLock from '@material-symbols/svg-400/outlined/lock.svg?raw'
 import axios from '@nextcloud/axios'
@@ -187,6 +198,7 @@ import { useIsMobile } from '@nextcloud/vue'
 import debounce from 'debounce'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcButton from '@nextcloud/vue/components/NcButton'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcEmptyContent from '@nextcloud/vue/components/NcEmptyContent'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
@@ -210,6 +222,7 @@ export default {
 	components: {
 		ImportQuestionsDialog,
 		NcButton,
+		NcDialog,
 		NcIconSvgWrapper,
 		AddQuestionMenu,
 		NcAppContent,
@@ -254,10 +267,59 @@ export default {
 
 			// when set to a number, the next created question will be inserted at this index
 			insertMenuOpenedIndex: null,
+
+			/** The question the delete dialog is asking about, or null when it is closed */
+			questionPendingDelete: null,
+			showConfirmDeleteQuestion: false,
+
+			confirmDeleteQuestionButtons: [
+				{
+					label: t('forms', 'Cancel'),
+					icon: IconCancel,
+					variant: 'tertiary',
+					callback: () => {
+						this.questionPendingDelete = null
+					},
+				},
+				{
+					label: t('forms', 'Delete question'),
+					icon: IconDelete,
+					variant: 'error',
+					callback: () => {
+						this.deleteQuestionConfirmed()
+					},
+				},
+			],
 		}
 	},
 
 	computed: {
+		/**
+		 * What deleting this question will cost. The form's own response count is the
+		 * honest figure to quote: the editor is not told how many of those answered this
+		 * particular question, and inventing a number would be worse than not giving one.
+		 *
+		 * @return {string} the question to put before deleting it
+		 */
+		confirmDeleteQuestionMessage() {
+			const question = (this.form?.questions ?? []).find(
+				(candidate) => candidate.id === this.questionPendingDelete,
+			)
+			const title = question?.text?.trim()
+			const responses = this.form?.submissionCount ?? 0
+			return title
+				? t(
+						'forms',
+						'"{question}" and any answers given to it in the {count} responses already received will be deleted. It cannot be undone.',
+						{ question: title, count: responses },
+					)
+				: t(
+						'forms',
+						'This question and any answers given to it in the {count} responses already received will be deleted. It cannot be undone.',
+						{ count: responses },
+					)
+		},
+
 		hasQuestions() {
 			return this.form.questions && this.form.questions.length === 0
 		},
@@ -559,7 +621,34 @@ export default {
 		 *
 		 * @param {number} questionId the question id to delete
 		 */
-		async deleteQuestion(questionId) {
+		/**
+		 * Delete a question - after asking, once the form has answers to lose.
+		 *
+		 * Writing a form means adding and removing questions constantly, and a
+		 * confirmation on every one of those would be noise. The moment somebody has
+		 * answered, the same click also deletes what they wrote, and that is worth a
+		 * question.
+		 *
+		 * @param {number} questionId the question to delete
+		 */
+		deleteQuestion(questionId) {
+			if (!(this.form.submissionCount > 0)) {
+				this.questionPendingDelete = questionId
+				this.deleteQuestionConfirmed()
+				return
+			}
+			this.questionPendingDelete = questionId
+			this.showConfirmDeleteQuestion = true
+		},
+
+		/** Delete the question the dialog named, once it has been agreed to. */
+		async deleteQuestionConfirmed() {
+			const questionId = this.questionPendingDelete
+			this.questionPendingDelete = null
+			this.showConfirmDeleteQuestion = false
+			if (questionId === null) {
+				return
+			}
 			this.isLoadingQuestions = true
 
 			try {
