@@ -872,7 +872,12 @@ export default {
 		// rule that divides the form - drawn across the card, above the title, where the
 		// break actually falls - and a title a step larger than the questions it heads.
 		// Respondents already saw this: there a section is 24px and heads its own page.
-		.question:has(.question-section) {
+		//
+		// :deep, and it has to be. Submit.vue reaches `.question` with a plain selector
+		// because it renders the questions itself, so its scope id lands on the card.
+		// Here they sit inside the sortable list's own `ul`, several components down,
+		// and the card carries three scope ids - none of them this file's.
+		:deep(.question:has(.question-section)) {
 			&::before {
 				border-block-start: 2px solid
 					var(--color-border-dark, var(--color-border));
@@ -883,13 +888,13 @@ export default {
 				margin: 0 -8px 20px calc(-1 * var(--default-clickable-area) - 12px);
 			}
 
-			:deep(.question__header__title__text) {
+			.question__header__title__text {
 				font-size: 20px !important;
 			}
 
 			// The rule the section drew under its own title is what respondents see;
 			// here the one above the card says it better, and two would be noise.
-			:deep(.question-section__rule) {
+			.question-section__rule {
 				display: none;
 			}
 		}
