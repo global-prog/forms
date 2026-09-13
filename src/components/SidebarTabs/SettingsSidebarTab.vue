@@ -1134,6 +1134,8 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+@use '../../scssmixins/markdownOutput' as *;
+
 /*
  * The settings tab had grown into one flat column of twenty-odd switches, several of
  * them added by this fork, with nothing to say which belonged together. The headings
@@ -1151,8 +1153,6 @@ export default {
 		margin-block-start: 4px;
 	}
 }
-
-@use '../../scssmixins/markdownOutput' as *;
 
 #expiresDatetimePicker,
 #opensAtDatetimePicker {
