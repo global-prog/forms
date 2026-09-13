@@ -388,7 +388,7 @@ OC.L10N.register(
     "From" : "من",
     "Groups the questions that follow" : "يجمع الأسئلة التي تليه",
     "Header image address" : "عنوان صورة الترويسة",
-    "The header image, as respondents will see it" : "صورة الترويسة كما سيراها المشاركون",
+    "Preview of the header image" : "معاينة صورة الترويسة",
     "That address did not load a picture." : "لم يُحمِّل هذا العنوان أي صورة.",
     "Hearts" : "قلوب",
     "Higher than" : "أكبر من",

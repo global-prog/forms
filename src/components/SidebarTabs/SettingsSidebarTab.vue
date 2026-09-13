@@ -119,7 +119,7 @@
 			<img
 				:key="headerImage"
 				:src="headerImage"
-				:alt="t('forms', 'The header image, as respondents will see it')"
+				:alt="t('forms', 'Preview of the header image')"
 				class="settings-header-image__preview"
 				@load="headerImageBroken = false"
 				@error="headerImageBroken = true" />
@@ -1190,13 +1190,16 @@ export default {
 	margin-block: 8px 4px;
 
 	&__preview {
-		background-color: var(--color-background-dark);
+		// The same ground and the same fit as the form's own header card, so a picture
+		// with transparency is judged against what will actually be behind it. This one
+		// showed at once that the default banner is black artwork on a dark theme.
+		background-color: var(--color-main-background);
 		block-size: auto;
 		border: 1px solid var(--color-border);
 		border-radius: var(--border-radius-large);
 		display: block;
 		inline-size: 100%;
-		max-block-size: 96px;
+		max-block-size: 110px;
 		object-fit: cover;
 	}
 
