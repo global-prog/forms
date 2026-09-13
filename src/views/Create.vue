@@ -884,8 +884,12 @@ export default {
 				content: '';
 				display: block;
 				// Out to the card's own edges, past the padding that leaves room for the
-				// drag handles.
-				margin: 0 -8px 20px calc(-1 * var(--default-clickable-area) - 12px);
+				// drag handles. Both literals mirror Question.vue's own
+				// `padding: 8px 8px 8px 56px` - deriving the start from
+				// --default-clickable-area looked tidier and was wrong: that token is
+				// 34px here, not the 44px the 56 was built from, so the rule stopped
+				// 10px short of the edge.
+				margin: 0 -8px 20px -56px;
 			}
 
 			.question__header__title__text {
