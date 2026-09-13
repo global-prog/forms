@@ -94,6 +94,7 @@
 						{{ t('forms', 'Convert to embeddable link') }}
 					</NcActionButton>
 					<NcActionButton
+						closeAfterClick
 						:disabled="locked || !isCurrentUserOwner"
 						@click="removeShare(share)">
 						<template #icon>
@@ -126,6 +127,14 @@
 			"
 			:text="qrDialogText"
 			@closed="qrDialogText = ''" />
+
+		<!-- Removing a link is not an edit, it is a withdrawal: every copy of it that has
+		     been sent out stops working, and a replacement cannot carry the same address. -->
+		<NcDialog
+			v-model:open="showConfirmRemoveShare"
+			:name="t('forms', 'Remove link')"
+			:message="confirmRemoveShareMessage"
+			:buttons="confirmRemoveShareButtons" />
 
 		<!-- Internal link -->
 		<div class="share-div">
@@ -213,6 +222,7 @@
 
 <script>
 import IconPlus from '@material-symbols/svg-400/outlined/add.svg?raw'
+import IconCancel from '@material-symbols/svg-400/outlined/block.svg?raw'
 import IconCodeBrackets from '@material-symbols/svg-400/outlined/code.svg?raw'
 import IconCopyAll from '@material-symbols/svg-400/outlined/copy_all.svg?raw'
 import IconDelete from '@material-symbols/svg-400/outlined/delete.svg?raw'
@@ -229,6 +239,7 @@ import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionLink from '@nextcloud/vue/components/NcActionLink'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
+import NcDialog from '@nextcloud/vue/components/NcDialog'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import QRDialog from '../QRDialog.vue'
@@ -248,6 +259,7 @@ export default {
 		NcActionButton,
 		NcActionLink,
 		NcCheckboxRadioSwitch,
+		NcDialog,
 		NcNoteCard,
 		QRDialog,
 		SharingSearchDiv,
@@ -294,10 +306,55 @@ export default {
 			isLoading: false,
 			appConfig: loadState(appName, 'appConfig'),
 			qrDialogText: '',
+
+			/** The link the removal dialog is asking about, or null when it is closed */
+			sharePendingRemove: null,
+			showConfirmRemoveShare: false,
+
+			confirmRemoveShareButtons: [
+				{
+					label: t('forms', 'Cancel'),
+					icon: IconCancel,
+					variant: 'tertiary',
+					callback: () => {
+						this.sharePendingRemove = null
+					},
+				},
+				{
+					label: t('forms', 'Remove link'),
+					icon: IconDelete,
+					variant: 'error',
+					callback: () => {
+						this.removeShareConfirmed()
+					},
+				},
+			],
 		}
 	},
 
 	computed: {
+		/**
+		 * What removing this link costs, which is not obvious from a menu item reading
+		 * "Remove link". Every copy already sent out stops working at once, and a new
+		 * link is a new address - it cannot be made to match the old one.
+		 *
+		 * @return {string} the question to put before withdrawing it
+		 */
+		confirmRemoveShareMessage() {
+			const share = this.sharePendingRemove
+			if (!share) {
+				return t(
+					'forms',
+					'Anyone holding this link will no longer be able to open the form, and a new link cannot repeat this address.',
+				)
+			}
+			return t(
+				'forms',
+				'{link} will stop working. Anyone holding it will no longer be able to open the form, and a new link cannot repeat this address.',
+				{ link: this.getPublicShareLink(share) },
+			)
+		},
+
 		isCurrentUserOwner() {
 			return getCurrentUser().uid === this.form.ownerId
 		},
@@ -441,7 +498,24 @@ export default {
 		 *
 		 * @param {object} share the share to delete
 		 */
-		async removeShare(share) {
+		/**
+		 * Withdraw a share link, after asking.
+		 *
+		 * @param {object} share the link to withdraw
+		 */
+		removeShare(share) {
+			this.sharePendingRemove = share
+			this.showConfirmRemoveShare = true
+		},
+
+		/** Withdraw the link the dialog named, once it has been agreed to. */
+		async removeShareConfirmed() {
+			const share = this.sharePendingRemove
+			this.sharePendingRemove = null
+			this.showConfirmRemoveShare = false
+			if (!share) {
+				return
+			}
 			this.isLoading = true
 
 			try {
