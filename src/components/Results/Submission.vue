@@ -21,7 +21,12 @@
 					</template>
 					{{ t('forms', 'Edit this response') }}
 				</NcActionRouter>
-				<NcActionButton v-if="canDeleteSubmission" @click="onDelete">
+				<!-- closeAfterClick: this opens a confirmation now rather than deleting
+				     on the spot, and the menu would otherwise stay open on top of it. -->
+				<NcActionButton
+					v-if="canDeleteSubmission"
+					closeAfterClick
+					@click="onDelete">
 					<template #icon>
 						<NcIconSvgWrapper :svg="IconDelete" />
 					</template>
