@@ -160,7 +160,18 @@ export default {
 					colour: getComputedStyle(
 						item.querySelector('.chart-donut__swatch'),
 					).backgroundColor,
-					label: item.textContent.replace(/\s+/g, ' ').trim(),
+					// Joined per span: textContent runs the label straight into the value,
+					// so the key came out reading "Yes6 (55%)".
+					label: [...item.children]
+						.filter(
+							(child) =>
+								!child.classList.contains('chart-donut__swatch'),
+						)
+						.map((child) =>
+							child.textContent.replace(/\s+/g, ' ').trim(),
+						)
+						.filter(Boolean)
+						.join(' '),
 				}),
 			)
 		},
