@@ -12,6 +12,34 @@
  */
 
 /**
+ * The palette an exported picture is drawn in.
+ *
+ * A downloaded chart is on its way somewhere else - a report, a slide, an email - and
+ * those are on white. Matching the screen means someone reading in dark mode exports a
+ * dark rectangle that lands badly in a document and wastes ink on a printer. The printed
+ * report already forces paper colours for the same reason; this is the same decision for
+ * the same destination. The series are the light values from css/forms.css, which are the
+ * ones checked for contrast on white.
+ */
+export const PAPER = {
+	series: [
+		'#2a78d6',
+		'#d4551f',
+		'#12805d',
+		'#9a6a00',
+		'#c4456f',
+		'#008300',
+		'#4a3aa7',
+	],
+	muted: '#767676',
+	ink: '#222222',
+	inkFaint: '#555555',
+	track: '#f0f0f0',
+	surface: '#ffffff',
+	border: '#999999',
+}
+
+/**
  * Break a title into lines that fit a given width.
  *
  * @param {CanvasRenderingContext2D} context the context whose font the text is measured in
@@ -100,9 +128,8 @@ export function startChartCanvas({
 }) {
 	const scale = 2
 	const padding = 24
-	const background =
-		style.getPropertyValue('--color-main-background').trim() || '#ffffff'
-	const ink = style.getPropertyValue('--color-main-text').trim() || '#222222'
+	const background = PAPER.surface
+	const ink = PAPER.ink
 	const family = style.fontFamily || 'sans-serif'
 
 	const canvas = document.createElement('canvas')

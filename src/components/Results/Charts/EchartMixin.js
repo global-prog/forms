@@ -4,7 +4,7 @@
  */
 
 import logger from '../../../utils/Logger.js'
-import { fileNameFor, wrapText } from './chartImage.js'
+import { fileNameFor, PAPER, wrapText } from './chartImage.js'
 import { forget, onThemeChange, whenNearView } from './chartScheduler.js'
 import { loadEcharts, readChartTheme } from './echartsLoader.js'
 
@@ -185,7 +185,29 @@ export default {
 				context.fillText(line, x, padding + index * 22)
 			})
 
-			const svg = this.chart.renderToSVGString()
+			// Rendered a second time, offscreen, in the paper palette: the picture is for
+			// somewhere else, and re-theming the chart on the page would make it flash.
+			// If anything about that fails the on-screen drawing is still a correct
+			// picture, so it is used rather than losing the download.
+			let svg
+			try {
+				const echarts = await loadEcharts()
+				const offscreen = echarts.init(document.createElement('div'), null, {
+					renderer: 'svg',
+					ssr: true,
+					width,
+					height,
+				})
+				offscreen.setOption(
+					this.chartOption({ ...PAPER, rtl: direction === 'rtl' }, width),
+					{ notMerge: true },
+				)
+				svg = offscreen.renderToSVGString()
+				offscreen.dispose()
+			} catch (error) {
+				logger.debug('Could not redraw the chart for export', { error })
+				svg = this.chart.renderToSVGString()
+			}
 			const url = URL.createObjectURL(
 				new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }),
 			)
