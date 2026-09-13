@@ -26,6 +26,7 @@
 <template>
 	<div
 		class="chart-form-picker"
+		dir="auto"
 		role="group"
 		:aria-label="t('forms', 'Chart type')">
 		<NcCheckboxRadioSwitch

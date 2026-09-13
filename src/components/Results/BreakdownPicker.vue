@@ -16,7 +16,7 @@
   option in the select is what returns the card to a single figure for everyone.
 -->
 <template>
-	<div class="breakdown-picker">
+	<div class="breakdown-picker" dir="auto">
 		<NcButton
 			v-if="!revealed"
 			variant="tertiary"

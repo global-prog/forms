@@ -12,6 +12,7 @@
 	<section
 		v-if="bars.length > 1"
 		class="response-timeline"
+		dir="auto"
 		:aria-label="t('forms', 'When responses arrived')">
 		<h3 class="response-timeline__title">
 			{{ t('forms', 'When responses arrived') }}

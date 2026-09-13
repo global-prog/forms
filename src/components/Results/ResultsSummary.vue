@@ -11,10 +11,12 @@
 		<h3 dir="auto" :style="{ textAlign: formTextAlign }">
 			{{ question.text }}
 		</h3>
-		<p class="question-summary__detail">
+		<!-- Written by the interface rather than by the form's author, so it reads in
+		     the interface's direction and not the question's. -->
+		<p class="question-summary__detail" dir="auto">
 			{{ questionTypeLabel }}
 		</p>
-		<p v-if="askedNote" class="question-summary__detail">
+		<p v-if="askedNote" class="question-summary__detail" dir="auto">
 			{{ askedNote }}
 		</p>
 
@@ -261,16 +263,21 @@
 		     It must come after the list above: a v-else has to sit next to its v-if, and
 		     with this button between them the list attached itself to the button instead,
 		     so every card that offers no download showed the raw answers under its chart. -->
-		<NcButton
-			v-if="hasDownloadableChart"
-			class="question-summary__download"
-			variant="tertiary"
-			@click="downloadChart">
-			<template #icon>
-				<NcIconSvgWrapper :svg="IconDownload" />
-			</template>
-			{{ t('forms', 'Download chart') }}
-		</NcButton>
+		<!-- Wrapped so the button sits at the same edge as the two controls above it.
+		     A button is only as wide as its label, so on its own it was placed by the
+		     question's direction while they were placed by the interface's, and an
+		     Arabic question left the card's furniture split between both margins. -->
+		<div v-if="hasDownloadableChart" dir="auto">
+			<NcButton
+				class="question-summary__download"
+				variant="tertiary"
+				@click="downloadChart">
+				<template #icon>
+					<NcIconSvgWrapper :svg="IconDownload" />
+				</template>
+				{{ t('forms', 'Download chart') }}
+			</NcButton>
+		</div>
 		<NcButton
 			v-if="hiddenAnswerCount > 0"
 			class="question-summary__text-toggle"
