@@ -1210,6 +1210,13 @@ export default {
 			// Every chart view can be saved. A ring and a stacked bar keep their key in
 			// the page rather than in the drawing, and the image takes it with them; the
 			// heatmap has no drawing at all and paints itself from the rendered table.
+			//
+			// A grid is named separately because it is `predefined: false` in
+			// AnswerTypes - it has rows and columns rather than a list of options - so
+			// testing that flag alone silently drops both of its views.
+			if (this.question.type === 'grid') {
+				return true
+			}
 			return this.answerTypes[this.question.type]?.predefined === true
 		},
 
