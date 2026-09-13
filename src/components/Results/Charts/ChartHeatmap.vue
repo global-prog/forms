@@ -185,9 +185,7 @@ export default {
 
 			await savePng(canvas, title)
 		},
-	},
 
-	methods: {
 		/**
 		 * @param {object} cell the cell being drawn
 		 * @return {number} its tint strength, 0 to MAX_TINT
