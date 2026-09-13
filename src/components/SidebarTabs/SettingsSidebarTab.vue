@@ -112,6 +112,23 @@
 			:disabled="formArchived || locked"
 			:modelValue="headerImage"
 			@update:modelValue="onHeaderImageChange" />
+		<!-- An address typed into a box tells the author nothing about whether it is the
+		     right picture, or a picture at all. Shown here, a typo is obvious at once
+		     instead of on the form itself. -->
+		<div v-if="headerImage" class="settings-header-image">
+			<img
+				:key="headerImage"
+				:src="headerImage"
+				:alt="t('forms', 'The header image, as respondents will see it')"
+				class="settings-header-image__preview"
+				@load="headerImageBroken = false"
+				@error="headerImageBroken = true" />
+			<p
+				v-if="headerImageBroken"
+				class="settings-hint settings-header-image__error">
+				{{ t('forms', 'That address did not load a picture.') }}
+			</p>
+		</div>
 		<NcColorPicker
 			class="settings-colour"
 			:modelValue="accentColor || '#0082c9'"
@@ -488,6 +505,8 @@ export default {
 			svgLockOpen,
 			confirmationEmailSubject: this.form?.confirmationEmailSubject || '',
 			confirmationEmailBody: this.form?.confirmationEmailBody || '',
+			/** Set by the preview's own load and error events, not guessed from the text */
+			headerImageBroken: false,
 		}
 	},
 
@@ -902,6 +921,10 @@ export default {
 		 * @param {string} value banner image address
 		 */
 		onHeaderImageChange(value) {
+			// Typing is not failing: the warning goes away on every change and comes back
+			// only if the browser cannot load what was typed. The :key on the image makes
+			// it re-request rather than keep the last result.
+			this.headerImageBroken = false
 			this.updateSettings({ headerImage: value })
 		},
 
@@ -1161,6 +1184,26 @@ export default {
 
 .settings-div--indent {
 	margin-inline-start: 40px;
+}
+
+.settings-header-image {
+	margin-block: 8px 4px;
+
+	&__preview {
+		background-color: var(--color-background-dark);
+		block-size: auto;
+		border: 1px solid var(--color-border);
+		border-radius: var(--border-radius-large);
+		display: block;
+		inline-size: 100%;
+		max-block-size: 96px;
+		object-fit: cover;
+	}
+
+	&__error {
+		color: var(--color-error-text, var(--color-element-error));
+		margin-block-start: 4px;
+	}
 }
 
 .settings-hint {

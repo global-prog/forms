@@ -231,11 +231,20 @@ export default {
 
 <style lang="scss" scoped>
 .answer {
-	margin-block-start: 12px;
+	margin-block-start: 16px;
 	width: 100%;
 
+	// The question is the label here and the answer is the content, but the heading was
+	// 21px bold against a 15px answer - so reading a response, the eye landed on the
+	// questions, which are identical in every one of them, rather than on the answers,
+	// which are the only thing that differs. Muted and set at body size it reads as a
+	// label, the answer below it carries the contrast, and a card is a quarter shorter.
 	&__question-text {
-		font-weight: bold;
+		color: var(--color-text-maxcontrast);
+		font-size: 1em;
+		font-weight: 600;
+		line-height: 1.3;
+		margin-block: 0 2px;
 	}
 
 	&__grade {
