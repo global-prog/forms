@@ -26,6 +26,7 @@
 			<!-- TRANSLATORS text for the action triggered by the button -->
 			{{ t('forms', 'Unlock form') }}
 		</NcButton>
+		<h4 class="settings-group">{{ t('forms', 'Responses') }}</h4>
 		<NcCheckboxRadioSwitch
 			:modelValue="form.isAnonymous"
 			:disabled="formArchived || locked"
@@ -57,6 +58,7 @@
 			@update:modelValue="onAllowCommentsChange">
 			{{ t('forms', 'Allow comments') }}
 		</NcCheckboxRadioSwitch>
+		<h4 class="settings-group">{{ t('forms', 'Quiz') }}</h4>
 		<NcCheckboxRadioSwitch
 			:modelValue="quizMode"
 			:disabled="formArchived || locked"
@@ -88,6 +90,7 @@
 				)
 			}}
 		</p>
+		<h4 class="settings-group">{{ t('forms', 'Presentation') }}</h4>
 		<NcCheckboxRadioSwitch
 			:modelValue="shuffleQuestions"
 			:disabled="formArchived || locked"
@@ -146,6 +149,7 @@
 				)
 			}}
 		</p>
+		<h4 class="settings-group">{{ t('forms', 'Notifications') }}</h4>
 		<NcCheckboxRadioSwitch
 			:modelValue="notifyOwner"
 			:disabled="formArchived || locked"
@@ -161,6 +165,7 @@
 				:modelValue="notifyEmails"
 				@update:modelValue="onNotifyEmailsChange" />
 		</div>
+		<h4 class="settings-group">{{ t('forms', 'Availability') }}</h4>
 		<NcCheckboxRadioSwitch
 			:modelValue="formExpires"
 			:disabled="formArchived || locked"
@@ -280,6 +285,7 @@
 				)
 			}}
 		</p>
+		<h4 class="settings-group">{{ t('forms', 'After submitting') }}</h4>
 		<NcCheckboxRadioSwitch
 			:modelValue="hasCustomSubmissionMessage"
 			:disabled="formArchived || locked"
@@ -1128,6 +1134,24 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+/*
+ * The settings tab had grown into one flat column of twenty-odd switches, several of
+ * them added by this fork, with nothing to say which belonged together. The headings
+ * group what was already there - nothing has moved - so an author scanning for "when
+ * does this close" is reading a short list rather than the whole tab.
+ */
+.settings-group {
+	color: var(--color-text-maxcontrast);
+	font-size: 15px;
+	font-weight: bold;
+	margin-block: 20px 4px;
+
+	// The first one heads the tab, so it does not need to be pushed away from anything.
+	&:first-of-type {
+		margin-block-start: 4px;
+	}
+}
+
 @use '../../scssmixins/markdownOutput' as *;
 
 #expiresDatetimePicker,
