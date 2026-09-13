@@ -147,6 +147,25 @@ export default {
 
 	methods: {
 		/**
+		 * The key as the page shows it, for the downloaded image.
+		 *
+		 * Read back out of the rendered legend rather than rebuilt from the data, so the
+		 * picture cannot disagree with the page about which colour meant what.
+		 *
+		 * @return {{colour: string, label: string}[]} one row per series
+		 */
+		legendRows() {
+			return [...this.$el.querySelectorAll('.chart-donut__legend-item')].map(
+				(item) => ({
+					colour: getComputedStyle(
+						item.querySelector('.chart-donut__swatch'),
+					).backgroundColor,
+					label: item.textContent.replace(/\s+/g, ' ').trim(),
+				}),
+			)
+		},
+
+		/**
 		 * @param {object} theme the resolved palette and chrome colours
 		 * @return {object} the ECharts option
 		 */
