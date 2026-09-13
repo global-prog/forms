@@ -222,6 +222,10 @@ export default {
 		gap: 6px;
 		list-style: none;
 		margin: 0;
+		// The count is pushed to the end of the row, so on a wide card the key read
+		// "Yes" against one edge and "6 (55%)" against the other, half a screen apart.
+		// Held to the width of a field, the label and its number stay one thing.
+		max-inline-size: 360px;
 		min-inline-size: 0;
 		padding: 0;
 	}

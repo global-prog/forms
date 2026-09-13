@@ -1141,6 +1141,9 @@ export default {
 	padding-inline: 20px;
 
 	&__select {
+		// The same width as the filter's fields directly above it: two lone controls
+		// in a column, one 360px and one sized to its own text, read as a mistake.
+		inline-size: 100%;
 		max-inline-size: 360px;
 		min-inline-size: 0;
 	}
