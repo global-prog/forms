@@ -230,8 +230,11 @@
 						'This form has reached the maximum number of responses',
 					)
 				">
+				<!-- Not a tick. A tick is what this same view shows a few states up
+				     when a response HAS been recorded; wearing it here told someone who
+				     cannot answer that they just had. The reason is in the words. -->
 				<template #icon>
-					<NcIconSvgWrapper :svg="IconCheckSvg" size="64" />
+					<NcIconSvgWrapper :svg="IconClosedSvg" :size="64" />
 				</template>
 			</NcEmptyContent>
 			<NcEmptyContent
@@ -244,8 +247,11 @@
 						'This form has expired and is no longer taking responses',
 					)
 				">
+				<!-- Not a tick. A tick is what this same view shows a few states up
+				     when a response HAS been recorded; wearing it here told someone who
+				     cannot answer that they just had. The reason is in the words. -->
 				<template #icon>
-					<NcIconSvgWrapper :svg="IconCheckSvg" size="64" />
+					<NcIconSvgWrapper :svg="IconClosedSvg" :size="64" />
 				</template>
 			</NcEmptyContent>
 			<!-- Scheduled to open later. The server refuses answers until then too; whoever
@@ -271,8 +277,11 @@
 						'This form was closed and is no longer taking responses',
 					)
 				">
+				<!-- Not a tick. A tick is what this same view shows a few states up
+				     when a response HAS been recorded; wearing it here told someone who
+				     cannot answer that they just had. The reason is in the words. -->
 				<template #icon>
-					<NcIconSvgWrapper :svg="IconCheckSvg" size="64" />
+					<NcIconSvgWrapper :svg="IconClosedSvg" :size="64" />
 				</template>
 			</NcEmptyContent>
 
@@ -556,6 +565,7 @@ export default {
 		return {
 			IconCheckSvg: IconCheck,
 			IconCloseSvg: IconClose,
+			IconClosedSvg: IconCancel,
 			IconLinkSvg: IconLink,
 			IconRefreshSvg: IconRefresh,
 			IconScheduleSvg: IconSchedule,
