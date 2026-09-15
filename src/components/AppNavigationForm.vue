@@ -19,7 +19,13 @@
 		@click="mobileCloseNavigation">
 		<template #icon>
 			<NcLoadingIcon v-if="loading" :size="16" />
-			<NcIconSvgWrapper v-else-if="isExpired" :svg="IconCheck" :size="16" />
+			<!-- One mark for "not taking responses", however it got there. A form closed
+			     by hand carried no mark while an expired one carried a tick, so the
+			     deliberate state was the invisible one and the other looked like praise. -->
+			<NcIconSvgWrapper
+				v-else-if="isExpired || isClosed"
+				:svg="IconClosed"
+				:size="16" />
 			<NcIconSvgWrapper v-else :svg="FormsIcon" :size="16" />
 		</template>
 		<template v-if="hasSubtitle" #subname>
@@ -100,7 +106,7 @@
 <script>
 import IconArchive from '@material-symbols/svg-400/outlined/archive.svg?raw'
 import IconPoll from '@material-symbols/svg-400/outlined/bar_chart.svg?raw'
-import IconCheck from '@material-symbols/svg-400/outlined/check.svg?raw'
+import IconClosed from '@material-symbols/svg-400/outlined/block.svg?raw'
 import IconContentCopy from '@material-symbols/svg-400/outlined/content_copy.svg?raw'
 import IconDelete from '@material-symbols/svg-400/outlined/delete.svg?raw'
 import IconPencil from '@material-symbols/svg-400/outlined/edit.svg?raw'
@@ -161,7 +167,7 @@ export default {
 			FormsIcon,
 			IconArchive,
 			IconArchiveOff,
-			IconCheck,
+			IconClosed,
 			IconContentCopy,
 			IconDelete,
 			IconPencil,
@@ -206,6 +212,13 @@ export default {
 		},
 
 		/**
+		 * Check if the form was closed by hand, rather than by its own expiry date
+		 */
+		isClosed() {
+			return this.form.state === FormState.FormClosed
+		},
+
+		/**
 		 * Check if form is expired
 		 */
 		isExpired() {
@@ -239,7 +252,7 @@ export default {
 		 * Return expiration details for subtitle
 		 */
 		formSubtitle() {
-			if (this.form.state === FormState.FormClosed) {
+			if (this.isClosed) {
 				// TRANSLATORS: The form was closed manually so it does not take new submissions
 				return t('forms', 'Form closed')
 			}

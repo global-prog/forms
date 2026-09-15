@@ -18,7 +18,7 @@
 </template>
 
 <script>
-import IconCheck from '@material-symbols/svg-400/outlined/check.svg?raw'
+import IconClosed from '@material-symbols/svg-400/outlined/block.svg?raw'
 import { loadState } from '@nextcloud/initial-state'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
 import NcContent from '@nextcloud/vue/components/NcContent'
@@ -56,7 +56,10 @@ export default {
 						'This form has expired and is no longer taking responses',
 					),
 
-					icon: IconCheck,
+					// Not a tick: this is what an anonymous visitor lands on when the link
+					// they were sent has expired, and a tick reads as "done, all good"
+					// rather than "this is no longer taking responses".
+					icon: IconClosed,
 				},
 			},
 
