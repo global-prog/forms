@@ -299,21 +299,21 @@ export default {
 		 *                         which label input (lowest value or highest value) triggered the blur event.
 		 */
 		onBlur(label) {
-			// The labels are computed from extraSettings, so the tidied text is saved
-			// through the same handlers as typing, and only when it actually changed.
-			if (label === 'lowest') {
-				const cleaned = this.optionsLabelLowest
-					.replace(/[\r\n]+/g, ' ')
-					.trim()
-				if (cleaned !== this.optionsLabelLowest) {
-					this.onOptionsLabelLowestChange(cleaned)
-				}
-			} else if (label === 'highest') {
-				const cleaned = this.optionsLabelHighest
-					.replace(/[\r\n]+/g, ' ')
-					.trim()
-				if (cleaned !== this.optionsLabelHighest) {
-					this.onOptionsLabelHighestChange(cleaned)
+			// The computed labels follow the extraSettings prop, which only updates once the
+			// debounced save fires, so tidy what is in the textarea right now. Otherwise a
+			// quick blur tidies the previous text and that save replaces the pending one.
+			// The tidied text goes through the same handlers as typing, and only when it
+			// actually changed.
+			const textarea = this.$refs[label]?.$refs?.input
+			if (textarea) {
+				const typed = textarea.value
+				const cleaned = typed.replace(/[\r\n]+/g, ' ').trim()
+				if (cleaned !== typed) {
+					if (label === 'lowest') {
+						this.onOptionsLabelLowestChange(cleaned)
+					} else if (label === 'highest') {
+						this.onOptionsLabelHighestChange(cleaned)
+					}
 				}
 			}
 			this.resizeLabel(label)

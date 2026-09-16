@@ -328,6 +328,8 @@ export default {
 			font-weight: normal;
 			// Never more than a good share of a phone screen, so the answers stay in view.
 			min-width: min(200px, 40vw);
+			// A long row label with no spaces would otherwise push that cap aside.
+			overflow-wrap: anywhere;
 			text-align: start;
 			position: sticky;
 			inset-inline-start: 0;

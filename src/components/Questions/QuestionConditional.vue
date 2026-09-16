@@ -766,6 +766,7 @@ export default {
 			).length
 
 			if (clearedCount > 0) {
+				// Closing the dialog without a button rejects, which is a cancel too.
 				const confirmed = await showConfirmation({
 					name: t('forms', 'Change trigger type'),
 					text: n(
@@ -776,7 +777,7 @@ export default {
 					),
 					labelConfirm: t('forms', 'Change trigger type'),
 					labelReject: t('forms', 'Cancel'),
-				})
+				}).catch(() => false)
 				if (!confirmed) {
 					return
 				}
@@ -925,7 +926,7 @@ export default {
 								),
 					labelConfirm: t('forms', 'Delete'),
 					labelReject: t('forms', 'Cancel'),
-				})
+				}).catch(() => false)
 				if (!confirmed) {
 					return
 				}

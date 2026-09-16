@@ -23,7 +23,7 @@ use Psr\Log\LoggerInterface;
  *
  * Opt-in per form, stored in the form's settings JSON so it needed no column of its own:
  *   notifyOwner  bool    send to the form owner's account email address
- *   notifyEmails string  additional recipients, comma separated
+ *   notifyEmails string  additional recipients, comma separated; used only with notifyOwner
  *
  * Nothing here is allowed to break submitting. The response is already stored by the time
  * this runs, so every failure path logs and returns rather than throwing.
@@ -56,7 +56,9 @@ class OwnerNotificationService {
 			return;
 		}
 
-		if (empty($settings['notifyOwner']) && empty($settings['notifyEmails'])) {
+		// The extra addresses are only shown, and only editable, while the switch is on.
+		// A form saved with addresses and the switch off must not keep mailing them.
+		if (empty($settings['notifyOwner'])) {
 			return;
 		}
 

@@ -431,7 +431,7 @@ export default {
 				'{option} removed from ranking',
 				{ option: option.text },
 				undefined,
-				{ escape: false },
+				{ escape: false, sanitize: false },
 			)
 
 			// As above: move to the neighbouring ranked option, or back to the pool
@@ -514,7 +514,7 @@ export default {
 				'{option} moved to position {position}',
 				{ option: option.text, position },
 				undefined,
-				{ escape: false },
+				{ escape: false, sanitize: false },
 			)
 		},
 

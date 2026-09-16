@@ -336,14 +336,21 @@ export default {
 		},
 
 		async onConfirmDelete() {
+			// Closing the dialog without a button rejects, which is a cancel too.
 			const shouldDelete = await showConfirmation({
 				name: t('forms', 'Delete form'),
-				text: t('forms', 'Are you sure you want to delete {title}?', {
-					title: this.formTitle,
-				}),
+				// The dialog shows its text as text, so the name is neither escaped nor
+				// sanitised; either would put entities such as &amp; on screen.
+				text: t(
+					'forms',
+					'Are you sure you want to delete {title}?',
+					{ title: this.formTitle },
+					undefined,
+					{ escape: false, sanitize: false },
+				),
 				labelConfirm: t('forms', 'Delete form'),
 				labelReject: t('forms', 'Cancel'),
-			})
+			}).catch(() => false)
 
 			if (shouldDelete) {
 				await this.onDeleteForm()

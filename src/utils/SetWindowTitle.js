@@ -16,15 +16,14 @@ function SetWindowTitle(formTitle) {
 	} else {
 		// One translatable pattern rather than pieces glued together, so a language can
 		// put the form's name where it reads naturally. The tab title is plain text, so
-		// the name must not be HTML-escaped.
+		// the name must be neither HTML-escaped nor sanitised: either puts entities such
+		// as &amp; in the tab.
 		const formsTitle = t(
 			'forms',
 			'{formTitle} - Forms',
 			{ formTitle },
 			undefined,
-			{
-				escape: false,
-			},
+			{ escape: false, sanitize: false },
 		)
 		window.document.title = formsTitle + ' - ' + OC.theme.title
 	}

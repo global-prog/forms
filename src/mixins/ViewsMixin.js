@@ -46,6 +46,10 @@ export default {
 		},
 	},
 
+	// Declared so a listener the parent binds for them is not also passed down as an
+	// attribute. Merged with any list a view declares itself.
+	emits: ['update:form', 'openSharing'],
+
 	data() {
 		return {
 			// State-Variable
@@ -169,7 +173,7 @@ export default {
 
 	methods: {
 		onShareForm() {
-			this.$emit('open-sharing', this.form.hash)
+			this.$emit('openSharing', this.form.hash)
 		},
 
 		/**
@@ -228,7 +232,11 @@ export default {
 					this.isLoadingForm = false
 				}
 			} finally {
-				this.focusTitle()
+				// A quiet reload happens after the page is shown; moving focus then
+				// interrupts what a screen reader is reading.
+				if (!silent) {
+					this.focusTitle()
+				}
 			}
 		},
 

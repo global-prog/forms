@@ -39,6 +39,7 @@
 </template>
 
 <script>
+import { translate as t } from '@nextcloud/l10n'
 import Question from './Question.vue'
 import QuestionMixin from '../../mixins/QuestionMixin.js'
 

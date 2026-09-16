@@ -776,9 +776,9 @@ export default {
 		border-radius: var(--border-radius-element, var(--border-radius-large));
 		padding-inline: calc(3 * var(--default-grid-baseline)) var(--focus-offset);
 		padding-block: var(--focus-offset);
-		height: var(--default-clickable-area);
-		width: 100%;
-		max-width: 300px;
+		block-size: var(--default-clickable-area);
+		inline-size: 100%;
+		max-inline-size: 300px;
 
 		label {
 			color: var(--color-text-maxcontrast);

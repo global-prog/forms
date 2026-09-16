@@ -90,6 +90,7 @@ import IconTableColumn from '@material-symbols/svg-400/outlined/view_column.svg?
 import IconTableRow from '@material-symbols/svg-400/outlined/view_stream.svg?raw'
 import axios from '@nextcloud/axios'
 import { showError } from '@nextcloud/dialogs'
+import { translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl } from '@nextcloud/router'
 import debounce from 'debounce'
 import PQueue from 'p-queue'

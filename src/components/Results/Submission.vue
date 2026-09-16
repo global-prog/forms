@@ -12,9 +12,13 @@
 			<NcActions
 				class="submission-menu"
 				:ariaLabel="
-					t('forms', 'Actions for response from {name}', {
-						name: submission.userDisplayName,
-					})
+					t(
+						'forms',
+						'Actions for response from {name}',
+						{ name: submission.userDisplayName },
+						undefined,
+						{ escape: false, sanitize: false },
+					)
 				"
 				forceMenu>
 				<NcActionRouter

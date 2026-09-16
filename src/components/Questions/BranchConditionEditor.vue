@@ -166,6 +166,7 @@
 </template>
 
 <script>
+import { translate as t } from '@nextcloud/l10n'
 import moment from '@nextcloud/moment'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
@@ -560,17 +561,17 @@ export default {
 
 <style lang="scss" scoped>
 .branch-condition-editor {
-	padding: 8px 0;
+	padding-block: 8px;
 }
 
 .condition-label {
-	margin-bottom: 8px;
+	margin-block-end: 8px;
 	font-weight: 500;
 	color: var(--color-text-maxcontrast);
 }
 
 .condition-options {
-	max-width: 400px;
+	max-inline-size: 400px;
 }
 
 .condition-row {
@@ -581,16 +582,17 @@ export default {
 }
 
 .condition-type-select {
-	min-width: 150px;
+	min-inline-size: min(150px, 100%);
 }
 
 .condition-value-input {
 	flex: 1;
-	min-width: 200px;
+	// Capped so the field still fits a narrow phone screen instead of overflowing it.
+	min-inline-size: min(200px, 100%);
 }
 
 .condition-range-input {
-	width: 100px;
+	inline-size: 100px;
 }
 
 .condition-range-separator {
@@ -602,8 +604,8 @@ export default {
 }
 
 .color-preview {
-	width: 24px;
-	height: 24px;
+	inline-size: 24px;
+	block-size: 24px;
 	border-radius: var(--border-radius);
 	border: 1px solid var(--color-border-dark);
 }

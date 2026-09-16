@@ -317,6 +317,7 @@
 						:answerType="answerTypes[question.type]"
 						:index="index + 1"
 						:displayNumber="answerableNumbers[question.id]"
+						:headingLevel="headingLevels[question.id]"
 						:maxStringLengths="maxStringLengths"
 						:values="answers[question.id]"
 						@keydown.enter.exact="onKeydownEnter"
@@ -404,9 +405,13 @@
 						{{ t('forms', 'Back') }}
 					</NcButton>
 					<NcButton
-						v-if="pageCount > 1 && currentPage < pageCount - 1"
+						v-if="
+							pageCount > 1
+							&& currentPage < pageCount - 1
+							&& !submitsHere
+						"
 						alignment="center-reverse"
-						class="submit-button"
+						class="submit-button submit-button--forward"
 						variant="primary"
 						@click.prevent="goToNextPage">
 						{{ t('forms', 'Next') }}
@@ -414,9 +419,9 @@
 					<!-- aria-disabled rather than disabled while sending: a disabled button
 					     drops keyboard focus, which is the thing this keeps in place. -->
 					<NcButton
-						v-if="currentPage >= pageCount - 1"
+						v-if="currentPage >= pageCount - 1 || submitsHere"
 						alignment="center-reverse"
-						class="submit-button"
+						class="submit-button submit-button--forward"
 						:aria-busy="loading ? 'true' : undefined"
 						:aria-disabled="loading ? 'true' : undefined"
 						type="submit"
@@ -497,6 +502,7 @@ import axios from '@nextcloud/axios'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { emit } from '@nextcloud/event-bus'
 import { loadState } from '@nextcloud/initial-state'
+import { translate as t } from '@nextcloud/l10n'
 import moment from '@nextcloud/moment'
 import { generateOcsUrl, generateUrl } from '@nextcloud/router'
 import debounce from 'debounce'
@@ -727,12 +733,50 @@ export default {
 		},
 
 		/**
+		 * The heading level of each title. A section's title heads the questions after
+		 * it, so they sit one level below; otherwise every question would read as the
+		 * section's sibling, and the outline a screen reader offers would be flat.
+		 * Anything before the first section, and every question on a form without
+		 * sections, stays directly under the form title.
+		 *
+		 * @return {Record<number, number>} heading level keyed by question id
+		 */
+		headingLevels() {
+			const levels = {}
+			let inSection = false
+			for (const question of this.orderedQuestions) {
+				if (question.type === 'section') {
+					inSection = true
+					levels[question.id] = 3
+				} else {
+					levels[question.id] = inSection ? 4 : 3
+				}
+			}
+			return levels
+		},
+
+		/**
 		 * pages the respondent actually visited, including the one they are on.
 		 *
 		 * @return {Set<number>} visited page indexes
 		 */
 		reachablePages() {
 			return new Set([...this.pageHistory, this.currentPage])
+		},
+
+		/**
+		 * Whether this page's answers end the form here ("Submit the form" rule). The
+		 * server stops at this page too, so later pages are neither shown nor required.
+		 *
+		 * @return {boolean} true when the Submit button belongs on this page
+		 */
+		submitsHere() {
+			const onThisPage = this.validQuestions.filter(
+				(question) =>
+					this.questionPages[question.id] === this.currentPage
+					&& this.visibleQuestions[question.id],
+			)
+			return resolveBranching(onThisPage, this.answers)?.target === 'submit'
 		},
 
 		/**
@@ -1345,7 +1389,8 @@ export default {
 		 * @return {boolean} whether focus was placed
 		 */
 		focusHeadingOf(question) {
-			const heading = question?.$el?.querySelector?.('h2, h3')
+			// h4 too: a question after a section is titled one level down.
+			const heading = question?.$el?.querySelector?.('h2, h3, h4')
 			if (heading) {
 				heading.setAttribute('tabindex', '-1')
 				heading.focus({ preventScroll: true })
@@ -1437,12 +1482,14 @@ export default {
 			)
 			const jump = resolveBranching(onThisPage, this.answers)
 
-			let target = this.currentPage + 1
 			if (jump?.target === 'submit') {
-				// "Submit form" on this answer: go straight to the last page, which is where
-				// the submit button lives.
-				target = this.pageCount - 1
-			} else if (jump?.target === 'section' && jump.questionId !== undefined) {
+				// The form ends on this page (the Submit button is shown here instead of
+				// Next), matching the server, which never reaches the pages after it.
+				return
+			}
+
+			let target = this.currentPage + 1
+			if (jump?.target === 'section' && jump.questionId !== undefined) {
 				const jumpTo = this.questionPages[jump.questionId]
 				// Never jump backwards -- that is how an infinite loop gets built.
 				if (jumpTo !== undefined && jumpTo > this.currentPage) {
@@ -1919,7 +1966,8 @@ export default {
 
 			// Focus the next control the respondent can actually reach: skip hidden
 			// questions, other pages and disabled controls. Fieldsets are listed among a
-			// form's elements too, but take no focus.
+			// form's elements too, but take no focus. In the footer only the forward
+			// action counts, so a second Enter never lands on Clear form or Back.
 			const next = formInputs
 				.slice(sourceInputIndex + 1)
 				.find(
@@ -1927,7 +1975,9 @@ export default {
 						!input.disabled
 						&& input.type !== 'hidden'
 						&& input.tagName !== 'FIELDSET'
-						&& input.offsetParent !== null,
+						&& input.offsetParent !== null
+						&& (!input.closest('.form-buttons')
+							|| input.classList.contains('submit-button--forward')),
 				)
 			next?.focus()
 		},
@@ -2047,7 +2097,28 @@ export default {
 			const page = this.questionPages[question.id]
 			if (page !== undefined && page !== this.currentPage) {
 				this.currentPage = page
-				await this.$nextTick()
+			}
+			// Wait for the error note the check has just added, so it is scrolled into
+			// view together with the question it belongs to.
+			await this.$nextTick()
+			// Focus first, without scrolling: focus() scrolls on its own, and doing that
+			// after a smooth scroll has started cuts it off with a jump.
+			const control = [
+				...question.$el.querySelectorAll(
+					'input, textarea, select, button, [tabindex]:not([tabindex="-1"])',
+				),
+			].find(
+				(element) =>
+					!element.disabled
+					&& element.type !== 'hidden'
+					&& element.offsetParent !== null,
+			)
+			if (control) {
+				control.focus({ preventScroll: true })
+			} else {
+				// No control that can take focus: the title at least tells a screen
+				// reader which question is meant.
+				this.focusHeadingOf(question)
 			}
 			const gently = !window.matchMedia?.('(prefers-reduced-motion: reduce)')
 				?.matches
@@ -2055,11 +2126,6 @@ export default {
 				block: 'center',
 				behavior: gently ? 'smooth' : 'auto',
 			})
-			question.$el
-				.querySelector(
-					'input, textarea, select, [tabindex]:not([tabindex="-1"])',
-				)
-				?.focus()
 		},
 
 		/**
@@ -2124,14 +2190,6 @@ export default {
 				this.loading = false
 			}
 
-			if (!this.publicView) {
-				// Quietly: the full reload swapped the whole view for a loading screen,
-				// which hid the thank-you screen for a moment and took the announcement
-				// of it along. Picks up what the submission changed, such as the
-				// response count or a limit now reached.
-				await this.fetchFullForm(this.form.id, { silent: true })
-			}
-
 			this.$nextTick(() => {
 				// After success the form has gone, so focus goes to the title above the
 				// thank-you screen. After a refusal it goes back to the button pressed.
@@ -2144,6 +2202,15 @@ export default {
 					this.$refs.title?.focus?.()
 				}
 			})
+
+			if (!this.publicView) {
+				// Quietly: the full reload swapped the whole view for a loading screen,
+				// which hid the thank-you screen for a moment and took the announcement
+				// of it along. Picks up what the submission changed, such as the
+				// response count or a limit now reached. Last, after focus has moved:
+				// moving it once the thank-you text is being read cuts that off.
+				await this.fetchFullForm(this.form.id, { silent: true })
+			}
 		},
 
 		onResetSubmission() {

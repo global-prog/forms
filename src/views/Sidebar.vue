@@ -117,13 +117,20 @@ export default {
 			)
 		},
 
+		/**
+		 * When the lock ends, as a date and time. The tabs put it after "until", which a
+		 * relative "in 2 hours" does not read well with, and a computed relative time
+		 * would also go stale while the sidebar stays open.
+		 *
+		 * @return {string} the formatted end, or '' for a permanent lock
+		 */
 		lockedUntilFormatted() {
 			if (this.form.lockedUntil === 0 || this.form.lockedUntil === null) {
 				return ''
 			}
 			return moment(this.form.lockedUntil, 'X')
 				.locale(window.OC.getLanguage())
-				.fromNow()
+				.format('LLL')
 		},
 
 		sidebarTitle() {

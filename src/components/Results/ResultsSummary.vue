@@ -110,32 +110,6 @@
 				</ul>
 			</div>
 
-			<!-- The same numbers within each answer to another question: the average
-			     rating by department, by year group, by whatever was asked. -->
-			<div v-if="groupingQuestions.length" class="question-summary__compare">
-				<BreakdownPicker
-					:options="groupingOptions"
-					:modelValue="selectedGrouping"
-					:placeholder="t('forms', 'One average for everyone')"
-					@update:modelValue="onGroupingChosen" />
-				<ChartFigure
-					v-if="comparisonBars.length"
-					:items="comparisonBars"
-					form="bars"
-					:max="comparisonMax"
-					hidePercentage />
-				<p
-					v-if="comparisonBars.length"
-					class="question-summary__compare-counts">
-					{{ comparisonCounts }}
-				</p>
-				<p
-					v-else-if="groupBy !== null"
-					class="question-summary__ranking-description">
-					{{ t('forms', 'Nobody answered both questions.') }}
-				</p>
-			</div>
-
 			<template v-if="numericStats.buckets.length">
 				<ChartFormPicker
 					v-if="chartForms.length > 1"
@@ -175,33 +149,6 @@
 				:items="optionBars"
 				:form="chartForm"
 				:max="askedCount" />
-
-			<!-- The same answers within each answer to another question: who said what,
-			     by department, by year group. The two nodes below are deliberately
-			     adjacent: a v-else-if has to sit next to its v-if. -->
-			<div v-if="groupingQuestions.length" class="question-summary__compare">
-				<BreakdownPicker
-					:options="groupingOptions"
-					:modelValue="selectedGrouping"
-					:placeholder="t('forms', 'One total for everyone')"
-					@update:modelValue="onGroupingChosen" />
-				<template v-if="crossTab.columns.length">
-					<ChartHeatmap
-						:rows="crossTab.rows"
-						:columns="crossTab.columns"
-						:cells="crossTab.cells"
-						:caption="crossTabCaption"
-						wrapLabels />
-					<p class="question-summary__compare-counts">
-						{{ crossTabCounts }}
-					</p>
-				</template>
-				<p
-					v-else-if="groupBy !== null"
-					class="question-summary__ranking-description">
-					{{ t('forms', 'Nobody answered both questions.') }}
-				</p>
-			</div>
 		</div>
 
 		<div
@@ -259,16 +206,34 @@
 				}}</span>
 			</li>
 		</ul>
-		<!-- The bars, columns or line as a picture, titled, for a report or a slide.
+		<!-- What can be done with the chart, in one row under it on every card: break it
+		     down by another question, and save it as a picture for a report or a slide.
+		     Kept out of the branches above so that each kind of question places them the
+		     same way; they used to sit in a different order on a choice question and on a
+		     scale, and a reader moving down the page had to look for them each time.
 		     It must come after the list above: a v-else has to sit next to its v-if, and
-		     with this button between them the list attached itself to the button instead,
-		     so every card that offers no download showed the raw answers under its chart. -->
-		<!-- Wrapped so the button sits at the same edge as the two controls above it.
-		     A button is only as wide as its label, so on its own it was placed by the
-		     question's direction while they were placed by the interface's, and an
-		     Arabic question left the card's furniture split between both margins. -->
-		<div v-if="hasDownloadableChart" dir="auto">
+		     with these between them the list attached itself to them instead, so every
+		     card showed the raw answers under its chart. -->
+		<!-- `dir="auto"` so the row sits at the same edge as the chart-type buttons: it
+		     holds interface words, not the question's, and on its own it was placed by
+		     the question's direction, which split an Arabic card's controls between both
+		     margins. -->
+		<div
+			v-if="groupingQuestions.length || hasDownloadableChart"
+			class="question-summary__actions"
+			dir="auto">
+			<BreakdownPicker
+				v-if="groupingQuestions.length"
+				:options="groupingOptions"
+				:modelValue="selectedGrouping"
+				:placeholder="
+					numericStats
+						? t('forms', 'One average for everyone')
+						: t('forms', 'One total for everyone')
+				"
+				@update:modelValue="onGroupingChosen" />
 			<NcButton
+				v-if="hasDownloadableChart"
 				class="question-summary__download"
 				variant="tertiary"
 				@click="downloadChart">
@@ -277,6 +242,46 @@
 				</template>
 				{{ t('forms', 'Download chart') }}
 			</NcButton>
+		</div>
+
+		<!-- The breakdown itself, under the row that asked for it. Only numeric and
+		     choice questions can be broken down (see groupingQuestions), so the two
+		     cases below are the whole of it: the average by department, by year group,
+		     for a number; who said what within each group, for a set of options. -->
+		<div
+			v-if="groupingQuestions.length && groupBy !== null"
+			class="question-summary__compare">
+			<template v-if="numericStats">
+				<template v-if="comparisonBars.length">
+					<ChartFigure
+						:items="comparisonBars"
+						form="bars"
+						:max="comparisonMax"
+						hidePercentage />
+					<p class="question-summary__compare-counts">
+						{{ comparisonCounts }}
+					</p>
+				</template>
+				<p v-else class="question-summary__ranking-description">
+					{{ t('forms', 'Nobody answered both questions.') }}
+				</p>
+			</template>
+			<template v-else>
+				<template v-if="crossTab.columns.length">
+					<ChartHeatmap
+						:rows="crossTab.rows"
+						:columns="crossTab.columns"
+						:cells="crossTab.cells"
+						:caption="crossTabCaption"
+						wrapLabels />
+					<p class="question-summary__compare-counts">
+						{{ crossTabCounts }}
+					</p>
+				</template>
+				<p v-else class="question-summary__ranking-description">
+					{{ t('forms', 'Nobody answered both questions.') }}
+				</p>
+			</template>
 		</div>
 		<NcButton
 			v-if="hiddenAnswerCount > 0"
@@ -298,7 +303,7 @@
 import IconDownload from '@material-symbols/svg-400/outlined/download.svg?raw'
 import IconFile from '@material-symbols/svg-400/outlined/draft.svg?raw'
 import { showError } from '@nextcloud/dialogs'
-import { translate as t } from '@nextcloud/l10n'
+import { translatePlural as n, translate as t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -1473,12 +1478,18 @@ export default {
 		margin-block-start: 4px;
 	}
 
-	&__download {
-		margin-block-start: 4px;
+	// End-aligned so that, once the breakdown select is open with its label above it,
+	// the download button lines up with the select's box rather than with its label.
+	&__actions {
+		align-items: flex-end;
+		display: flex;
+		flex-wrap: wrap;
+		gap: 4px 8px;
+		margin-block-start: 8px;
 	}
 
 	&__compare {
-		margin-block: 16px 8px;
+		margin-block: 8px;
 	}
 
 	&__compare-counts {
@@ -1637,7 +1648,7 @@ export default {
 	}
 
 	.question-summary__text-toggle,
-	.question-summary__download {
+	.question-summary__actions {
 		display: none;
 	}
 }

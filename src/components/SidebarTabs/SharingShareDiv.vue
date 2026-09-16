@@ -35,7 +35,11 @@
 				{{ t('forms', 'Delete responses') }}
 			</NcActionCheckbox>
 			<NcActionSeparator />
-			<NcActionButton :disabled="locked || busy" @click="removeShare">
+			<!-- Closes first: it opens a confirmation, which the menu would otherwise cover. -->
+			<NcActionButton
+				closeAfterClick
+				:disabled="locked || busy"
+				@click="removeShare">
 				<template #icon>
 					<NcIconSvgWrapper :svg="IconClose" />
 				</template>

@@ -109,6 +109,7 @@
 </template>
 
 <script>
+import { translate as t } from '@nextcloud/l10n'
 import moment from '@nextcloud/moment'
 import NcActionCheckbox from '@nextcloud/vue/components/NcActionCheckbox'
 import NcActionInput from '@nextcloud/vue/components/NcActionInput'
@@ -459,7 +460,7 @@ export default {
 
 <style lang="scss" scoped>
 .question__content :deep(.vue-date-time-picker__wrapper) {
-	width: 100%;
-	max-width: 300px;
+	inline-size: 100%;
+	max-inline-size: 300px;
 }
 </style>

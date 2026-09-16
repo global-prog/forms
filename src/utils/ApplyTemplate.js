@@ -33,13 +33,25 @@ export async function createFormFromTemplate(template) {
 	if (template.form.settings) {
 		keyValuePairs.settings = template.form.settings
 	}
-	await axios.patch(
-		generateOcsUrl('apps/forms/api/v3/forms/{id}', { id: form.id }),
-		{ keyValuePairs },
-	)
 
-	for (const question of template.questions) {
-		await addQuestion(form.id, question)
+	// Every step after the first can fail on its own, and a failure there would leave an
+	// untitled or half-built form in the list while the caller reports that nothing was
+	// created. Remove it again so the error is true; if that removal fails as well, the
+	// original error is still the one worth reporting.
+	try {
+		await axios.patch(
+			generateOcsUrl('apps/forms/api/v3/forms/{id}', { id: form.id }),
+			{ keyValuePairs },
+		)
+
+		for (const question of template.questions) {
+			await addQuestion(form.id, question)
+		}
+	} catch (error) {
+		await axios
+			.delete(generateOcsUrl('apps/forms/api/v3/forms/{id}', { id: form.id }))
+			.catch(() => {})
+		throw error
 	}
 
 	// The form was created empty and named afterwards, so give back the named one: the

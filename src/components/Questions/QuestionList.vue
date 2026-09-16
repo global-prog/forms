@@ -308,16 +308,27 @@ export default {
 	position: absolute;
 }
 
+// The insert row sits in the gap between two question cards and takes no room of its
+// own. The gap (24px) is narrower than the button, so the row is centred on it and
+// reaches a little into both cards; it is raised above the next card, whose solid
+// background would otherwise paint over it. The offset is measured from the inside of
+// the card's 2px border: the border, half the gap, then half the button.
 .question-insert {
-	position: relative;
-	margin-block-end: -34px;
-	inset-block-end: -16px;
-	margin-inline-start: -12px;
-	width: calc(100% - var(--default-clickable-area));
+	position: absolute;
+	inset-block-end: calc(-1 * (2px + 12px + var(--default-clickable-area) / 2));
+	inset-inline: 0;
+	z-index: 1;
 	display: flex;
 	justify-content: center;
 	opacity: 0;
 	transition: opacity 0.12s ease;
+	// The row is as wide as the card; only the button in it should catch the pointer,
+	// not the strip of the next card it lies over.
+	pointer-events: none;
+
+	> * {
+		pointer-events: auto;
+	}
 }
 
 .question-insert.is-mobile {

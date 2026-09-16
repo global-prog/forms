@@ -126,13 +126,14 @@
 			</p>
 		</div>
 		<!-- clearable adds a "no colour" choice, the only way back to the theme colour
-		     once one has been picked. -->
+		     once one has been picked. The button is as wide as the address field above,
+		     so the two controls share both edges. -->
 		<NcColorPicker
 			class="settings-colour"
 			clearable
 			:modelValue="accentColor || undefined"
 			@update:modelValue="onAccentColorChange">
-			<NcButton :disabled="formArchived || locked" variant="secondary">
+			<NcButton :disabled="formArchived || locked" variant="secondary" wide>
 				{{
 					accentColor
 						? t('forms', 'Change accent colour')
@@ -661,25 +662,33 @@ export default {
 
 		/**
 		 * Who holds the lock and for how long, as one sentence per case so translators
-		 * never have to fit a separately translated "never" into it.
+		 * never have to fit a separately translated "never" into it. The same sentences
+		 * as the sharing tab, so the two notices read alike and share one translation.
 		 *
 		 * @return {string} the notice text
 		 */
 		lockNotice() {
-			const lockedBy = this.form.lockedBy || this.form.ownerId
+			const lockHolder = this.form.lockedBy || this.form.ownerId
 			const currentUser = getCurrentUser()
 			// Only the account id is known for anyone else; for oneself the display name is.
-			const user =
-				currentUser && lockedBy === currentUser.uid
-					? currentUser.displayName || lockedBy
-					: lockedBy
+			const lockedBy =
+				currentUser && lockHolder === currentUser.uid
+					? currentUser.displayName || lockHolder
+					: lockHolder
+			// Shown as plain text, so the values need no HTML escaping or sanitising.
 			if (this.lockedUntil === '') {
-				return t('forms', 'Locked permanently by {user}', { user })
+				return t('forms', 'Locked by {lockedBy}', { lockedBy }, undefined, {
+					escape: false,
+					sanitize: false,
+				})
 			}
-			return t('forms', 'Locked by {user}, unlocks {time}', {
-				user,
-				time: this.lockedUntil,
-			})
+			return t(
+				'forms',
+				'Locked by {lockedBy} until {lockedUntil}',
+				{ lockedBy, lockedUntil: this.lockedUntil },
+				undefined,
+				{ escape: false, sanitize: false },
+			)
 		},
 
 		/** @return {boolean} whether the custom submission message can be opened for editing */
@@ -1373,6 +1382,10 @@ export default {
 	margin-inline-start: 40px;
 }
 
+.settings-colour {
+	margin-block: 8px 4px;
+}
+
 .settings-header-image {
 	margin-block: 8px 4px;
 
@@ -1407,12 +1420,13 @@ export default {
 	font-weight: bold;
 }
 
+// The picker lines up with the fields and switches around it; its hint keeps the indent
+// every other hint has.
 .settings-language {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
 	margin-block: 8px;
-	padding-inline-start: 16px;
 
 	&__label {
 		color: var(--color-text-maxcontrast);

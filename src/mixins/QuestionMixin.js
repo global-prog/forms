@@ -5,6 +5,7 @@ import axios from '@nextcloud/axios'
  */
 import { showError } from '@nextcloud/dialogs'
 import { emit } from '@nextcloud/event-bus'
+import { translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl } from '@nextcloud/router'
 import debounce from 'debounce'
 import Question from '../components/Questions/Question.vue'

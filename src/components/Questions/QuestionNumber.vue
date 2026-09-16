@@ -84,6 +84,7 @@
 
 <script>
 import IconNumeric from '@material-symbols/svg-400/outlined/123.svg?raw'
+import { translate as t } from '@nextcloud/l10n'
 import debounce from 'debounce'
 import NcActionCheckbox from '@nextcloud/vue/components/NcActionCheckbox'
 import NcActionInput from '@nextcloud/vue/components/NcActionInput'

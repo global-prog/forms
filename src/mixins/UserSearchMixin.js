@@ -30,7 +30,19 @@ export default {
 			suggestions: [],
 			// Increases with each search, so only the newest reply is shown
 			searchToken: 0,
+			// Whether a search is waiting for the debounce or its reply
+			searchPending: false,
 		}
+	},
+	created() {
+		// Per instance rather than a method: a debounced method is one timer shared by
+		// every component using this mixin, so one search could swallow another's query.
+		this.debounceGetSuggestions = debounce((...args) => {
+			this.getSuggestions(...args)
+		}, INPUT_DEBOUNCE_MS)
+	},
+	beforeUnmount() {
+		this.debounceGetSuggestions.clear()
 	},
 	computed: {
 		/**
@@ -59,18 +71,18 @@ export default {
 			if (this.isValidQuery) {
 				// already set loading to have proper ux feedback during debounce
 				this.loading = true
+				this.searchPending = true
 				this.debounceGetSuggestions(query, shareType)
+			} else if (this.searchPending) {
+				// Emptied while a search was waiting or running: drop it, or its spinner
+				// would stay on over the recommendations. Only then, so the spinner of a
+				// recommendations request that is still loading is left alone.
+				this.debounceGetSuggestions.clear()
+				this.searchToken++
+				this.searchPending = false
+				this.loading = false
 			}
 		},
-
-		/**
-		 * Debounce getSuggestions
-		 *
-		 * @param {...*} args arguments to pass
-		 */
-		debounceGetSuggestions: debounce(function (...args) {
-			this.getSuggestions(...args)
-		}, INPUT_DEBOUNCE_MS),
 
 		/**
 		 * Get suggestions
@@ -126,6 +138,7 @@ export default {
 				}
 			} finally {
 				if (token === this.searchToken) {
+					this.searchPending = false
 					this.loading = false
 				}
 			}

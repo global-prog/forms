@@ -125,15 +125,21 @@
 					<NcIconSvgWrapper :svg="FormsIcon" :size="64" />
 				</template>
 				<template v-if="canCreateForms" #action>
-					<NcButton
-						variant="primary"
-						:disabled="creatingForm"
-						@click="onNewForm">
-						{{ t('forms', 'Create a form') }}
-					</NcButton>
-					<NcButton variant="secondary" @click="showTemplates = true">
-						{{ t('forms', 'Start from a template') }}
-					</NcButton>
+					<div class="forms-emptycontent__actions">
+						<NcButton
+							variant="primary"
+							wide
+							:disabled="creatingForm"
+							@click="onNewForm">
+							{{ t('forms', 'Create a form') }}
+						</NcButton>
+						<NcButton
+							variant="secondary"
+							wide
+							@click="showTemplates = true">
+							{{ t('forms', 'Start from a template') }}
+						</NcButton>
+					</div>
 				</template>
 			</NcEmptyContent>
 
@@ -149,15 +155,21 @@
 					<NcIconSvgWrapper :svg="FormsIcon" :size="64" />
 				</template>
 				<template v-if="canCreateForms" #action>
-					<NcButton
-						variant="primary"
-						:disabled="creatingForm"
-						@click="onNewForm">
-						{{ t('forms', 'Create new form') }}
-					</NcButton>
-					<NcButton variant="secondary" @click="showTemplates = true">
-						{{ t('forms', 'Start from a template') }}
-					</NcButton>
+					<div class="forms-emptycontent__actions">
+						<NcButton
+							variant="primary"
+							wide
+							:disabled="creatingForm"
+							@click="onNewForm">
+							{{ t('forms', 'Create new form') }}
+						</NcButton>
+						<NcButton
+							variant="secondary"
+							wide
+							@click="showTemplates = true">
+							{{ t('forms', 'Start from a template') }}
+						</NcButton>
+					</div>
 				</template>
 			</NcEmptyContent>
 		</NcAppContent>
@@ -707,5 +719,19 @@ export default {
 
 .forms-emptycontent {
 	height: 100%;
+}
+
+// The action slot is a plain block, so the two buttons stacked at their own text widths.
+// One grid track per button, sized 1fr, gives both the width of the wider one; side by
+// side where they fit, one above the other on a phone, equal either way.
+.forms-emptycontent__actions {
+	display: inline-grid;
+	grid-auto-flow: column;
+	grid-auto-columns: 1fr;
+	gap: calc(var(--default-grid-baseline) * 2);
+
+	@media (max-width: 480px) {
+		grid-auto-flow: row;
+	}
 }
 </style>

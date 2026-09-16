@@ -810,6 +810,10 @@
     "This form was closed and is no longer taking responses" : "أُغلق هذا النموذج ولم يعد يستقبل ردودًا",
     "Submitting form …" : "جارٍ إرسال النموذج …",
     "Your latest answers could not be saved. Keep this page open and try again." : "تعذّر حفظ آخر إجاباتك. أبقِ هذه الصفحة مفتوحة وحاول مرة أخرى.",
-    "There was an error while loading the response" : "حدث خطأ أثناء تحميل الرد"
+    "There was an error while loading the response" : "حدث خطأ أثناء تحميل الرد",
+    "Option deleted" : "تم حذف الخيار",
+    "Row deleted" : "تم حذف الصف",
+    "Column deleted" : "تم حذف العمود",
+    "Link created" : "تم إنشاء الرابط"
 },"pluralForm" :"nplurals=6; plural=n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 && n%100<=10 ? 3 : n%100>=11 && n%100<=99 ? 4 : 5;"
 }

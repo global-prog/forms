@@ -63,7 +63,8 @@
 						</template>
 						{{ t('forms', 'Copy to clipboard') }}
 					</NcActionLink>
-					<NcActionButton @click="openQrDialog(share)">
+					<!-- The menu would otherwise stay open above the dialog it opens. -->
+					<NcActionButton closeAfterClick @click="openQrDialog(share)">
 						<template #icon>
 							<NcIconSvgWrapper :svg="IconQr" />
 						</template>
@@ -233,7 +234,7 @@ import IconLinkVariant from '@material-symbols/svg-400/outlined/link_2.svg?raw'
 import IconQr from '@material-symbols/svg-400/outlined/qr_code.svg?raw'
 import { getCurrentUser } from '@nextcloud/auth'
 import axios from '@nextcloud/axios'
-import { showError } from '@nextcloud/dialogs'
+import { showError, showSuccess } from '@nextcloud/dialogs'
 import { loadState } from '@nextcloud/initial-state'
 import { translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl } from '@nextcloud/router'
@@ -305,7 +306,11 @@ export default {
 
 	data() {
 		return {
-			isLoading: false,
+			/**
+			 * Share requests still running. A count rather than a flag, so the first of two
+			 * overlapping requests to finish does not lift the busy state for the other.
+			 */
+			pendingRequests: 0,
 			appConfig: loadState(appName, 'appConfig'),
 			qrDialogText: '',
 
@@ -324,9 +329,14 @@ export default {
 
 	computed: {
 		lockedNotice() {
-			const lockedBy = this.form.lockedBy
-				? this.form.lockedBy
-				: this.form.ownerId
+			const lockHolder = this.form.lockedBy || this.form.ownerId
+			const currentUser = getCurrentUser()
+			// The same wording as the settings tab: only the account id is known for
+			// anyone else, for oneself the display name is.
+			const lockedBy =
+				currentUser && lockHolder === currentUser.uid
+					? currentUser.displayName || lockHolder
+					: lockHolder
 			if (this.lockedUntil === '') {
 				return t('forms', 'Locked by {lockedBy}', { lockedBy }, undefined, {
 					escape: false,
@@ -341,6 +351,11 @@ export default {
 				undefined,
 				{ escape: false, sanitize: false },
 			)
+		},
+
+		/** @return {boolean} whether any share request is still running */
+		isLoading() {
+			return this.pendingRequests > 0
 		},
 
 		/** Whether the removal dialog is about a public link rather than a person, group or team */
@@ -437,7 +452,7 @@ export default {
 		 * @param {object} newShare the share object
 		 */
 		async addShare(newShare) {
-			this.isLoading = true
+			this.pendingRequests++
 
 			try {
 				const response = await axios.post(
@@ -460,7 +475,7 @@ export default {
 				})
 				showError(t('forms', 'There was an error while adding the share'))
 			} finally {
-				this.isLoading = false
+				this.pendingRequests--
 			}
 		},
 
@@ -469,7 +484,7 @@ export default {
 			if (this.isLoading) {
 				return
 			}
-			this.isLoading = true
+			this.pendingRequests++
 
 			try {
 				const response = await axios.post(
@@ -484,11 +499,13 @@ export default {
 
 				// Add new share
 				this.$emit('addShare', share)
+				// The new row can appear out of view on a phone, so say that it worked.
+				showSuccess(t('forms', 'Link created'))
 			} catch (error) {
 				logger.error('Error adding public link', { error })
 				showError(t('forms', 'There was an error while adding the link'))
 			} finally {
-				this.isLoading = false
+				this.pendingRequests--
 			}
 		},
 
@@ -517,7 +534,7 @@ export default {
 			if (this.isLoading) {
 				return
 			}
-			this.isLoading = true
+			this.pendingRequests++
 
 			try {
 				const response = await axios.patch(
@@ -544,7 +561,7 @@ export default {
 				})
 				showError(t('forms', 'There was an error while updating the share'))
 			} finally {
-				this.isLoading = false
+				this.pendingRequests--
 			}
 		},
 
@@ -574,7 +591,7 @@ export default {
 			if (!share) {
 				return
 			}
-			this.isLoading = true
+			this.pendingRequests++
 
 			try {
 				await axios.delete(
@@ -588,7 +605,7 @@ export default {
 				logger.error('Error while removing share', { error, share })
 				showError(t('forms', 'There was an error while removing the share'))
 			} finally {
-				this.isLoading = false
+				this.pendingRequests--
 			}
 		},
 

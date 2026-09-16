@@ -239,14 +239,21 @@ export default {
 .top-bar {
 	display: flex;
 	align-items: center;
-	align-self: flex-end;
+	// The full width of the content column, with the controls kept at the end. Sized to
+	// its controls, the bar's ground covered only them, and questions scrolled past in
+	// plain sight beside the view switch.
+	align-self: stretch;
 	// allow to wrap on small screens
 	flex-wrap: wrap;
 	justify-content: flex-end;
 
-	// align with navigation and sidebar toggle, but ensure it is not overlayed
-	padding: var(--app-navigation-padding);
-	margin-inline: var(--default-clickable-area);
+	// Clear of the navigation and sidebar toggles. Padding rather than margin, so the
+	// ground reaches the column's edges; both toggles are stacked above the content and
+	// stay on top of it.
+	padding-block: var(--app-navigation-padding);
+	padding-inline: calc(
+		var(--app-navigation-padding) + var(--default-clickable-area)
+	);
 
 	position: sticky;
 	top: 0;
@@ -256,8 +263,8 @@ export default {
 	background-color: var(--color-main-background);
 
 	&--has-sidebar {
-		// Remove margin as the toggle button does not exist when open
-		margin-inline-end: 0;
+		// The sidebar toggle does not exist while the sidebar is open
+		padding-inline-end: var(--app-navigation-padding);
 	}
 }
 </style>

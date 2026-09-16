@@ -16,7 +16,10 @@
   option in the select is what returns the card to a single figure for everyone.
 -->
 <template>
-	<div class="breakdown-picker" dir="auto">
+	<div
+		class="breakdown-picker"
+		:class="{ 'breakdown-picker--open': revealed }"
+		dir="auto">
 		<NcButton
 			v-if="!revealed"
 			variant="tertiary"
@@ -111,7 +114,13 @@ export default {
 
 <style lang="scss" scoped>
 .breakdown-picker {
-	margin-block-start: 8px;
+	// It shares a wrapping row with the card's other chart actions. Once open, the
+	// select needs a width of its own: in a row that sizes it to its content, a
+	// percentage width has nothing to be a percentage of and the box collapses.
+	&--open {
+		flex: 1 1 240px;
+		max-inline-size: 320px;
+	}
 
 	&__select {
 		inline-size: 100%;

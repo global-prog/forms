@@ -23,6 +23,7 @@
 			:name="
 				t('forms', 'Loading {title} …', { title: form.title }, undefined, {
 					escape: false,
+					sanitize: false,
 				})
 			">
 			<template #icon>
@@ -40,7 +41,7 @@
 					'Form \'{title}\' is archived and cannot be modified.',
 					{ title: form.title },
 					undefined,
-					{ escape: false },
+					{ escape: false, sanitize: false },
 				)
 			">
 			<template #icon>
@@ -65,7 +66,7 @@
 								: lockedUntilFormatted,
 					},
 					undefined,
-					{ escape: false },
+					{ escape: false, sanitize: false },
 				)
 			">
 			<template #icon>
@@ -284,6 +285,13 @@ export default {
 			questionMenuOpened: false,
 			activeQuestionType: null,
 
+			// Title and description edits still inside the autosave's debounce wait, so
+			// the status does not claim everything is saved while it is not yet sent.
+			formEditsPending: {
+				title: false,
+				description: false,
+			},
+
 			// when set to a number, the next created question will be inserted at this index
 			insertMenuOpenedIndex: null,
 
@@ -342,9 +350,9 @@ export default {
 						'"{question}" and any answers given to it in the %n responses already received will be deleted. It cannot be undone.',
 						responses,
 						{ question: title },
-						// The dialog shows the message as text; escaping would put entities
-						// such as &amp; on screen.
-						{ escape: false },
+						// The dialog shows the message as text; escaping or sanitising would
+						// put entities such as &amp; on screen.
+						{ escape: false, sanitize: false },
 					)
 				: n(
 						'forms',
@@ -356,7 +364,11 @@ export default {
 
 		/** @return {string} what the title and description autosave is doing */
 		saveStatus() {
-			if (this.formSavingCount > 0) {
+			if (
+				this.formSavingCount > 0
+				|| this.formEditsPending.title
+				|| this.formEditsPending.description
+			) {
 				return t('forms', 'Saving …')
 			}
 			if (this.formSaveFailed) {
@@ -496,6 +508,7 @@ export default {
 
 		onTitleChange() {
 			this.resizeTitle()
+			this.formEditsPending.title = true
 			this.saveTitle()
 		},
 
@@ -532,6 +545,7 @@ export default {
 		updateDescription({ target }) {
 			this.form.description = target.value
 			this.resizeDescription()
+			this.formEditsPending.description = true
 			this.saveDescription()
 		},
 
@@ -539,10 +553,14 @@ export default {
 		 * Title & description save methods
 		 */
 		saveTitle: debounce(async function () {
+			// saveFormProperty counts itself as running before its first await, so the
+			// status never flickers to "saved" in between.
+			this.formEditsPending.title = false
 			this.saveFormProperty('title')
 		}, INPUT_DEBOUNCE_MS),
 
 		saveDescription: debounce(async function () {
+			this.formEditsPending.description = false
 			this.saveFormProperty('description')
 		}, INPUT_DEBOUNCE_MS),
 

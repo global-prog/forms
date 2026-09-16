@@ -266,6 +266,11 @@ export default {
 		display: none;
 	}
 
+	// Level with the title and the cards, which lose their inset on paper.
+	.summary-filter {
+		padding-inline: 0;
+	}
+
 	.summary-filter__printed {
 		display: block;
 		font-weight: bold;

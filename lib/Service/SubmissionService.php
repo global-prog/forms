@@ -1305,10 +1305,18 @@ class SubmissionService {
 		// always gets u so that "." matches a whole Arabic letter, as it does in the browser.
 		// The D modifier stops $ matching before a trailing newline, which the client's
 		// check would not do.
+		// Editors write JavaScript's \uHHHH and \u{H..}, which the browser understands and
+		// PCRE rejects, so they are rewritten to PCRE's \x{H..}. A \u whose backslash is
+		// itself escaped is literal text and stays as it is.
+		$toPcre = static fn (string $body): string => preg_replace(
+			'/(?<!\\\\)((?:\\\\\\\\)*)\\\\u(?:\{([0-9A-Fa-f]{1,6})\}|([0-9A-Fa-f]{4}))/',
+			'$1\\x{$2$3}',
+			$body,
+		) ?? $body;
 		if (preg_match('~^/(.*)/([ims]*)$~sD', $pattern, $parts) === 1) {
-			$pattern = "\x01" . $parts[1] . "\x01" . $parts[2] . 'u';
+			$pattern = "\x01" . $toPcre($parts[1]) . "\x01" . $parts[2] . 'u';
 		} else {
-			$pattern = "\x01" . $pattern . "\x01u";
+			$pattern = "\x01" . $toPcre($pattern) . "\x01u";
 		}
 
 		// Validate regex syntax

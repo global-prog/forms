@@ -56,6 +56,7 @@
 
 <script>
 import IconClose from '@material-symbols/svg-400/outlined/close.svg?raw'
+import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcColorPicker from '@nextcloud/vue/components/NcColorPicker'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'

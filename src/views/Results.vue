@@ -28,7 +28,11 @@
 
 		<!-- Showing submissions -->
 		<header>
-			<h2 dir="auto" :style="{ textAlign: authorTextAlign }">
+			<h2
+				ref="resultsHeading"
+				dir="auto"
+				tabindex="-1"
+				:style="{ textAlign: authorTextAlign }">
 				{{ formTitle }}
 			</h2>
 			<!-- A live region, so a finished search or a deletion is announced. -->
@@ -611,6 +615,10 @@ export default {
 					respondent: submission.userDisplayName,
 					date: moment(submission.timestamp, 'X').format('LLL'),
 				},
+				undefined,
+				// The dialog shows its message as text; escaping or sanitising would put
+				// entities such as &amp; on screen.
+				{ escape: false, sanitize: false },
 			)
 		},
 
@@ -1168,6 +1176,9 @@ export default {
 		focusAfterDelete(nextId) {
 			const section = this.$refs.responsesSection
 			if (!section) {
+				// The list itself is gone (the last response, or the last search match, was
+				// deleted), so the heading is the nearest stable place to land.
+				this.$refs.resultsHeading?.focus()
 				return
 			}
 			const card =
@@ -1336,31 +1347,34 @@ export default {
 		max-width: 750px;
 	}
 
-	// Title & description header
+	// Title & description header. The same box as the section below it, with the
+	// title, the count and the view switcher inset by the cards' own 20px, so every
+	// left edge on the page is one of two lines rather than four slightly different ones.
 	header {
 		display: flex;
 		flex-direction: column;
 		margin-block-end: 24px;
-		margin-inline-start: 40px;
-		// The full width plus that margin overflowed any screen narrower than the
-		// header's maximum, clipping the start of the title and making the whole view
-		// scroll sideways on a phone. Wide screens still get the full 750px.
-		width: calc(100% - 40px);
 
 		h2 {
 			margin-block-end: 0; // because the input field has enough padding
 			font-size: 28px;
 			font-weight: bold;
 			margin-block-start: 32px;
-			padding-inline-start: 14px;
+			padding-inline: 20px;
 			padding-block-end: 8px;
 			overflow: hidden;
 			text-overflow: ellipsis;
 			white-space: nowrap;
+
+			// Focused from script after the last response is deleted; a mouse user who
+			// deleted it needs no ring there, a keyboard user keeps it.
+			&:focus:not(:focus-visible) {
+				outline: none;
+			}
 		}
 
 		p {
-			padding-inline-start: 14px;
+			padding-inline: 20px;
 		}
 	}
 
@@ -1369,8 +1383,9 @@ export default {
 		flex-wrap: wrap;
 		align-items: center;
 		margin-block-start: 8px;
-		margin-inline-start: 8px;
-		padding-inline-start: calc(14px - var(--border-radius-pill));
+		// A pill's label sits a corner radius in from its edge; this lines the label,
+		// not the rounded edge, up with the title.
+		padding-inline-start: calc(20px - var(--border-radius-pill));
 
 		&__toggle {
 			margin-inline-end: 1em;
@@ -1470,6 +1485,11 @@ export default {
 	.results-print-meta {
 		color: #555;
 		display: block !important;
+	}
+
+	// The cards lose their inset on paper, so the title does too and stays level with them.
+	.app-content header :is(h2, p) {
+		padding-inline: 0 !important;
 	}
 
 	// A chart broken across a page turn cannot be read as one chart.

@@ -35,6 +35,11 @@ export const DATE_STORAGE_FORMATS = {
  * as /body/flags keeps its flags (only i, m and s, which both engines treat alike), anything
  * else is taken as the body alone.
  *
+ * The server always matches in UTF-8 mode, so the body is compiled with u first; a body that
+ * u mode rejects but the server accepts (such as \- outside a class) is read without it.
+ * Some dialect gaps remain: PCRE's \p{Arabic} is written \p{Script=Arabic} here, and
+ * neither engine reads the other's spelling.
+ *
  * @param {string} pattern the stored pattern
  * @return {RegExp|null} the expression, or null when the pattern is empty or not valid
  */
@@ -43,14 +48,18 @@ export function compilePattern(pattern) {
 		return null
 	}
 	const delimited = pattern.match(/^\/(.*)\/([ims]*)$/s)
+	const body = delimited ? delimited[1] : pattern
+	const flags = delimited ? [...new Set(delimited[2])].join('') : ''
 	try {
-		if (delimited) {
-			const flags = [...new Set(delimited[2])].join('')
-			return new RegExp(delimited[1], flags)
-		}
-		return new RegExp(pattern)
+		// Without u, \p{..} and \u{..} are read as literal text and an astral character
+		// as two halves, where the server sees one character.
+		return new RegExp(body, flags + 'u')
 	} catch {
-		return null
+		try {
+			return new RegExp(body, flags)
+		} catch {
+			return null
+		}
 	}
 }
 
