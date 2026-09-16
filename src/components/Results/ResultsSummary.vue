@@ -22,7 +22,7 @@
 
 		<!-- Ranking questions: Borda count with average rank -->
 		<div v-if="question.type === 'ranking'" class="question-summary__statistic">
-			<p class="question-summary__ranking-description">
+			<p class="question-summary__ranking-description" dir="auto">
 				{{
 					t(
 						'forms',
@@ -45,6 +45,7 @@
 				:items="rankingBars"
 				:form="chartForm"
 				:max="maxBordaScore"
+				:label="t('forms', 'Points per option')"
 				hidePercentage />
 		</div>
 
@@ -60,19 +61,27 @@
 			<dl class="numeric-summary__figures">
 				<div>
 					<dt>{{ t('forms', 'Average') }}</dt>
-					<dd>{{ numericStats.mean }}</dd>
+					<dd>
+						<bdi dir="ltr">{{ numericStats.mean }}</bdi>
+					</dd>
 				</div>
 				<div>
 					<dt>{{ t('forms', 'Median') }}</dt>
-					<dd>{{ numericStats.median }}</dd>
+					<dd>
+						<bdi dir="ltr">{{ numericStats.median }}</bdi>
+					</dd>
 				</div>
 				<div>
 					<dt>{{ t('forms', 'Lowest') }}</dt>
-					<dd>{{ numericStats.min }}</dd>
+					<dd>
+						<bdi dir="ltr">{{ numericStats.min }}</bdi>
+					</dd>
 				</div>
 				<div>
 					<dt>{{ t('forms', 'Highest') }}</dt>
-					<dd>{{ numericStats.max }}</dd>
+					<dd>
+						<bdi dir="ltr">{{ numericStats.max }}</bdi>
+					</dd>
 				</div>
 				<div>
 					<dt>{{ t('forms', 'Responses') }}</dt>
@@ -80,7 +89,9 @@
 				</div>
 				<div v-if="npsScore !== null">
 					<dt>{{ t('forms', 'Net Promoter Score') }}</dt>
-					<dd>{{ npsScore }}</dd>
+					<dd>
+						<bdi dir="ltr">{{ npsScore }}</bdi>
+					</dd>
 				</div>
 			</dl>
 
@@ -100,7 +111,8 @@
 					<li
 						v-for="group in npsGroups"
 						:key="group.key"
-						class="nps-breakdown__item">
+						class="nps-breakdown__item"
+						dir="auto">
 						<span
 							class="nps-breakdown__swatch"
 							:class="`nps-breakdown__segment--${group.key}`"
@@ -123,8 +135,19 @@
 					:items="bucketBars"
 					:form="chartForm"
 					:max="numericStats.busiest"
+					:label="t('forms', 'Responses per value')"
 					hidePercentage />
 			</template>
+			<!-- Too many different free numbers to draw one bar each. Said so, rather than
+			     leaving the card without a chart and without a reason. -->
+			<p v-else class="question-summary__ranking-description" dir="auto">
+				{{
+					t(
+						'forms',
+						'These answers are too varied to chart. The figures above summarise them.',
+					)
+				}}
+			</p>
 		</div>
 
 		<!-- Answers with countable results for visualization. A single-choice question can
@@ -175,7 +198,10 @@
 
 		<!-- Typed answers are grouped by what they say, most frequent first; the long tail
 		     waits behind a button on screen but is always printed. -->
-		<ul v-else class="question-summary__text">
+		<ul
+			v-else
+			:id="`question-answers-${question.id}`"
+			class="question-summary__text">
 			<!-- Do not wrap the following line between tags! `white-space:pre-line` respects `\n` but would produce additional empty first line -->
 			<!-- eslint-disable-next-line -->
 			<li v-for="(answer, index) in listedAnswers" :key="answer.id" dir="auto" :class="{ 'question-summary__text-more': index > shownAtFirst && !showAllAnswers }">
@@ -253,16 +279,25 @@
 			class="question-summary__compare">
 			<template v-if="numericStats">
 				<template v-if="comparisonBars.length">
+					<!-- Says what the bars are, as the cross-tab's caption does. -->
+					<p class="question-summary__compare-caption" dir="auto">
+						{{ comparisonCaption }}
+					</p>
 					<ChartFigure
 						:items="comparisonBars"
 						form="bars"
 						:max="comparisonMax"
+						:label="comparisonCaption"
 						hidePercentage />
-					<p class="question-summary__compare-counts">
-						{{ comparisonCounts }}
-					</p>
+					<ul
+						class="question-summary__compare-counts"
+						:dir="interfaceDirection">
+						<li v-for="entry in comparisonCounts" :key="entry.key">
+							{{ entry.text }}
+						</li>
+					</ul>
 				</template>
-				<p v-else class="question-summary__ranking-description">
+				<p v-else class="question-summary__ranking-description" dir="auto">
 					{{ t('forms', 'Nobody answered both questions.') }}
 				</p>
 			</template>
@@ -274,28 +309,39 @@
 						:cells="crossTab.cells"
 						:caption="crossTabCaption"
 						wrapLabels />
-					<p class="question-summary__compare-counts">
-						{{ crossTabCounts }}
+					<p class="question-summary__compare-counts" dir="auto">
+						{{
+							t(
+								'forms',
+								'Percentages are of the people in each column.',
+							)
+						}}
 					</p>
+					<ul
+						class="question-summary__compare-counts"
+						:dir="interfaceDirection">
+						<li v-for="entry in crossTabCounts" :key="entry.key">
+							{{ entry.text }}
+						</li>
+					</ul>
 				</template>
-				<p v-else class="question-summary__ranking-description">
+				<p v-else class="question-summary__ranking-description" dir="auto">
 					{{ t('forms', 'Nobody answered both questions.') }}
 				</p>
 			</template>
 		</div>
-		<NcButton
+		<div
 			v-if="hiddenAnswerCount > 0"
 			class="question-summary__text-toggle"
-			variant="tertiary"
-			@click="showAllAnswers = !showAllAnswers">
-			{{
-				showAllAnswers
-					? t('forms', 'Show fewer')
-					: t('forms', 'Show all {count} answers', {
-							count: listedAnswers.length - 1,
-						})
-			}}
-		</NcButton>
+			dir="auto">
+			<NcButton
+				variant="tertiary"
+				:aria-expanded="showAllAnswers ? 'true' : 'false'"
+				:aria-controls="`question-answers-${question.id}`"
+				@click="showAllAnswers = !showAllAnswers">
+				{{ showAllAnswers ? t('forms', 'Show fewer') : showAllLabel }}
+			</NcButton>
+		</div>
 	</div>
 </template>
 
@@ -303,7 +349,7 @@
 import IconDownload from '@material-symbols/svg-400/outlined/download.svg?raw'
 import IconFile from '@material-symbols/svg-400/outlined/draft.svg?raw'
 import { showError } from '@nextcloud/dialogs'
-import { translatePlural as n, translate as t } from '@nextcloud/l10n'
+import { isRTL, translatePlural as n, translate as t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -393,6 +439,16 @@ export default {
 	},
 
 	computed: {
+		/**
+		 * The interface's own direction, for lines the interface writes around the
+		 * author's words. `dir="auto"` would take it from whichever label came first.
+		 *
+		 * @return {string} 'rtl' or 'ltr'
+		 */
+		interfaceDirection() {
+			return isRTL() ? 'rtl' : 'ltr'
+		},
+
 		/**
 		 * Which way this one question should be laid out.
 		 *
@@ -668,7 +724,10 @@ export default {
 				return t(
 					'forms',
 					'{type} ({description})',
-					{ type: label, description: descriptionParts.join(', ') },
+					{
+						type: label,
+						description: descriptionParts.join(t('forms', ', ')),
+					},
 					undefined,
 					{ escape: false, sanitize: false },
 				)
@@ -846,6 +905,11 @@ export default {
 				this.gridColumns.map((column) => {
 					const cell = this.gridValue[row.id]?.[column.id] ?? {}
 					if (isNumber) {
+						// Nobody answered this cell: a dash, so it is not read as a real
+						// average of zero.
+						if (!cell.answersCount) {
+							return { value: 0, display: '–' }
+						}
 						const average = cell.averageValue ?? 0
 						// Rounded for reading, as every other average in the summary
 						// is; the tint keeps the exact value.
@@ -1154,6 +1218,7 @@ export default {
 				label: group.label,
 				value: group.mean,
 				percentage: 0,
+				count: group.count,
 				note: n('forms', '%n response', '%n responses', group.count),
 			}))
 		},
@@ -1182,10 +1247,30 @@ export default {
 				(question) => question.id === this.groupBy,
 			)
 			return grouping
-				? t('forms', '{question} by {group}', {
-						question: this.question.text,
-						group: grouping.text,
-					})
+				? t(
+						'forms',
+						'{question} by {group}',
+						{ question: this.question.text, group: grouping.text },
+						undefined,
+						// Printed as text, so not escaped: an "&" in either would read "&amp;".
+						{ escape: false, sanitize: false },
+					)
+				: ''
+		},
+
+		/** @return {string} what the average-by-group bars show */
+		comparisonCaption() {
+			const grouping = this.groupingQuestions.find(
+				(question) => question.id === this.groupBy,
+			)
+			return grouping
+				? t(
+						'forms',
+						'Average {question} by {group}',
+						{ question: this.question.text, group: grouping.text },
+						undefined,
+						{ escape: false, sanitize: false },
+					)
 				: ''
 		},
 
@@ -1194,28 +1279,26 @@ export default {
 		 * reader cannot tell 100% of two people from 100% of two hundred, and a checkbox
 		 * question's columns total past 100% with no explanation.
 		 *
-		 * @return {string} the groups and their sizes
+		 * @return {{key: string, text: string}[]} each group and its size
 		 */
 		crossTabCounts() {
-			const sizes = this.crossTab.columns
-				.map(
-					(column) =>
-						`${column.label}: ${n('forms', '%n response', '%n responses', column.respondents)}`,
-				)
-				.join(' · ')
-			return `${t('forms', 'Percentages are of the people in each column.')} ${sizes}`
+			return this.crossTab.columns.map((column) => ({
+				key: column.key,
+				text: this.groupSize(column.label, column.respondents),
+			}))
 		},
 
 		/**
 		 * How many people are in each group, in words: an average of four means little
 		 * without knowing whether four people or four hundred gave it.
 		 *
-		 * @return {string} the groups and their sizes
+		 * @return {{key: string, text: string}[]} each group and its size
 		 */
 		comparisonCounts() {
-			return this.comparisonBars
-				.map((bar) => `${bar.label}: ${bar.note}`)
-				.join(' · ')
+			return this.comparisonBars.map((bar) => ({
+				key: bar.key,
+				text: this.groupSize(bar.label, bar.count),
+			}))
 		},
 
 		/** @return {number} the widest an average bar can be: the top of the scale */
@@ -1252,8 +1335,37 @@ export default {
 			return this.answerTypes[this.question.type]?.predefined === true
 		},
 
+		/**
+		 * The button that reveals the rest of the list. Short and long answers are
+		 * grouped by what they say, so for them it counts different answers, not
+		 * responses.
+		 *
+		 * @return {string} the label
+		 */
+		showAllLabel() {
+			const count = this.listedAnswers.length - 1
+			return ['short', 'long'].includes(this.question.type)
+				? n(
+						'forms',
+						'Show all %n different answer',
+						'Show all %n different answers',
+						count,
+					)
+				: n('forms', 'Show all %n answer', 'Show all %n answers', count)
+		},
+
 		/** @return {number} how many answers wait behind the button */
 		hiddenAnswerCount() {
+			// Only the typed-answer list hides anything. A charted question has a
+			// response per person too, but no list for a button to open.
+			if (
+				this.question.type === 'ranking'
+				|| this.numericStats
+				|| this.answerTypes[this.question.type]?.predefined
+				|| this.question.type === 'grid'
+			) {
+				return 0
+			}
 			return Math.max(0, this.listedAnswers.length - 1 - this.shownAtFirst)
 		},
 
@@ -1348,6 +1460,27 @@ export default {
 	},
 
 	methods: {
+		/**
+		 * One group's size, as a sentence a translator can reorder. The group's name is
+		 * the author's text and is isolated, so an Arabic name in an English line (or the
+		 * other way round) does not pull the colon and the number out of place.
+		 *
+		 * @param {string} label the group's name
+		 * @param {number} count how many people are in it
+		 * @return {string} the line
+		 */
+		groupSize(label, count) {
+			return n(
+				'forms',
+				'{group}: %n response',
+				'{group}: %n responses',
+				count,
+				// First-strong and pop isolates: a bidi isolation inside plain text.
+				{ group: `\u2068${label}\u2069` },
+				{ escape: false, sanitize: false },
+			)
+		},
+
 		/**
 		 * Which form to open this question in.
 		 *
@@ -1492,10 +1625,27 @@ export default {
 		margin-block: 8px;
 	}
 
+	&__compare-caption {
+		color: var(--color-text-maxcontrast);
+		margin-block-end: 8px;
+		text-align: start;
+	}
+
 	&__compare-counts {
 		color: var(--color-text-maxcontrast);
 		margin-block-start: 4px;
 		overflow-wrap: anywhere;
+		text-align: start;
+	}
+
+	// The group sizes, one entry each, flowing onto as many lines as they need.
+	ul#{&}__compare-counts {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0 16px;
+		list-style: none;
+		margin-block-end: 0;
+		padding: 0;
 	}
 
 	&__text {
@@ -1522,6 +1672,9 @@ export default {
 	.color__field {
 		width: 100px;
 		height: var(--default-clickable-area);
+		// An edge, so a white answer shows on a light card and a black one on a dark card.
+		border: 1px solid var(--color-border-maxcontrast);
+		box-sizing: border-box;
 		border-radius: var(--border-radius-element);
 		position: relative;
 		inset-block-start: 12px;

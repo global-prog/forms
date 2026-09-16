@@ -72,7 +72,7 @@
 				<!-- eslint-enable vue/no-unused-refs -->
 				<!-- eslint-disable vue/no-v-html -->
 				<div
-					v-if="!loading && !success && !!formDescription"
+					v-if="!success && !!formDescription"
 					class="form-desc"
 					dir="auto"
 					:style="{ textAlign: authorTextAlign }"
@@ -90,9 +90,17 @@
 						)
 					}}</bdi>
 				</p>
-				<!-- Generate form information message-->
-				<p v-if="infoMessage" class="info-message">
-					<bdi>{{ infoMessage }}</bdi>
+				<!-- Form information message. Only beside the questions it describes: on the
+				     thank-you, closed, expired and full screens there is nothing to mark as
+				     mandatory. Each sentence is translated and shown on its own. -->
+				<p
+					v-if="showsQuestions && infoSentences.length"
+					class="info-message">
+					<!-- The space is real text, not a margin, so the line can still wrap
+					     between two sentences. -->
+					<template v-for="(sentence, i) in infoSentences" :key="sentence"
+						>{{ i ? ' ' : '' }}<bdi>{{ sentence }}</bdi></template
+					>
 				</p>
 				<!-- Printed only. On paper nothing can evaluate a display condition, so
 				     the sheet carries every question and has to say so; otherwise a
@@ -135,11 +143,10 @@
 				<!-- Quiz result. Graded server-side, so the answer key is never sent to the
 				     browser and cannot be read off the page before submitting. -->
 				<template v-if="quizScore || canSubmitAnother" #action>
-					<div
-						v-if="quizScore"
-						class="quiz-result"
-						role="status"
-						aria-live="polite">
+					<!-- Not a live region: it is inserted already filled, which screen
+					     readers usually skip. The score is announced with the thank-you
+					     text through the persistent region at the top instead. -->
+					<div v-if="quizScore" class="quiz-result">
 						<p class="quiz-result__score">
 							{{
 								t('forms', 'You scored {score} out of {max}', {
@@ -269,7 +276,7 @@
 					t('forms', 'This form opens on {date}.', { date: openingDate })
 				">
 				<template #icon>
-					<NcIconSvgWrapper :svg="IconScheduleSvg" size="64" />
+					<NcIconSvgWrapper :svg="IconScheduleSvg" :size="64" />
 				</template>
 			</NcEmptyContent>
 			<NcEmptyContent
@@ -349,20 +356,36 @@
 							:style="{ inlineSize: `${progressPercent}%` }" />
 					</div>
 				</div>
-				<p
+				<!-- The retry button sits beside the live region, not in it, so the
+				     announcement is the message alone. -->
+				<div
 					v-if="canKeepDraft"
 					class="draft-note"
-					:class="{ 'draft-note--failed': draftSaveFailed }"
-					role="status"
-					aria-live="polite">
-					<NcIconSvgWrapper
-						v-if="draftSaveFailed || draftEverSaved"
-						class="draft-note__mark"
-						:svg="draftSaveFailed ? IconWarningSvg : IconCheckSvg"
-						:size="18"
-						inline />
-					{{ draftMessage }}
-				</p>
+					:class="{ 'draft-note--failed': draftSaveFailed }">
+					<!-- tabindex -1: focus comes here once a retry succeeds and its button
+					     goes away, rather than falling to the page body. -->
+					<p
+						ref="draftStatus"
+						class="draft-note__status"
+						role="status"
+						aria-live="polite"
+						tabindex="-1">
+						<NcIconSvgWrapper
+							v-if="draftSaveFailed || draftEverSaved"
+							class="draft-note__mark"
+							:svg="draftSaveFailed ? IconWarningSvg : IconCheckSvg"
+							:size="18"
+							inline />
+						{{ draftMessage }}
+					</p>
+					<NcButton
+						v-if="draftSaveFailed"
+						size="small"
+						variant="tertiary"
+						@click.prevent="retryDraft">
+						{{ t('forms', 'Retry') }}
+					</NcButton>
+				</div>
 				<!-- Next or Submit always comes last, where the forward action is expected.
 				     Clear form used to sit after Next, so on every page but the last the
 				     destructive button took that place. -->
@@ -405,11 +428,7 @@
 						{{ t('forms', 'Back') }}
 					</NcButton>
 					<NcButton
-						v-if="
-							pageCount > 1
-							&& currentPage < pageCount - 1
-							&& !submitsHere
-						"
+						v-if="isBeforeLastPage"
 						alignment="center-reverse"
 						class="submit-button submit-button--forward"
 						variant="primary"
@@ -419,7 +438,7 @@
 					<!-- aria-disabled rather than disabled while sending: a disabled button
 					     drops keyboard focus, which is the thing this keeps in place. -->
 					<NcButton
-						v-if="currentPage >= pageCount - 1 || submitsHere"
+						v-if="!isBeforeLastPage"
 						alignment="center-reverse"
 						class="submit-button submit-button--forward"
 						:aria-busy="loading ? 'true' : undefined"
@@ -780,6 +799,20 @@ export default {
 		},
 
 		/**
+		 * Whether this page leads on to another rather than ending the form: Next is
+		 * shown here, and nothing may submit the response from it.
+		 *
+		 * @return {boolean} true while pages remain before the response can be sent
+		 */
+		isBeforeLastPage() {
+			return (
+				this.pageCount > 1
+				&& this.currentPage < this.pageCount - 1
+				&& !this.submitsHere
+			)
+		},
+
+		/**
 		 * The quiz result to show, or null when this was not a quiz.
 		 *
 		 * Numbers are tidied for display: whole scores should not read as "3.0 out of 5".
@@ -825,9 +858,25 @@ export default {
 				}))
 		},
 
-		/** @return {string} optional banner image address for this form */
+		/**
+		 * Optional banner image address for this form. Only a full http(s) address is
+		 * used: anything else, such as a host name typed without a scheme, would be read
+		 * as a path on this server and show respondents a broken image. A path that
+		 * starts with a slash is meant as one on this server, and forms saved with such
+		 * a path keep their banner.
+		 *
+		 * @return {string} the address, or empty
+		 */
 		headerImage() {
-			return this.form.settings?.headerImage || ''
+			const value = (this.form.settings?.headerImage || '').trim()
+			try {
+				const { protocol } = value.startsWith('/')
+					? new URL(value, window.location.href)
+					: new URL(value)
+				return protocol === 'https:' || protocol === 'http:' ? value : ''
+			} catch {
+				return ''
+			}
 		},
 
 		/**
@@ -1027,10 +1076,7 @@ export default {
 		 */
 		draftMessage() {
 			if (this.draftSaveFailed) {
-				return t(
-					'forms',
-					'Your latest answers could not be saved. Keep this page open and try again.',
-				)
+				return t('forms', 'Your latest answers could not be saved yet.')
 			}
 			return this.draftEverSaved
 				? t(
@@ -1076,21 +1122,48 @@ export default {
 			return !this.isArchived && !this.isClosed && !this.isExpired
 		},
 
-		infoMessage() {
-			let message = ''
+		/**
+		 * The sentences of the information line, kept apart rather than glued into one
+		 * string, so each stays a whole translation.
+		 *
+		 * @return {string[]} the sentences that apply to this form
+		 */
+		infoSentences() {
+			const sentences = []
 			if (this.form.isAnonymous) {
-				message += t('forms', 'Responses are anonymous.')
+				sentences.push(t('forms', 'Responses are anonymous.'))
 			}
 			if (!this.form.isAnonymous && this.isLoggedIn) {
-				message += t('forms', 'Responses are connected to your account.')
+				sentences.push(
+					t('forms', 'Responses are connected to your account.'),
+				)
 			}
 			if (this.isRequiredUsed) {
-				message +=
-					' '
-					+ t('forms', 'An asterisk (*) indicates mandatory questions.')
+				sentences.push(
+					t('forms', 'An asterisk (*) indicates mandatory questions.'),
+				)
 			}
+			return sentences
+		},
 
-			return message
+		/**
+		 * Whether the questions are on screen, rather than one of the status screens.
+		 * Mirrors the order of the v-if chain in the template, which ends with the form.
+		 *
+		 * @return {boolean} true when the form itself is shown
+		 */
+		showsQuestions() {
+			return !(
+				this.success
+				|| (!this.form.canSubmit
+					&& !this.isMaxSubmissionsReached
+					&& !this.submissionId)
+				|| (this.isMaxSubmissionsReached && !this.submissionId)
+				|| (this.isExpired && !this.hasChangesSinceOpen)
+				|| (this.isWaitingToOpen && !this.canEditForm)
+				|| this.isClosed
+				|| this.isArchived
+			)
 		},
 
 		/**
@@ -1271,9 +1344,38 @@ export default {
 				// success view). Screen readers need a moment to process the new DOM
 				// before a polite live region update registers.
 				setTimeout(() => {
-					this.successAnnouncement =
-						this.form.submissionMessage
-						|| t('forms', 'Thank you for completing the form!')
+					// Read as plain text: the author's message is Markdown, and its source
+					// would be read out with every asterisk and bracket. DOMParser, not
+					// innerHTML, so nothing in the message is loaded or run.
+					const html = this.submissionMessageHTML
+					let text = ''
+					if (html) {
+						const { body } = new DOMParser().parseFromString(
+							html,
+							'text/html',
+						)
+						// textContent runs paragraphs and list items straight into each
+						// other ("Thanks.Results follow"), so a space follows each block.
+						for (const block of body.querySelectorAll(
+							'p, li, br, h1, h2, h3, h4, h5, h6, blockquote, pre, tr',
+						)) {
+							block.after(' ')
+						}
+						text = body.textContent.replace(/\s+/g, ' ').trim()
+					}
+					if (!text) {
+						text = t('forms', 'Thank you for completing the form!')
+					}
+					// The quiz result appears already filled in, so it is announced here.
+					if (this.quizScore) {
+						text +=
+							' '
+							+ t('forms', 'You scored {score} out of {max}', {
+								score: this.quizScore.score,
+								max: this.quizScore.max,
+							})
+					}
+					this.successAnnouncement = text
 				}, 100)
 			} else {
 				this.successAnnouncement = ''
@@ -1292,9 +1394,7 @@ export default {
 			this.cancelDraftSave()
 			this.resetData()
 			this.quizResult = null
-			this.draftEverSaved = false
-			this.draftIsCurrent = true
-			this.draftSaveFailed = false
+			this.resetDraftNote()
 			// Fetch full form on change, and wait for it: the draft belongs to the new
 			// form, and reading it before the form is known would read the old one.
 			// Opening yet another form meanwhile cancels this fetch, and the rest is
@@ -1364,9 +1464,7 @@ export default {
 		 * through everything to reach the new content.
 		 */
 		focusPageStart() {
-			const gently = !window.matchMedia?.('(prefers-reduced-motion: reduce)')
-				?.matches
-			window.scrollTo({ top: 0, behavior: gently ? 'smooth' : 'auto' })
+			this.scrollToTop()
 			this.$nextTick(() => {
 				const first = (this.$refs.questions ?? []).find(
 					(component) =>
@@ -1375,6 +1473,22 @@ export default {
 				)
 				this.focusHeadingOf(first)
 			})
+		},
+
+		/**
+		 * Scroll the view back to its top.
+		 *
+		 * Inside the app the page does not scroll the window: the view's own root element
+		 * is the scroller, so that is the one reset. The window is reset as well for
+		 * layouts where the document itself scrolls. Scrolling the root into view would
+		 * not do: that moves only its ancestors, never its own scroll position.
+		 */
+		scrollToTop() {
+			const gently = !window.matchMedia?.('(prefers-reduced-motion: reduce)')
+				?.matches
+			const behavior = gently ? 'smooth' : 'auto'
+			this.$el?.scrollTo?.({ top: 0, behavior })
+			window.scrollTo({ top: 0, behavior })
 		},
 
 		/**
@@ -1422,6 +1536,18 @@ export default {
 		/** Bring the clock up to date. */
 		tickClock() {
 			this.now = Math.floor(Date.now() / 1000)
+		},
+
+		/**
+		 * Try again to keep the answers, at the respondent's request. When it works the
+		 * button disappears, so focus moves to the note that now says the answers are
+		 * saved instead of being dropped.
+		 */
+		async retryDraft() {
+			this.cancelDraftSave()
+			if (await this.writeDraft()) {
+				this.$nextTick(() => this.$refs.draftStatus?.focus?.())
+			}
 		},
 
 		/** Retry a save that failed, now that the connection is back. */
@@ -1799,6 +1925,9 @@ export default {
 				}
 
 				this.answers = answers
+				// The response as stored is the starting point: leaving without changing
+				// it loses nothing, and must not be questioned.
+				this.answersAtOpen = JSON.stringify(answers)
 			} catch (error) {
 				logger.error('Error while loading response', { error })
 				showError(
@@ -1967,7 +2096,8 @@ export default {
 			// Focus the next control the respondent can actually reach: skip hidden
 			// questions, other pages and disabled controls. Fieldsets are listed among a
 			// form's elements too, but take no focus. In the footer only the forward
-			// action counts, so a second Enter never lands on Clear form or Back.
+			// action counts, so a second Enter never lands on Clear form or Back, nor on
+			// the draft note's Retry.
 			const next = formInputs
 				.slice(sourceInputIndex + 1)
 				.find(
@@ -1976,6 +2106,7 @@ export default {
 						&& input.type !== 'hidden'
 						&& input.tagName !== 'FIELDSET'
 						&& input.offsetParent !== null
+						&& !input.closest('.draft-note')
 						&& (!input.closest('.form-buttons')
 							|| input.classList.contains('submit-button--forward')),
 				)
@@ -1984,10 +2115,16 @@ export default {
 
 		/**
 		 * Ctrl+Enter typically fires submit on forms.
-		 * Some inputs do automatically, while some need explicit handling
+		 * Some inputs do automatically, while some need explicit handling.
+		 * Before the last page it moves on instead, as Next would: submitting from
+		 * there would send the response with the later pages never seen.
 		 */
 		onKeydownCtrlEnter() {
-			this.$refs.form.requestSubmit()
+			if (this.isBeforeLastPage) {
+				this.goToNextPage()
+				return
+			}
+			this.$refs.form?.requestSubmit()
 		},
 
 		/*
@@ -2050,6 +2187,12 @@ export default {
 			if (this.loading) {
 				return
 			}
+			// Only the page that ends the form sends it. The browser can still fire a
+			// submit from an earlier page (Enter in a lone field, say), and that would
+			// send the response with the pages not yet reached left out.
+			if (this.isBeforeLastPage) {
+				return
+			}
 			const components = (this.$refs.questions ?? []).filter(this.isAnswerable)
 			const validation = components.map(
 				async (question) => await question.validate(),
@@ -2066,13 +2209,26 @@ export default {
 					throw new Error('One question did not validate sucessfully')
 				}
 
-				// in case no answer is set or all are empty show the confirmation dialog
-				if (
-					Object.keys(this.answers).length === 0
-					|| Object.values(this.answers).every(
-						(answers) => answers.length === 0,
-					)
-				) {
+				// in case nothing would be sent, show the confirmation dialog. Judged on
+				// what is actually sent, so an answer to a question hidden since does
+				// not count. A conditional question answers with an object, which is
+				// empty when neither its trigger nor any follow-up has a value.
+				const isEmpty = (answer) => {
+					if (Array.isArray(answer)) {
+						return answer.length === 0
+					}
+					if (answer && typeof answer === 'object') {
+						return (
+							!answer.trigger?.length
+							&& !Object.values(answer.subQuestions ?? {}).some(
+								(values) => values?.length,
+							)
+						)
+					}
+					return answer === undefined || answer === null || answer === ''
+				}
+				const sent = Object.values(this.submittedAnswers)
+				if (sent.every(isEmpty)) {
 					this.showConfirmEmptyModal = true
 				} else {
 					// otherwise do the real submit
@@ -2096,6 +2252,12 @@ export default {
 			}
 			const page = this.questionPages[question.id]
 			if (page !== undefined && page !== this.currentPage) {
+				// Going back to a page already visited rewinds the history to it, as
+				// Back would; otherwise the next Back would land on this same page.
+				const visited = this.pageHistory.indexOf(page)
+				if (visited !== -1) {
+					this.pageHistory.splice(visited)
+				}
 				this.currentPage = page
 			}
 			// Wait for the error note the check has just added, so it is scrolled into
@@ -2169,6 +2331,7 @@ export default {
 				// The server forgot the draft as it stored the response; cancel any save
 				// still waiting, or it would write the draft straight back.
 				this.cancelDraftSave()
+				this.resetDraftNote()
 				emit('forms:last-updated:set', this.form.id)
 			} catch (error) {
 				const errorMessage = error.response?.data?.ocs?.meta?.message
@@ -2217,6 +2380,21 @@ export default {
 			this.deleteFormFieldFromLocalStorage()
 			this.clearDraft()
 			this.resetData()
+			// The Clear form button is disabled now that nothing is answered, so the
+			// dialog cannot hand focus back to it. Wait for the dialog to let go of
+			// focus, then start again from the top and say what happened.
+			window.setTimeout(() => this.focusPageStart(), 0)
+			showSuccess(t('forms', 'Answers cleared'))
+		},
+
+		/**
+		 * Forget what the draft note said about the previous response, which a fresh
+		 * one has nothing to do with.
+		 */
+		resetDraftNote() {
+			this.draftEverSaved = false
+			this.draftSaveFailed = false
+			this.draftIsCurrent = true
 		},
 
 		/**
@@ -2225,10 +2403,11 @@ export default {
 		 */
 		onSubmitAnother() {
 			this.resetData()
+			this.resetDraftNote()
 			this.quizResult = null
 			this.applyPrefilledAnswers()
 			this.$nextTick(() => {
-				this.$el?.scrollIntoView?.({ block: 'start' })
+				this.scrollToTop()
 				// The button just pressed has gone; without this focus was left nowhere.
 				const first = (this.$refs.questions ?? []).find(
 					(component) =>
@@ -2440,8 +2619,16 @@ export default {
 			color: var(--color-text-maxcontrast);
 			display: flex;
 			gap: 6px;
+			flex-wrap: wrap;
 			margin-block: 4px 8px;
 			padding-inline: 20px;
+
+			&__status {
+				align-items: center;
+				display: flex;
+				gap: 6px;
+				margin: 0;
+			}
 
 			&__mark {
 				color: var(--color-element-success);

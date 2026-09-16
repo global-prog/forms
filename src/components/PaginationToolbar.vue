@@ -10,7 +10,7 @@
 				variant="tertiary"
 				:disabled="totalPages === 1 || pageNumber <= 1"
 				:aria-label="t('forms', 'Go to first page')"
-				@click="pageNumber = 1">
+				@click="goTo(1, $event)">
 				<template #icon>
 					<NcIconSvgWrapper :svg="IconFirst" />
 				</template>
@@ -19,7 +19,7 @@
 				variant="tertiary"
 				:disabled="totalPages === 1 || pageNumber <= 1"
 				:aria-label="t('forms', 'Go to previous page')"
-				@click="pageNumber--">
+				@click="goTo(pageNumber - 1, $event)">
 				<template #icon>
 					<NcIconSvgWrapper :svg="IconBack" />
 				</template>
@@ -46,7 +46,7 @@
 				variant="tertiary"
 				:disabled="totalPages === 1 || pageNumber >= totalPages"
 				:aria-label="t('forms', 'Go to next page')"
-				@click="pageNumber++">
+				@click="goTo(pageNumber + 1, $event)">
 				<template #icon>
 					<NcIconSvgWrapper :svg="IconForward" />
 				</template>
@@ -55,7 +55,7 @@
 				variant="tertiary"
 				:disabled="totalPages === 1 || pageNumber >= totalPages"
 				:aria-label="t('forms', 'Go to last page')"
-				@click="pageNumber = totalPages">
+				@click="goTo(totalPages, $event)">
 				<template #icon>
 					<NcIconSvgWrapper :svg="IconLast" />
 				</template>
@@ -140,6 +140,35 @@ export default {
 				}
 				this.$emit('update:offset', (pageNumber - 1) * this.limit)
 			},
+		},
+	},
+
+	methods: {
+		/**
+		 * @param {number} page the page to show
+		 * @param {?MouseEvent} event the button press
+		 */
+		goTo(page, event) {
+			const button = event?.currentTarget ?? null
+			// A click from Enter or Space carries no click count.
+			const fromKeyboard = event?.detail === 0
+			this.pageNumber = page
+			// Reaching the first or last page disables the button that was just pressed,
+			// and a disabled button drops its focus to the page body. The page picker
+			// sits between the buttons, so keyboard users carry on from there. Pointer
+			// presses are left alone: focusing the picker would raise a phone keyboard.
+			if (!fromKeyboard || !button) {
+				return
+			}
+			this.$nextTick(() => {
+				const active = document.activeElement
+				if (
+					button.disabled
+					&& (!active || active === button || active === document.body)
+				) {
+					this.$el.querySelector('.page-number input')?.focus()
+				}
+			})
 		},
 	},
 }

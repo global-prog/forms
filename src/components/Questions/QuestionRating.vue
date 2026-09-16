@@ -29,7 +29,7 @@
 				type="number"
 				min="2"
 				max="10"
-				:label="t('forms', 'Number of stars')"
+				:label="t('forms', 'Highest rating')"
 				:modelValue="String(maxRating)"
 				@submit="onChangeMax"
 				@input="onChangeMax" />
@@ -53,7 +53,11 @@
 					:key="star"
 					class="rating__star"
 					:class="{ 'rating__star--on': star <= currentValue }"
-					:title="n('forms', '%n star', '%n stars', star)">
+					:title="
+						n('forms', '%n out of {max}', '%n out of {max}', star, {
+							max: maxRating,
+						})
+					">
 					<input
 						class="hidden-visually"
 						type="radio"
@@ -66,6 +70,8 @@
 						:value="star"
 						:checked="star === currentValue"
 						:required="isRequired && !currentValue"
+						:aria-invalid="hasError ? 'true' : undefined"
+						:aria-errormessage="hasError ? errorId : undefined"
 						@change="onPick(star)" />
 					<!-- Larger than the default 20px: five outline glyphs that size, set
 					     in a 44px target, read as decoration beside the question rather
@@ -179,7 +185,9 @@ export default {
 		 */
 		onPick(star, refocus = false) {
 			this.$emit('update:values', star ? [String(star)] : [])
-			this.errorMessage = null
+			// Re-checked rather than simply cleared: clearing a required rating leaves it
+			// unanswered, and the error must stay.
+			this.revalidateIfInvalid()
 			// Clearing removes the Clear button itself, and with it the keyboard focus;
 			// put the focus back on the first star so the respondent stays where they were.
 			if (refocus) {

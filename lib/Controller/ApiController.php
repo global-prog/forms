@@ -2073,6 +2073,9 @@ class ApiController extends OCSController {
 					$mimeTypesPerExtension = method_exists($this->mimeTypeDetector, 'getAllMappings')
 						? $this->mimeTypeDetector->getAllMappings() : [];
 					foreach ($extraSettings['allowedFileExtensions'] as $allowedFileExtension) {
+						// The mapping is keyed by bare lower-case extensions; editors have
+						// stored ".pdf" and "PDF" as well.
+						$allowedFileExtension = strtolower(ltrim((string)$allowedFileExtension, '.'));
 						if (
 							isset($mimeTypesPerExtension[$allowedFileExtension])
 							&& in_array($mimeType, $mimeTypesPerExtension[$allowedFileExtension])

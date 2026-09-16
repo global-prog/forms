@@ -19,7 +19,7 @@
 
 		<NcDialog
 			v-model:open="showModal"
-			contentClasses="modal-content"
+			contentClasses="transfer-ownership__content"
 			:name="t('forms', 'Transfer ownership')"
 			outTransition
 			@close="closeModal">
@@ -40,15 +40,14 @@
 				<!-- eslint-enable vue/no-v-html -->
 				<NcSelectUsers
 					v-model="selected"
-					class="modal-content__select"
+					class="transfer-ownership__select"
+					:inputLabel="t('forms', 'New owner')"
 					:loading="loading"
 					:options="options"
 					:placeholder="t('forms', 'Search for a user')"
 					@search="
 						(query) => asyncSearch(query, [SHARE_TYPES.SHARE_TYPE_USER])
 					" />
-
-				<br />
 
 				<!-- eslint-disable vue/no-v-html -->
 				<p
@@ -70,8 +69,6 @@
 					:label="t('forms', 'Confirmation text')"
 					:aria-describedby="confirmationHintId"
 					:success="confirmationMatches" />
-
-				<br />
 
 				<p>
 					<strong>{{ t('forms', 'This can not be undone.') }}</strong>
@@ -244,15 +241,20 @@ export default {
 }
 </script>
 
-<style lang="scss" scoped>
-:deep(.modal-content) {
+<!-- Not scoped: the dialog is teleported to the end of the page, outside this
+     component, so a scoped rule could never reach its content. The dialog's own
+     class is repeated so this outranks its scoped padding. -->
+<style lang="scss">
+.dialog__content.transfer-ownership__content {
 	padding-inline: 18px;
 
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
 }
+</style>
 
+<style lang="scss" scoped>
 .transfer-button__text {
 	color: var(--color-error-text);
 }

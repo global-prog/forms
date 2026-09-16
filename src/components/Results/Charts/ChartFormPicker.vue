@@ -40,7 +40,7 @@
 			@update:modelValue="$emit('update:modelValue', $event)">
 			<NcIconSvgWrapper
 				class="chart-form-picker__icon"
-				:svg="icons[form]"
+				:svg="iconFor(form)"
 				inline />
 			{{ labels[form] }}
 		</NcCheckboxRadioSwitch>
@@ -49,6 +49,7 @@
 
 <script>
 import IconBars from '@material-symbols/svg-400/outlined/align_horizontal_left.svg?raw'
+import IconBarsRtl from '@material-symbols/svg-400/outlined/align_horizontal_right.svg?raw'
 import IconColumns from '@material-symbols/svg-400/outlined/bar_chart.svg?raw'
 import IconRing from '@material-symbols/svg-400/outlined/donut_small.svg?raw'
 import IconHeatmap from '@material-symbols/svg-400/outlined/grid_on.svg?raw'
@@ -113,6 +114,35 @@ export default {
 				stacked: t('forms', 'Stacked'),
 			},
 		}
+	},
+
+	data() {
+		return {
+			// Whether the chart this picker sits above is drawn right to left.
+			chartRtl: false,
+		}
+	},
+
+	mounted() {
+		// The picker itself reads in the interface's direction (dir="auto"), but the chart
+		// takes the card's. The card's is the one the bars grow from, so it is read off
+		// the element the picker sits in.
+		const host = this.$el.parentElement ?? this.$el
+		this.chartRtl = window.getComputedStyle(host).direction === 'rtl'
+	},
+
+	methods: {
+		/**
+		 * @param {string} form the chart form
+		 * @return {string} its icon; horizontal bars are anchored on the side the chart's
+		 *   bars grow from, so the icon matches the drawing in a right-to-left card
+		 */
+		iconFor(form) {
+			if (form === 'bars' && this.chartRtl) {
+				return IconBarsRtl
+			}
+			return this.icons[form]
+		},
 	},
 }
 </script>

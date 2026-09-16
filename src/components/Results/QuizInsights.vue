@@ -44,7 +44,8 @@
 			class="quiz-insights__chart"
 			form="columns"
 			:items="distribution"
-			:max="graded.length" />
+			:max="graded.length"
+			:label="t('forms', 'How many people got each score')" />
 
 		<h4 class="quiz-insights__subtitle">
 			{{ t('forms', 'Questions, most often missed first') }}

@@ -23,21 +23,35 @@
 		size="normal"
 		@update:open="$emit('update:open', $event)">
 		<div class="logic">
+			<!-- A subquestion is shown by its branch, and the respondent view reads
+			     neither a condition nor a jump on it, so neither is offered. -->
+			<p v-if="isSubQuestion" class="logic__empty">
+				{{
+					t(
+						'forms',
+						'Questions inside a branch are shown by their branch; conditions and jumps are not available here.',
+					)
+				}}
+			</p>
+
 			<!-- ------------------------------------------------ show/hide -->
-			<h4 class="logic__heading">{{ t('forms', 'Show this question') }}</h4>
+			<h4 v-if="!isSubQuestion" class="logic__heading">
+				{{ t('forms', 'Show this question') }}
+			</h4>
 
 			<NcCheckboxRadioSwitch
+				v-if="!isSubQuestion"
 				:modelValue="hasCondition"
 				@update:modelValue="toggleCondition">
 				{{ t('forms', 'Only if earlier answers match') }}
 			</NcCheckboxRadioSwitch>
 
-			<template v-if="hasCondition">
+			<template v-if="hasCondition && !isSubQuestion">
 				<p v-if="sourceCandidates.length === 0" class="logic__empty">
 					{{
 						t(
 							'forms',
-							'There are no earlier questions to base a condition on. Move this question further down the form.',
+							'No earlier question can be used as a condition. Only choice, text, scale and time questions can be.',
 						)
 					}}
 				</p>
@@ -45,15 +59,7 @@
 				<template v-else>
 					<label class="logic__row">
 						<span>{{ t('forms', 'Match') }}</span>
-						<select
-							:value="match"
-							:aria-label="
-								t(
-									'forms',
-									'Whether all rules or any rule must match',
-								)
-							"
-							@change="onMatchChange">
+						<select :value="match" @change="onMatchChange">
 							<option value="all">
 								{{ t('forms', 'all rules') }}
 							</option>
@@ -69,7 +75,7 @@
 							:value="rule.questionId"
 							:aria-label="t('forms', 'Question this rule looks at')"
 							:aria-describedby="
-								ruleProblem(rule) === 'missing'
+								['missing', 'order'].includes(ruleProblem(rule))
 									? problemId(index)
 									: undefined
 							"
@@ -82,6 +88,17 @@
 								disabled
 								:value="rule.questionId">
 								{{ t('forms', 'Deleted question') }}
+							</option>
+							<!-- Still named, so the editor sees which question the rule
+							     looks at while choosing an earlier one. -->
+							<option
+								v-else-if="ruleProblem(rule) === 'order'"
+								disabled
+								:value="rule.questionId">
+								{{
+									sourceText(rule.questionId)
+									|| t('forms', 'Untitled question')
+								}}
 							</option>
 							<option
 								v-for="candidate in sourceCandidates"
@@ -97,14 +114,24 @@
 						<select
 							v-if="ruleKind(rule) === 'choice'"
 							:value="
-								rule.conditions?.[0]?.optionId
+								missingOptionId(rule)
+								?? rule.conditions?.[0]?.optionId
 								?? rule.conditions?.[0]?.optionIds?.[0]
 								?? ''
 							"
 							:aria-label="t('forms', 'Answer that must be chosen')"
+							:aria-describedby="
+								ruleProblem(rule) ? problemId(index) : undefined
+							"
 							@change="onRuleOption(index, $event)">
 							<option disabled value="">
 								{{ t('forms', 'Choose an answer') }}
+							</option>
+							<option
+								v-if="ruleProblem(rule) === 'missing-option'"
+								disabled
+								:value="missingOptionId(rule)">
+								{{ t('forms', 'Deleted answer') }}
 							</option>
 							<option
 								v-for="option in optionsFor(rule.questionId)"
@@ -287,7 +314,6 @@
 						<input
 							type="text"
 							:value="correctAnswer"
-							:aria-label="t('forms', 'The expected answer')"
 							@input="onCorrectAnswerChange" />
 					</label>
 					<NcCheckboxRadioSwitch
@@ -302,7 +328,6 @@
 					<input
 						type="text"
 						:value="feedbackCorrect"
-						:aria-label="t('forms', 'Shown when the answer is right')"
 						@input="onFeedbackChange('feedbackCorrect', $event)" />
 				</label>
 				<label class="logic__row">
@@ -310,13 +335,12 @@
 					<input
 						type="text"
 						:value="feedbackIncorrect"
-						:aria-label="t('forms', 'Shown when the answer is wrong')"
 						@input="onFeedbackChange('feedbackIncorrect', $event)" />
 				</label>
 			</template>
 
 			<!-- ------------------------------------------------ branching -->
-			<template v-if="options.length > 0">
+			<template v-if="options.length > 0 && !isSubQuestion">
 				<h4 class="logic__heading">
 					{{ t('forms', 'After this question, go to') }}
 				</h4>
@@ -337,7 +361,22 @@
 								option: option.text,
 							})
 						"
+						:aria-describedby="
+							targetOf(option.id) === 'missing'
+								? targetProblemId(option.id)
+								: undefined
+						"
 						@change="onTarget(option.id, $event)">
+						<!-- Respondents go to the next page when the section is gone or
+						     now comes earlier; saying so beats a blank field. -->
+						<option
+							v-if="targetOf(option.id) === 'missing'"
+							value="missing"
+							disabled>
+							{{
+								t('forms', 'Removed section (goes to the next page)')
+							}}
+						</option>
 						<option value="next">{{ t('forms', 'Next page') }}</option>
 						<option
 							v-for="section in sectionTargets"
@@ -349,6 +388,17 @@
 							{{ t('forms', 'Submit the form') }}
 						</option>
 					</select>
+					<p
+						v-if="targetOf(option.id) === 'missing'"
+						:id="targetProblemId(option.id)"
+						class="logic__warning">
+						{{
+							t(
+								'forms',
+								'This destination no longer exists; choose another.',
+							)
+						}}
+					</p>
 				</div>
 			</template>
 		</div>
@@ -459,6 +509,16 @@ export default {
 						...TIME_TYPES,
 					].includes(q.type),
 				)
+		},
+
+		/**
+		 * Subquestions live inside their conditional's branches, not in the form's own
+		 * list, so they are the questions that list does not find.
+		 *
+		 * @return {boolean} whether this question sits inside a branch
+		 */
+		isSubQuestion() {
+			return this.allQuestions.length > 0 && this.ownIndex < 0
 		},
 
 		/** @return {Array} sections after this question, i.e. valid jump targets */
@@ -610,20 +670,38 @@ export default {
 		 * question from every respondent, so they are pointed out while editing.
 		 *
 		 * @param {object} rule the rule to check
-		 * @return {string|null} missing, incomplete or pattern; null for a usable rule
+		 * @return {string|null} missing, order, incomplete, missing-option or pattern;
+		 *     null for a usable rule
 		 */
 		ruleProblem(rule) {
 			const kind = this.ruleKind(rule)
 			const condition = rule.conditions?.[0] ?? {}
+			// A source moved below this question is not answered yet when this one is
+			// shown, so the rule can never match; the picker lists earlier ones only.
+			if (
+				!['missing', 'unknown'].includes(kind)
+				&& !this.sourceCandidates.some((q) => q.id === rule.questionId)
+			) {
+				return 'order'
+			}
 			switch (kind) {
 				case 'missing':
 					return 'missing'
-				case 'choice':
-					return (condition.optionId === undefined
-						|| condition.optionId === null)
-						&& !condition.optionIds?.length
-						? 'incomplete'
-						: null
+				case 'choice': {
+					const ids = condition.optionIds?.length
+						? condition.optionIds
+						: [condition.optionId]
+					if (ids.every((id) => id === undefined || id === null)) {
+						return 'incomplete'
+					}
+					// An answer deleted since keeps the rule stored but unmatched.
+					const known = this.optionsFor(rule.questionId).map((o) =>
+						String(o.id),
+					)
+					return ids.every((id) => known.includes(String(id)))
+						? null
+						: 'missing-option'
+				}
 				case 'text':
 					if ((condition.value ?? '') === '') {
 						return 'incomplete'
@@ -656,6 +734,16 @@ export default {
 						'forms',
 						'The question this rule used has been deleted, so the rule can never match. Remove the rule.',
 					)
+				case 'order':
+					return t(
+						'forms',
+						'This rule looks at a later question, so it can never match. Choose an earlier question.',
+					)
+				case 'missing-option':
+					return t(
+						'forms',
+						'The answer this rule used has been deleted. Choose another answer.',
+					)
 				case 'pattern':
 					return t('forms', 'This pattern is not valid')
 				default:
@@ -671,6 +759,42 @@ export default {
 		 */
 		problemId(index) {
 			return `logic-${this.questionId}-rule-${index}-problem`
+		},
+
+		/**
+		 * @param {number} optionId the answer option
+		 * @return {string} id of the warning about that option's destination
+		 */
+		targetProblemId(optionId) {
+			return `logic-${this.questionId}-target-${optionId}-problem`
+		},
+
+		/**
+		 * The select shows the deleted answer rather than a surviving one of the same
+		 * rule, so it matches the warning below it.
+		 *
+		 * @param {object} rule a choice rule
+		 * @return {number|string|undefined} the first answer it names that no longer
+		 *     exists, if any
+		 */
+		missingOptionId(rule) {
+			const condition = rule.conditions?.[0] ?? {}
+			const ids = condition.optionIds?.length
+				? condition.optionIds
+				: [condition.optionId]
+			const known = this.optionsFor(rule.questionId).map((o) => String(o.id))
+			return ids.find(
+				(id) =>
+					id !== undefined && id !== null && !known.includes(String(id)),
+			)
+		},
+
+		/**
+		 * @param {number} questionId a question of the form
+		 * @return {string} its title, or '' when it has none
+		 */
+		sourceText(questionId) {
+			return this.allQuestions.find((q) => q.id === questionId)?.text ?? ''
 		},
 
 		/**
@@ -858,7 +982,11 @@ export default {
 				return 'submit'
 			}
 			if (rule?.target === 'section') {
-				return `section:${rule.questionId}`
+				// A section deleted, or moved above this question, is skipped by the
+				// respondent view, which goes on to the next page.
+				return this.sectionTargets.some((s) => s.id === rule.questionId)
+					? `section:${rule.questionId}`
+					: 'missing'
 			}
 			return 'next'
 		},

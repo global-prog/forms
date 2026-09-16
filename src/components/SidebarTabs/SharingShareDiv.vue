@@ -14,7 +14,19 @@
 			<!-- One string, so the type label keeps its space and translators can order it. -->
 			<span>{{ displayNameWithType }}</span>
 		</div>
-		<NcActions class="share-div__actions" :disabled="!isCurrentUserOwner">
+		<!-- Named after the recipient, so a list of menus is not heard as "Actions" over and over. -->
+		<NcActions
+			class="share-div__actions"
+			:ariaLabel="
+				t(
+					'forms',
+					'Options for {name}',
+					{ name: displayNameWithType },
+					undefined,
+					{ escape: false, sanitize: false },
+				)
+			"
+			:disabled="!isCurrentUserOwner">
 			<NcActionCaption :name="t('forms', 'Permissions')" />
 			<NcActionCheckbox
 				:modelValue="canEditForm"

@@ -528,7 +528,14 @@ export default {
 		},
 
 		focusButton(refName) {
-			this.$nextTick(() => this.$refs[refName].$el.focus())
+			// An action button's root element is its list item, which cannot take focus.
+			this.$nextTick(() => {
+				const el = this.$refs[refName]?.$el
+				const button = el?.matches?.('button')
+					? el
+					: el?.querySelector?.('button')
+				button?.focus()
+			})
 		},
 
 		/**

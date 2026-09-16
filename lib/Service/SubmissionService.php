@@ -1173,6 +1173,11 @@ class SubmissionService {
 				foreach ($conditions as $condition) {
 					$type = $condition['type'] ?? Constants::CONDITION_TYPE_STRING_CONTAINS;
 					$value = $condition['value'] ?? '';
+					// A rule still waiting for its text matches nothing, as on the client:
+					// every text contains the empty string.
+					if ($value === '') {
+						continue;
+					}
 
 					switch ($type) {
 						case Constants::CONDITION_TYPE_STRING_EQUALS:

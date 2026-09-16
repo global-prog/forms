@@ -32,19 +32,24 @@
 				ref="resultsHeading"
 				dir="auto"
 				tabindex="-1"
+				:title="formTitle"
 				:style="{ textAlign: authorTextAlign }">
 				{{ formTitle }}
 			</h2>
 			<!-- A live region, so a finished search or a deletion is announced. -->
 			<p role="status">
-				{{
-					n(
-						'forms',
-						'%n response',
-						'%n responses',
-						filteredSubmissionsCount,
-					)
-				}}
+				<!-- The count is only known once a load has succeeded; until then it
+				     would read as a form nobody answered. -->
+				<template v-if="loadedView !== null && !loadError">
+					{{
+						n(
+							'forms',
+							'%n response',
+							'%n responses',
+							filteredSubmissionsCount,
+						)
+					}}
+				</template>
 			</p>
 
 			<!-- Paper only. On screen the heading above is enough; a printed report also
@@ -304,7 +309,7 @@
 					@update:modelValue="onJumpToQuestion" />
 			</div>
 			<p v-if="!summarySubmissions.length" class="summary-filter-empty">
-				{{ t('forms', 'No responses gave this answer.') }}
+				{{ t('forms', 'No responses match the chosen answers.') }}
 			</p>
 			<div v-else :dir="formDirection" :lang="formLanguage || undefined">
 				<ResponseTimeline :submissions="summarySubmissions" />
@@ -358,7 +363,7 @@
 		<NcDialog
 			v-model:open="showConfirmDeleteDialog"
 			:name="t('forms', 'Delete responses')"
-			:message="t('forms', 'Are you sure you want to delete all responses?')"
+			:message="confirmDeleteAllMessage"
 			:buttons="confirmDeleteButtons" />
 
 		<!-- Deleting all of them asked first; deleting one did not, though it destroys
@@ -391,7 +396,7 @@ import axios from '@nextcloud/axios'
 import { getFilePickerBuilder, showError, showSuccess } from '@nextcloud/dialogs'
 import { emit } from '@nextcloud/event-bus'
 import { FileType } from '@nextcloud/files'
-import { translate as t } from '@nextcloud/l10n'
+import { translatePlural as n, translate as t } from '@nextcloud/l10n'
 import moment from '@nextcloud/moment'
 import { generateOcsUrl, generateUrl } from '@nextcloud/router'
 import { useIsSmallMobile } from '@nextcloud/vue'
@@ -416,6 +421,7 @@ import ResultsSummary from '../components/Results/ResultsSummary.vue'
 import Submission from '../components/Results/Submission.vue'
 import SummaryFilter from '../components/Results/SummaryFilter.vue'
 import TopBar from '../components/TopBar.vue'
+import { loadEcharts } from '../components/Results/Charts/echartsLoader.js'
 import PermissionTypes from '../mixins/PermissionTypes.js'
 import ViewsMixin from '../mixins/ViewsMixin.js'
 import answerTypes from '../models/AnswerTypes.js'
@@ -592,6 +598,21 @@ export default {
 
 	computed: {
 		/**
+		 * The search narrows the list on screen but not what "delete all" removes, so
+		 * the question says how many will go and that it is every one of them.
+		 *
+		 * @return {string} the question to put before deleting every response
+		 */
+		confirmDeleteAllMessage() {
+			return n(
+				'forms',
+				'The %n response to this form will be permanently deleted, including any hidden by your search. This cannot be undone.',
+				'All %n responses to this form will be permanently deleted, including any hidden by your search. This cannot be undone.',
+				this.form?.submissionCount ?? 0,
+			)
+		},
+
+		/**
 		 * Which response is about to be deleted, said in full. A list of responses is a
 		 * column of near-identical rows, and "are you sure?" does not tell the reader
 		 * which one they opened the menu on.
@@ -753,8 +774,26 @@ export default {
 			this.loadController = null
 			this.submissions = []
 			this.loadedView = null
+			// The component is reused for the next form, so a search typed for the last
+			// one, and the page it was on, would otherwise be sent along with it.
+			const hadSearch = this.submissionSearch !== ''
+			this.skipReloadOnOffsetChange = true
+			this.offset = 0
+			this.submissionSearch = ''
 			await this.fetchFullForm(this.form.id)
+			if (hadSearch) {
+				// Clearing the search queued the debounced reload; this load replaces it.
+				const reloads = [].concat(
+					this.$options.watch?.submissionSearch ?? [],
+				)
+				for (const reload of reloads) {
+					reload?.clear?.()
+				}
+			}
 			this.loadFormResults()
+			this.$nextTick(() => {
+				this.skipReloadOnOffsetChange = false
+			})
 			SetWindowTitle(this.formTitle)
 		},
 
@@ -783,6 +822,26 @@ export default {
 		await this.fetchFullForm(this.form.id)
 		this.loadFormResults()
 		SetWindowTitle(this.formTitle)
+	},
+
+	mounted() {
+		// The top bar sticks over the content and wraps to two rows on a phone, so a
+		// question scrolled to the top would sit underneath it. Its measured height
+		// keeps anything scrolled into view clear of it.
+		const bar = this.$el?.querySelector?.('.top-bar')
+		if (bar && window.ResizeObserver) {
+			this.topBarObserver = new ResizeObserver(() => {
+				this.$el?.style?.setProperty(
+					'--results-top-bar-height',
+					`${bar.offsetHeight}px`,
+				)
+			})
+			this.topBarObserver.observe(bar)
+		}
+	},
+
+	beforeUnmount() {
+		this.topBarObserver?.disconnect()
 	},
 
 	methods: {
@@ -897,9 +956,30 @@ export default {
 				// Reloads without limit/offset, so the charts summarise every response.
 				await this.loadFormResults()
 			}
-			this.printedAt = new Date().toLocaleString()
-			// Let the charts paint before the print dialog freezes the page.
+			// In the reader's Nextcloud language, like every other date on the page.
+			this.printedAt = moment().format('LLL')
+			// Let the charts get as far as waiting to be drawn, which printing then starts
+			// for all of them. Each first waits for the chart library, which on a first
+			// visit is still being fetched, and then for its own render.
 			await this.$nextTick()
+			if (this.summaryQuestions.length) {
+				try {
+					await loadEcharts()
+				} catch (error) {
+					// The charts say so themselves; the text of the summary still prints.
+					logger.debug('Chart library not available for printing', {
+						error,
+					})
+				}
+				await this.$nextTick()
+			}
+			await new Promise((resolve) => {
+				if (window.requestAnimationFrame) {
+					window.requestAnimationFrame(() => resolve())
+				} else {
+					setTimeout(resolve, 0)
+				}
+			})
 			window.print()
 		},
 
@@ -1231,14 +1311,22 @@ export default {
 			if (!option) {
 				return
 			}
+			const target = document.getElementById(`question-summary-${option.id}`)
+			if (!target) {
+				return
+			}
 			const gently = !window.matchMedia?.('(prefers-reduced-motion: reduce)')
 				?.matches
-			document
-				.getElementById(`question-summary-${option.id}`)
-				?.scrollIntoView({
-					block: 'start',
-					behavior: gently ? 'smooth' : 'auto',
-				})
+			target.scrollIntoView({
+				block: 'start',
+				behavior: gently ? 'smooth' : 'auto',
+			})
+			// Move focus along with the view, so the keyboard and a screen reader carry
+			// on from the question rather than from the picker at the top.
+			if (!target.hasAttribute('tabindex')) {
+				target.setAttribute('tabindex', '-1')
+			}
+			target.focus({ preventScroll: true })
 		},
 
 		getPicker() {
@@ -1340,6 +1428,13 @@ export default {
 	display: flex;
 	align-items: center;
 	flex-direction: column;
+	// Clear of the sticky top bar, whose height is measured in script.
+	scroll-padding-block-start: calc(var(--results-top-bar-height, 0px) + 8px);
+
+	// Focused from script by "Jump to question"; a ring only for keyboard users.
+	:deep(.question-summary:focus:not(:focus-visible)) {
+		outline: none;
+	}
 
 	header,
 	section {
@@ -1356,15 +1451,24 @@ export default {
 		margin-block-end: 24px;
 
 		h2 {
-			margin-block-end: 0; // because the input field has enough padding
 			font-size: 28px;
 			font-weight: bold;
 			margin-block-start: 32px;
+			// A margin, not padding: the clamp below hides the lines past the third
+			// only down to the padding edge, so padding would show a sliver of the next.
+			margin-block-end: 8px;
 			padding-inline: 20px;
-			padding-block-end: 8px;
+			// A long title wraps to a few lines rather than being cut to a few words on
+			// a phone; the full text is in its tooltip beyond that.
+			overflow-wrap: anywhere;
+			display: -webkit-box;
+			-webkit-box-orient: vertical;
+			-webkit-line-clamp: 3;
 			overflow: hidden;
-			text-overflow: ellipsis;
-			white-space: nowrap;
+
+			@media (max-width: 512px) {
+				font-size: 22px;
+			}
 
 			// Focused from script after the last response is deleted; a mouse user who
 			// deleted it needs no ring there, a keyboard user keeps it.
@@ -1404,8 +1508,9 @@ export default {
 }
 
 .responses-section {
-	// Only ever focused by script, after a deletion; a ring would frame the whole list.
-	&:focus {
+	// Focused by script after a deletion. A mouse user needs no ring around the whole
+	// list; a keyboard user still has to see where focus went.
+	&:focus:not(:focus-visible) {
 		outline: none;
 	}
 
@@ -1490,6 +1595,13 @@ export default {
 	// The cards lose their inset on paper, so the title does too and stays level with them.
 	.app-content header :is(h2, p) {
 		padding-inline: 0 !important;
+	}
+
+	// Paper has no tooltip to read the rest of a long title from.
+	.app-content header h2 {
+		display: block !important;
+		-webkit-line-clamp: none !important;
+		overflow: visible !important;
 	}
 
 	// A chart broken across a page turn cannot be read as one chart.

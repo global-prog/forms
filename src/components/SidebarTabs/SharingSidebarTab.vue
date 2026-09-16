@@ -4,7 +4,7 @@
 -->
 
 <template>
-	<div class="sidebar-tabs__content">
+	<div ref="root" class="sidebar-tabs__content">
 		<NcNoteCard
 			v-if="locked"
 			type="info"
@@ -25,7 +25,8 @@
 				<NcIconSvgWrapper :svg="IconLinkVariant" />
 			</div>
 			<span class="share-div__desc">{{ t('forms', 'Share link') }}</span>
-			<NcActions>
+			<!-- A single entry renders as a plain button named by its own text. -->
+			<NcActions class="share-div__actions share-div__actions--link">
 				<NcActionButton
 					:disabled="locked || !isCurrentUserOwner || isLoading"
 					@click="addPublicLink">
@@ -40,21 +41,29 @@
 			<div
 				v-for="share in publicLinkShares"
 				:key="'share-' + share.shareType + '-' + share.shareWith"
-				:set="void (isEmbeddable = isEmbeddingAllowed(share))"
 				class="share-div share-div--link"
 				:class="{ 'share-div--embeddable': isEmbeddingAllowed(share) }">
 				<div class="share-div__avatar">
 					<NcIconSvgWrapper
-						v-if="isEmbeddable"
+						v-if="isEmbeddingAllowed(share)"
 						:svg="IconLinkBoxVariantOutline" />
 					<NcIconSvgWrapper v-else :svg="IconLinkVariant" />
 				</div>
 				<span class="share-div__desc">{{
-					isEmbeddable
+					isEmbeddingAllowed(share)
 						? t('forms', 'Embeddable link')
 						: t('forms', 'Share link')
 				}}</span>
-				<NcActions :inline="1">
+				<!-- Each row reads its own link through share: the menu entries render after
+				     the whole loop has run, so a value stored per pass would be the last row's. -->
+				<NcActions
+					class="share-div__actions share-div__actions--link"
+					:inline="1"
+					:ariaLabel="
+						isEmbeddingAllowed(share)
+							? t('forms', 'Embeddable link options')
+							: t('forms', 'Share link options')
+					">
 					<NcActionLink
 						:href="getPublicShareLink(share)"
 						@click.prevent="copyLink($event, getPublicShareLink(share))">
@@ -71,7 +80,7 @@
 						{{ t('forms', 'Show QR code') }}
 					</NcActionButton>
 					<NcActionButton
-						v-if="isEmbeddable"
+						v-if="isEmbeddingAllowed(share)"
 						@click="copyEmbeddingCode($event, share)">
 						<template #icon>
 							<NcIconSvgWrapper :svg="IconCodeBrackets" />
@@ -138,7 +147,7 @@
 			:buttons="confirmRemoveShareButtons" />
 
 		<!-- Internal link -->
-		<div class="share-div">
+		<div class="share-div share-div--internal">
 			<div class="share-div__avatar">
 				<NcIconSvgWrapper :svg="IconLinkVariant" />
 			</div>
@@ -236,7 +245,7 @@ import { getCurrentUser } from '@nextcloud/auth'
 import axios from '@nextcloud/axios'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { loadState } from '@nextcloud/initial-state'
-import { translate as t } from '@nextcloud/l10n'
+import { getLanguage, translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl } from '@nextcloud/router'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionLink from '@nextcloud/vue/components/NcActionLink'
@@ -254,6 +263,25 @@ import ShareLinkMixin from '../../mixins/ShareLinkMixin.js'
 import ShareTypes from '../../mixins/ShareTypes.js'
 import logger from '../../utils/Logger.js'
 import OcsResponse2Data from '../../utils/OcsResponse2Data.js'
+
+/**
+ * Compares names the way a reader of the interface language expects, so that for
+ * example the different written forms of an Arabic alef sort together.
+ */
+let nameCollator
+try {
+	// Nextcloud language codes use "_" (pt_BR) where Intl expects "-".
+	nameCollator = new Intl.Collator(getLanguage().replace(/_/g, '-'), {
+		sensitivity: 'base',
+		numeric: true,
+	})
+} catch {
+	// A language code Intl does not know, such as sr@latin
+	nameCollator = new Intl.Collator(undefined, {
+		sensitivity: 'base',
+		numeric: true,
+	})
+}
 
 export default {
 	components: {
@@ -591,6 +619,8 @@ export default {
 			if (!share) {
 				return
 			}
+			const isLink = share.shareType === this.SHARE_TYPES.SHARE_TYPE_LINK
+			let removed = false
 			this.pendingRequests++
 
 			try {
@@ -601,12 +631,62 @@ export default {
 					}),
 				)
 				this.$emit('removeShare', share)
+				removed = true
+				showSuccess(
+					isLink
+						? t('forms', 'Link removed')
+						: t('forms', 'Access removed'),
+				)
 			} catch (error) {
 				logger.error('Error while removing share', { error, share })
 				showError(t('forms', 'There was an error while removing the share'))
 			} finally {
 				this.pendingRequests--
 			}
+			// Only once the request count has dropped, so an "Add link" button that
+			// replaces the last link is no longer disabled when focus looks for it.
+			if (removed) {
+				await this.restoreFocusAfterRemoval(isLink)
+			}
+		},
+
+		/**
+		 * The dialog hands focus back to the removed row's menu button, which then leaves
+		 * the page and drops focus to the top of it. Move it to a row of the same kind that
+		 * stays, or to the internal link, unless the user has already moved on elsewhere.
+		 *
+		 * @param {boolean} wasLink whether a public link rather than a person was removed
+		 */
+		async restoreFocusAfterRemoval(wasLink) {
+			await this.$nextTick()
+			const root = this.$refs.root
+			if (!root) {
+				return
+			}
+			const active = document.activeElement
+			const focusLost =
+				!active
+				|| active === document.body
+				|| !active.isConnected
+				|| (root.contains(active) && active.closest('.v-leave-active'))
+			if (!focusLost) {
+				return
+			}
+			// Rows still animating out carry v-leave-active until they are removed. A menu
+			// with a single entry renders that entry as the root button itself, and a link
+			// entry renders as an anchor, so match the element as well as its descendants.
+			const selector = wasLink
+				? '.share-div__actions--link button, button.share-div__actions--link'
+				: 'ul .share-div__actions button'
+			const target =
+				[...root.querySelectorAll(selector)].find(
+					(button) =>
+						!button.closest('.v-leave-active') && !button.disabled,
+				)
+				?? root.querySelector(
+					'.share-div--internal :is(a, button):not([disabled])',
+				)
+			target?.focus()
 		},
 
 		/**
@@ -624,14 +704,11 @@ export default {
 				return 1
 			}
 
-			// Otherwise sort by displayname
-			if (a.displayName.toLowerCase() < b.displayName.toLowerCase()) {
-				return -1
-			}
-			if (a.displayName.toLowerCase() > b.displayName.toLowerCase()) {
-				return 1
-			}
-			return 0
+			// Otherwise sort by name; a deleted account has no display name, only its id.
+			return nameCollator.compare(
+				a.displayName || a.shareWith || '',
+				b.displayName || b.shareWith || '',
+			)
 		},
 
 		onPermitAllUsersChange(newVal) {

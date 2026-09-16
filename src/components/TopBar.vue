@@ -6,6 +6,7 @@
 	<!-- No toolbar role: it promises one tab stop with arrow keys between the controls,
 	     which this bar does not have. The view switch labels its own radio group. -->
 	<div
+		ref="bar"
 		class="top-bar"
 		:class="{
 			'top-bar--has-sidebar': sidebarOpened,
@@ -198,6 +199,31 @@ export default {
 				&& this.submissionCount === 0
 			)
 		},
+	},
+
+	mounted() {
+		// The bar sticks to the top of the scrolling content, so anything scrolled to the
+		// top edge - a question jumped to, a new question receiving focus - would land
+		// underneath it. Keep the scroller's padding equal to the bar's height, which
+		// grows when the bar wraps to two rows on a phone.
+		// A ref rather than $el: the template's leading comment can make $el a text node.
+		const bar = this.$refs.bar
+		const scroller = bar?.parentElement?.closest('.app-content')
+		if (!scroller || !window.ResizeObserver) {
+			return
+		}
+		this.scroller = scroller
+		this.resizeObserver = new ResizeObserver(() => {
+			scroller.style.scrollPaddingBlockStart = `${bar.offsetHeight}px`
+		})
+		this.resizeObserver.observe(bar)
+	},
+
+	beforeUnmount() {
+		this.resizeObserver?.disconnect()
+		if (this.scroller) {
+			this.scroller.style.scrollPaddingBlockStart = ''
+		}
 	},
 
 	methods: {

@@ -7,6 +7,7 @@
 	<NcContent appName="forms">
 		<NcAppNavigation
 			v-if="canCreateForms || hasForms"
+			ref="navigation"
 			:aria-label="t('forms', 'Forms navigation')">
 			<NcAppNavigationNew
 				v-if="canCreateForms"
@@ -20,7 +21,11 @@
 			<!-- Wrapped and padded the way NcAppNavigationNew pads its own button, so the
 			     two stack as a matching pair instead of this one running edge to edge. -->
 			<div v-if="canCreateForms" class="forms-navigation__template">
-				<NcButton variant="tertiary" wide @click="showTemplates = true">
+				<NcButton
+					alignment="start"
+					variant="tertiary"
+					wide
+					@click="showTemplates = true">
 					<template #icon>
 						<NcIconSvgWrapper :svg="IconTemplate" />
 					</template>
@@ -69,7 +74,11 @@
 			</template>
 
 			<template #footer>
-				<div v-if="archivedForms.length > 0" class="forms-navigation-footer">
+				<!-- Kept while the dialog is open: restoring or deleting the last archived form
+				     would otherwise remove the button that focus returns to when it closes. -->
+				<div
+					v-if="archivedForms.length > 0 || showArchivedForms"
+					class="forms-navigation-footer">
 					<NcButton
 						alignment="start"
 						class="forms__archived-forms-toggle"
@@ -201,7 +210,8 @@
 			:forms="archivedForms"
 			:ownedIds="ownedFormIds"
 			@clone="onCloneForm"
-			@delete="onDeleteForm" />
+			@delete="onDeleteForm"
+			@mobileCloseNavigation="mobileCloseNavigation" />
 		<TemplatePicker
 			v-if="canCreateForms"
 			v-model:open="showTemplates"
@@ -334,9 +344,21 @@ export default {
 			return {}
 		})
 
-		const updateSelectedForm = (form) => {
-			sidebarOpened.value = false
+		// The form 'Share form' is opening. Its route change must leave the sidebar open,
+		// while any other move to another form or view closes it.
+		const pendingSharingHash = ref(null)
 
+		watch([routeHash, () => route.name], ([hash]) => {
+			const pending = pendingSharingHash.value
+			pendingSharingHash.value = null
+			if (hash !== pending) {
+				sidebarOpened.value = false
+			}
+		})
+
+		// Views send the full form here after every fetch, which can land after the
+		// sidebar was opened for it, so this must not touch the sidebar.
+		const updateSelectedForm = (form) => {
 			const index = forms.value.findIndex((f) => f.hash === form.hash)
 			if (index > -1) {
 				forms.value[index] = form
@@ -392,7 +414,14 @@ export default {
 
 		const openSharing = (hash) => {
 			if (hash !== routeHash.value) {
-				router.push({ name: 'edit', params: { hash } })
+				pendingSharingHash.value = hash
+				router.push({ name: 'edit', params: { hash } }).then((failure) => {
+					// A cancelled move never reaches the watcher, so the mark would
+					// otherwise keep the sidebar open on a later visit to that form.
+					if (failure && pendingSharingHash.value === hash) {
+						pendingSharingHash.value = null
+					}
+				})
 			}
 
 			sidebarActive.value = 'forms-sharing'
@@ -540,6 +569,29 @@ export default {
 			{ immediate: true },
 		)
 
+		const navigation = ref(null)
+
+		// Restoring or deleting the last archived form empties the list the footer button
+		// is shown for. The dialog hands focus back to that button as it starts to close,
+		// and the button goes away once it has closed, which would drop focus to the page.
+		// Runs before the footer is removed, so focus can still be moved on from it.
+		watch(showArchivedForms, (open) => {
+			if (open || archivedForms.value.length > 0) {
+				return
+			}
+			const content = navigation.value?.$el?.querySelector?.(
+				'.app-navigation__content',
+			)
+			const toggle = content?.querySelector('.forms__archived-forms-toggle')
+			if (!toggle || !toggle.contains(document.activeElement)) {
+				return
+			}
+			const target = [
+				...content.querySelectorAll('a[href], button:not([disabled])'),
+			].find((element) => !toggle.contains(element))
+			target?.focus()
+		})
+
 		// Whether the template picker is open.
 		const showTemplates = ref(false)
 
@@ -636,6 +688,11 @@ export default {
 				const sharedFormIndex = allSharedForms.value.findIndex(
 					(form) => form.id === id,
 				)
+				// A save can finish after its form has left both lists, for example
+				// once it was deleted.
+				if (sharedFormIndex === -1) {
+					return
+				}
 				allSharedForms.value[sharedFormIndex].lastUpdated = moment().unix()
 				allSharedForms.value.sort((b, a) => a.lastUpdated - b.lastUpdated)
 			}
@@ -674,6 +731,7 @@ export default {
 			ownedFormIds,
 			routeHash,
 			routeAllowed,
+			navigation,
 			mobileCloseNavigation,
 			openSharing,
 			loadForms,

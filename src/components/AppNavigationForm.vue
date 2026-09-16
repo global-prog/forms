@@ -6,7 +6,7 @@
 <template>
 	<NcListItem
 		:active="isActive"
-		:actions-aria-label="t('forms', 'Form actions')"
+		:actions-aria-label="actionsAriaLabel"
 		:counterNumber="form.submissionCount"
 		compact
 		forceMenu
@@ -295,7 +295,25 @@ export default {
 							{ escape: false, sanitize: false },
 						)
 					: this.formTitle
-			return [name, this.formSubtitle].filter(Boolean).join(', ')
+			// TRANSLATORS: Separator between the parts of a list, such as a form's name and its status
+			return [name, this.formSubtitle].filter(Boolean).join(t('forms', ', '))
+		},
+
+		/**
+		 * Name for the row's menu button. With every menu button shown at once, a fixed
+		 * label left screen-reader users with a run of identical buttons.
+		 *
+		 * @return {string}
+		 */
+		actionsAriaLabel() {
+			// Left raw: the result is an attribute value, which Vue escapes itself.
+			return t(
+				'forms',
+				'Actions for {title}',
+				{ title: this.formTitle },
+				undefined,
+				{ escape: false, sanitize: false },
+			)
 		},
 
 		/**
@@ -380,7 +398,10 @@ export default {
 				// The row leaves its list at once, so say where the form went.
 				showSuccess(
 					wasArchived
-						? t('forms', 'Form restored')
+						? t(
+								'forms',
+								'Form restored. It is closed until you open it again in the form settings.',
+							)
 						: t(
 								'forms',
 								'Form archived. You can find it under Archived forms.',

@@ -347,6 +347,7 @@ export default {
 			values[rowId] = value
 
 			this.$emit('update:values', values)
+			this.revalidateIfInvalid()
 		},
 
 		onChangeTextNumber(rowId, columnId, value) {
@@ -354,6 +355,7 @@ export default {
 			values[rowId][columnId] = value
 
 			this.$emit('update:values', values)
+			this.revalidateIfInvalid()
 		},
 	},
 }
@@ -522,6 +524,18 @@ fieldset {
 		// The cells scroll underneath the sticky label, so it needs a solid ground.
 		background-color: var(--color-main-background);
 		z-index: 1;
+	}
+
+	// The solid ground above would otherwise hide the row shade core paints on hover,
+	// leaving the label - the cell that says which row this is - out of the highlight.
+	// Swap in the same shade rather than going transparent, so the cells scrolled
+	// underneath stay covered.
+	// Core shades a row only on hover, which a keyboard never triggers; the whole row
+	// takes the shade while one of its cells has focus too, not just its label.
+	tbody tr:focus-within,
+	tbody tr:hover > .first-column,
+	tbody tr:focus-within > .first-column {
+		background-color: var(--color-background-dark);
 	}
 }
 </style>

@@ -126,7 +126,7 @@ class FormsService {
 
 					if ($question['extraSettings']['allowedFileExtensions'] ?? null) {
 						foreach ($question['extraSettings']['allowedFileExtensions'] as $extension) {
-							$question['accept'][] = '.' . $extension;
+							$question['accept'][] = '.' . strtolower(ltrim((string)$extension, '.'));
 						}
 					}
 				}
@@ -212,7 +212,7 @@ class FormsService {
 
 				if ($subQuestion['extraSettings']['allowedFileExtensions'] ?? null) {
 					foreach ($subQuestion['extraSettings']['allowedFileExtensions'] as $extension) {
-						$subQuestion['accept'][] = '.' . $extension;
+						$subQuestion['accept'][] = '.' . strtolower(ltrim((string)$extension, '.'));
 					}
 				}
 			}
@@ -256,7 +256,7 @@ class FormsService {
 
 				if ($question['extraSettings']['allowedFileExtensions'] ?? null) {
 					foreach ($question['extraSettings']['allowedFileExtensions'] as $extension) {
-						$question['accept'][] = '.' . $extension;
+						$question['accept'][] = '.' . strtolower(ltrim((string)$extension, '.'));
 					}
 				}
 			}

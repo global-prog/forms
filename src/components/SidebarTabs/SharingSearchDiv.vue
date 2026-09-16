@@ -4,13 +4,17 @@
 -->
 
 <template>
-	<div>
+	<div class="sharing-search">
+		<!-- Held empty on purpose: a picked person is added at once, so leaving them in the
+		     box would look as if they were still waiting to be added. -->
 		<NcSelectUsers
+			:modelValue="null"
 			keepOpen
 			:loading="showLoadingCircle"
 			:disabled="locked || !isCurrentUserOwner"
 			:options="options"
 			:placeholder="t('forms', 'Search for user, group or team …')"
+			:aria-label-combobox="t('forms', 'Search for user, group or team …')"
 			:aria-label-listbox="t('forms', 'Search for user, group or team …')"
 			@search="asyncSearch"
 			@update:modelValue="addShare" />
@@ -102,6 +106,10 @@ export default {
 		 * @param {object} share New share to share with, format still for multiselect.
 		 */
 		addShare(share) {
+			// Clearing the box reports an empty pick; there is nobody to add then.
+			if (!share) {
+				return
+			}
 			const newShare = {
 				shareWith: share.shareWith,
 				displayName: share.displayName,

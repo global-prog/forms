@@ -7,6 +7,20 @@ import { translate as t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import logger from '../utils/Logger.js'
 
+/**
+ * Make text safe to place inside a double-quoted HTML attribute.
+ *
+ * @param {string} text Text to escape
+ * @return {string} escaped text
+ */
+function escapeAttribute(text) {
+	return String(text)
+		.replaceAll('&', '&amp;')
+		.replaceAll('"', '&quot;')
+		.replaceAll('<', '&lt;')
+		.replaceAll('>', '&gt;')
+}
+
 export default {
 	methods: {
 		/**
@@ -83,7 +97,10 @@ export default {
 		 */
 		async copyEmbeddingCode(event, share) {
 			const target = event?.currentTarget
-			const code = `<iframe src="${this.getPublicShareLink(share)}" width="750" height="900"></iframe>`
+			// The title names the frame for screen readers on the host page. The width and
+			// height attributes stay as a fallback, while the style lets the frame shrink
+			// to a phone screen instead of overflowing it.
+			const code = `<iframe src="${escapeAttribute(this.getPublicShareLink(share))}" title="${escapeAttribute(this.form?.title || t('forms', 'Form'))}" width="750" height="900" style="width:100%;max-width:750px;border:0" loading="lazy"></iframe>`
 			try {
 				await navigator.clipboard.writeText(code)
 				showSuccess(t('forms', 'Embedding code copied'))

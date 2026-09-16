@@ -163,6 +163,11 @@ export function evaluateConditions(sourceType, answer, conditions) {
 			const text = String(values[0] ?? '')
 			return conditions.some((condition) => {
 				const expected = String(condition.value ?? '')
+				// A rule still waiting for its text matches nothing. Every text contains
+				// the empty string, so it would otherwise open before anything is typed.
+				if (expected === '') {
+					return false
+				}
 				switch (condition.type ?? 'string_contains') {
 					case 'string_equals':
 						return text === expected

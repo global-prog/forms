@@ -9,6 +9,7 @@
 		:titlePlaceholder="answerType.titlePlaceholder"
 		:warningInvalid="answerType.warningInvalid"
 		:contentValid="contentValid"
+		:errorMessage="errorMessage"
 		:shiftDragHandle="false"
 		:isTriggerQuestion="isTriggerQuestion"
 		v-on="commonListeners">
@@ -90,7 +91,7 @@
 					:formId="formId"
 					:text="text"
 					description=""
-					:isRequired="false"
+					:isRequired="readOnly && isRequired"
 					:index="index"
 					:options="options"
 					:extraSettings="triggerExtraSettings"
@@ -232,9 +233,12 @@
 				<!-- Submit Mode: Show only the active branch's subquestions -->
 				<div v-else class="active-subquestions">
 					<TransitionGroup tag="div" name="branch-list">
-						<div
+						<!-- Each subquestion renders a list item, so they sit in a list. -->
+						<ul
 							v-for="activeBranch in activeBranches"
-							:key="activeBranch.id">
+							:key="activeBranch.id"
+							class="branch-subquestions"
+							role="list">
 							<component
 								:is="getSubQuestionComponentName(subQuestion.type)"
 								v-for="(
@@ -254,7 +258,7 @@
 								@update:values="
 									onSubQuestionValueChange(subQuestion.id, $event)
 								" />
-						</div>
+						</ul>
 					</TransitionGroup>
 				</div>
 			</div>
@@ -874,6 +878,10 @@ export default {
 
 		onTriggerValueChange(values) {
 			this.triggerValues = values
+			// The "answer this question" error has done its job once there is an answer.
+			if (this.errorMessage && this.hasTriggerAnswer(values)) {
+				this.errorMessage = null
+			}
 			this.emitValues()
 		},
 
@@ -999,6 +1007,13 @@ export default {
 				if (optionTexts.length > 0) {
 					return optionTexts.join(' + ')
 				}
+			}
+
+			if (this.triggerType === 'file') {
+				// Read as both engines read it: without the flag, "uploaded".
+				return branch.conditions[0]?.fileUploaded === false
+					? t('forms', 'No file uploaded')
+					: t('forms', 'File uploaded')
 			}
 
 			return t('forms', 'Branch {number}', { number: index + 1 })
@@ -1191,11 +1206,38 @@ export default {
 			)
 		},
 
+		/**
+		 * @param {Array|undefined} values the trigger's answer
+		 * @return {boolean} whether it holds anything; a cleared text field sends ['']
+		 */
+		hasTriggerAnswer(values) {
+			return (values ?? []).some(
+				(value) => value !== '' && value !== null && value !== undefined,
+			)
+		},
+
 		async validate() {
 			if (this.$refs.triggerQuestion?.validate) {
 				const triggerValid = await this.$refs.triggerQuestion.validate()
-				if (!triggerValid) return false
+				if (!triggerValid) {
+					// The trigger shows its own error; one message is enough.
+					this.errorMessage = null
+					return false
+				}
 			}
+
+			// The trigger is told it is required and checks that itself; this catches
+			// any trigger type that does not, so a required conditional never goes
+			// out with its trigger unanswered.
+			if (
+				this.readOnly
+				&& this.isRequired
+				&& !this.hasTriggerAnswer(this.triggerValues)
+			) {
+				this.errorMessage = t('forms', 'You must answer this question')
+				return false
+			}
+			this.errorMessage = null
 
 			if (this.$refs.subQuestions) {
 				for (const subQuestion of this.$refs.subQuestions) {
@@ -1315,6 +1357,12 @@ export default {
 	margin-top: 16px;
 	padding-inline-start: 16px;
 	border-inline-start: 3px solid var(--color-primary-element);
+}
+
+.branch-subquestions {
+	list-style: none;
+	margin: 0;
+	padding: 0;
 }
 
 // Only opacity and transform change between the states below; naming them keeps `all`

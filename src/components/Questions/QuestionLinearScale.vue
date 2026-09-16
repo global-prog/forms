@@ -17,6 +17,7 @@
 				type="multiselect"
 				:clearable="false"
 				:label="t('forms', 'Lowest value')"
+				:ariaLabelCombobox="t('forms', 'Lowest value')"
 				labelOutside
 				:options="[0, 1]"
 				required
@@ -30,6 +31,7 @@
 				type="multiselect"
 				:clearable="false"
 				:label="t('forms', 'Highest value')"
+				:ariaLabelCombobox="t('forms', 'Highest value')"
 				labelOutside
 				:options="[2, 3, 4, 5, 6, 7, 8, 9, 10]"
 				required
@@ -169,14 +171,16 @@ export default {
 		 * ID for the label for the lowest option
 		 */
 		labelId() {
-			return 'q' + this.index + '__label_lowest'
+			// Id-based like the rest of the question, so a subquestion that shares
+			// its position number with another question does not share its ids.
+			return this.ownElementIdPrefix + '__label_lowest'
 		},
 
 		/**
 		 * ID for the label for the highest option
 		 */
 		labelIdHighest() {
-			return 'q' + this.index + '__label_highest'
+			return this.ownElementIdPrefix + '__label_highest'
 		},
 
 		optionsLowest() {
@@ -222,6 +226,7 @@ export default {
 
 		onChange(option) {
 			this.$emit('update:values', [option])
+			this.revalidateIfInvalid()
 		},
 
 		/**
@@ -362,14 +367,16 @@ export default {
 			}
 		}
 
+		// Wide enough for the field's floating label, which is cut off rather than
+		// wrapped, without crowding the scale between the two fields.
 		&__label-input {
-			width: 120px;
+			inline-size: clamp(120px, 30%, 220px);
 			align-self: center;
 			min-height: fit-content;
 			flex-shrink: 0;
 
 			@media (max-width: 768px) {
-				width: 100%; // Full width on smaller screens
+				inline-size: 100%; // Full width on smaller screens
 				padding-block: var(--default-grid-baseline);
 			}
 		}

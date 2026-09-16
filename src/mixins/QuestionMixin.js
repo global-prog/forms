@@ -266,9 +266,14 @@ export default {
 	},
 
 	created() {
+		// A conditional's trigger question is rendered with the conditional's own id,
+		// so its title, required and name changes must not be written to that row;
+		// the conditional saves what belongs to it.
 		this.onTitleChange = debounceUnbound((text) => {
 			this.$emit('update:text', text)
-			this.saveQuestionProperty('text', text)
+			if (!this.isTriggerQuestion) {
+				this.saveQuestionProperty('text', text)
+			}
 		})
 
 		this.onDescriptionChange = debounceUnbound((description) => {
@@ -278,21 +283,60 @@ export default {
 
 		this.onRequiredChange = debounceUnbound((isRequiredValue) => {
 			this.$emit('update:isRequired', isRequiredValue)
-			this.saveQuestionProperty('isRequired', isRequiredValue)
+			if (!this.isTriggerQuestion) {
+				this.saveQuestionProperty('isRequired', isRequiredValue)
+			}
 		})
 
-		this.onExtraSettingsChange = debounceUnbound((newSettings) => {
-			const newExtraSettings = { ...this.extraSettings, ...newSettings }
-			this.$emit('update:extraSettings', newExtraSettings)
+		// Callers pass only the settings they changed. The debounce keeps just the
+		// arguments of its last call, so two changes inside one wait (a minimum and
+		// then a maximum, say) would drop the first; collect them here instead. The
+		// parent hears each change at once so controls reading the prop follow the
+		// input, and only the request to the server waits.
+		let pendingExtraSettings = {}
+		const saveExtraSettings = debounceUnbound(() => {
+			if (Object.keys(pendingExtraSettings).length === 0) {
+				return
+			}
+			const newExtraSettings = {
+				...this.extraSettings,
+				...pendingExtraSettings,
+			}
+			pendingExtraSettings = {}
 			if (!this.isTriggerQuestion) {
 				this.saveQuestionProperty('extraSettings', newExtraSettings)
 			}
 		})
+		this.onExtraSettingsChange = Object.assign(
+			(newSettings) => {
+				pendingExtraSettings = { ...pendingExtraSettings, ...newSettings }
+				this.$emit('update:extraSettings', {
+					...this.extraSettings,
+					...pendingExtraSettings,
+				})
+				saveExtraSettings()
+			},
+			{
+				clear: () => {
+					pendingExtraSettings = {}
+					saveExtraSettings.clear()
+				},
+				flush: saveExtraSettings.flush,
+			},
+		)
 
 		this.onNameChange = debounceUnbound((name) => {
 			this.$emit('update:name', name)
-			this.saveQuestionProperty('name', name)
+			if (!this.isTriggerQuestion) {
+				this.saveQuestionProperty('name', name)
+			}
 		})
+	},
+
+	beforeUnmount() {
+		// The parent already shows these settings; leaving the page inside the wait
+		// would otherwise never store them.
+		this.onExtraSettingsChange.flush()
 	},
 
 	computed: {
@@ -307,12 +351,38 @@ export default {
 			return props
 		},
 
+		/**
+		 * Prefix of this question's element ids. Built from the question id where
+		 * there is one: a conditional's subquestions are numbered from their parent,
+		 * so their index repeats the next question's.
+		 *
+		 * @return {string} the prefix
+		 */
+		elementIdPrefix() {
+			return this.id === null || this.id === undefined
+				? 'q' + this.index
+				: 'question' + this.id
+		},
+
+		/**
+		 * Prefix of the ids of elements a question renders for itself. A
+		 * conditional's trigger shares the conditional's id but shows its own hint
+		 * and error; its title and description are still the conditional's.
+		 *
+		 * @return {string} the prefix
+		 */
+		ownElementIdPrefix() {
+			return this.isTriggerQuestion
+				? 'trigger' + this.elementIdPrefix
+				: this.elementIdPrefix
+		},
+
 		titleId() {
-			return 'q' + this.index + '_title'
+			return this.elementIdPrefix + '_title'
 		},
 
 		descriptionId() {
-			return 'q' + this.index + '_desc'
+			return this.elementIdPrefix + '_desc'
 		},
 
 		hasError() {
@@ -324,11 +394,11 @@ export default {
 		},
 
 		errorId() {
-			return `q${this.index}_error`
+			return this.ownElementIdPrefix + '_error'
 		},
 
 		infoId() {
-			return `q${this.index}_info`
+			return this.ownElementIdPrefix + '_info'
 		},
 
 		/**
@@ -405,15 +475,31 @@ export default {
 		 * Focus the first focusable element
 		 */
 		focus() {
-			this.$el.scrollIntoView({ behavior: 'smooth' })
+			// Browsers do not apply a reduced-motion preference to smooth scrolls
+			// asked for from script.
+			const gently = !window.matchMedia?.('(prefers-reduced-motion: reduce)')
+				?.matches
+			this.$el.scrollIntoView({
+				behavior: gently ? 'smooth' : 'auto',
+				block: 'nearest',
+			})
 			this.$nextTick(() => {
 				const title = this.$el.querySelector(
 					'.question__header__title__text__input',
 				)
-				if (title) {
-					title.focus()
-				}
+				// preventScroll: a second, instant scroll would cut the smooth one short.
+				title?.focus({ preventScroll: true })
 			})
+		},
+
+		/**
+		 * Check the answer again once it changes, but only while an error is
+		 * shown, so the error goes away as soon as the answer is put right.
+		 */
+		revalidateIfInvalid() {
+			if (this.errorMessage) {
+				this.$nextTick(() => this.validate())
+			}
 		},
 
 		/**
@@ -493,7 +579,13 @@ export default {
 				})
 				this.updateOptions(options)
 				this.$nextTick(() => {
-					this.focusIndex(options.length - 1)
+					// focusIndex counts per option type, like each option's own index.
+					this.focusIndex(
+						options.filter(
+							(option) => option.optionType === OptionType.Choice,
+						).length - 1,
+						OptionType.Choice,
+					)
 				})
 			} catch (error) {
 				logger.error('Error while saving question options', { error })

@@ -31,6 +31,19 @@
 			</template>
 		</NcEmptyContent>
 
+		<!-- Without a full form there is nothing to edit, and the editor would break on
+		     the partial one the list provided. -->
+		<NcEmptyContent
+			v-else-if="loadFailed"
+			class="emtpycontent"
+			:name="t('forms', 'Could not load the form')">
+			<template #action>
+				<NcButton @click="fetchFullForm(form.id)">
+					{{ t('forms', 'Retry') }}
+				</NcButton>
+			</template>
+		</NcEmptyContent>
+
 		<NcEmptyContent
 			v-else-if="isFormArchived"
 			class="emtpycontent"
@@ -47,28 +60,20 @@
 			<template #icon>
 				<NcIconSvgWrapper :svg="IconLock" :size="64" />
 			</template>
+			<!-- Archiving the open form leaves no edit view to switch from, so the view
+			     switch disappears with it; the responses are still there to look at. -->
+			<template v-if="canShowResults" #action>
+				<NcButton @click="showResults">
+					{{ t('forms', 'Show responses') }}
+				</NcButton>
+			</template>
 		</NcEmptyContent>
 
 		<NcEmptyContent
 			v-else-if="isFormLocked"
 			class="emtpycontent"
 			:name="t('forms', 'Form is locked')"
-			:description="
-				t(
-					'forms',
-					'Form \'{title}\' is locked by {lockedBy} and cannot be modified. The lock expires: {lockedUntil}',
-					{
-						title: form.title,
-						lockedBy: form.lockedBy,
-						lockedUntil:
-							form.lockedUntil === 0
-								? t('forms', 'never')
-								: lockedUntilFormatted,
-					},
-					undefined,
-					{ escape: false, sanitize: false },
-				)
-			">
+			:description="lockNotice">
 			<template #icon>
 				<NcIconSvgWrapper :svg="IconLock" :size="64" />
 			</template>
@@ -131,9 +136,14 @@
 
 			<!-- Autosave status: title and description save as they are typed, and
 			     otherwise only a failure was ever reported. Outside the header, which is
-			     laid out in the form's language; this line is in the reader's. -->
-			<p class="save-status" aria-live="polite">
+			     laid out in the form's language; this line is in the reader's. Not a live
+			     region: it changes at every pause in typing, and hearing that twice each
+			     time is noise. Only a failure is announced, from the line below. -->
+			<p class="save-status">
 				{{ saveStatus }}
+			</p>
+			<p class="hidden-visually" role="status">
+				{{ formSaveFailed ? t('forms', 'Not saved') : '' }}
 			</p>
 
 			<section :dir="formDirection" :lang="formLanguage || undefined">
@@ -207,6 +217,7 @@ import IconCancel from '@material-symbols/svg-400/outlined/block.svg?raw'
 import IconDelete from '@material-symbols/svg-400/outlined/delete.svg?raw'
 import IconImport from '@material-symbols/svg-400/outlined/library_add.svg?raw'
 import IconLock from '@material-symbols/svg-400/outlined/lock.svg?raw'
+import { getCurrentUser } from '@nextcloud/auth'
 import axios from '@nextcloud/axios'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { emit } from '@nextcloud/event-bus'
@@ -374,7 +385,11 @@ export default {
 			if (this.formSaveFailed) {
 				return t('forms', 'Not saved')
 			}
-			return this.formSavedOnce ? t('forms', 'All changes saved') : ''
+			// Only the title and description are tracked here; questions save on their own,
+			// so this must not claim that everything is saved.
+			return this.formSavedOnce
+				? t('forms', 'Title and description saved')
+				: ''
 		},
 
 		hasQuestions() {
@@ -382,7 +397,7 @@ export default {
 		},
 
 		isRequiredUsed() {
-			return this.form.questions.reduce(
+			return (this.form.questions ?? []).reduce(
 				(isUsed, question) => isUsed || question.isRequired,
 				false,
 			)
@@ -453,8 +468,63 @@ export default {
 			return (question) => answerTypes[question.type]
 		},
 
+		/**
+		 * When the lock ends, as a date and time: a relative "in 2 hours" would go stale
+		 * while the page stays open.
+		 *
+		 * @return {string} the formatted end, or '' for a permanent lock
+		 */
 		lockedUntilFormatted() {
-			return moment(this.form.lockedUntil, 'X').fromNow()
+			if (this.form.lockedUntil === 0 || this.form.lockedUntil === null) {
+				return ''
+			}
+			return moment(this.form.lockedUntil, 'X')
+				.locale(window.OC.getLanguage())
+				.format('LLL')
+		},
+
+		/**
+		 * Who holds the lock and for how long, in the same whole sentences as the
+		 * sidebar, so translators never have to fit a separately translated "never"
+		 * into one and both places describe the lock alike.
+		 *
+		 * @return {string} the notice text
+		 */
+		lockNotice() {
+			const lockHolder = this.form.lockedBy || this.form.ownerId
+			const currentUser = getCurrentUser()
+			// Only the account id is known for anyone else; for oneself the display name is.
+			const lockedBy =
+				currentUser && lockHolder === currentUser.uid
+					? currentUser.displayName || lockHolder
+					: lockHolder
+			// Shown as plain text, so the values need no HTML escaping or sanitising.
+			if (this.lockedUntilFormatted === '') {
+				return t('forms', 'Locked by {lockedBy}', { lockedBy }, undefined, {
+					escape: false,
+					sanitize: false,
+				})
+			}
+			return t(
+				'forms',
+				'Locked by {lockedBy} until {lockedUntil}',
+				{ lockedBy, lockedUntil: this.lockedUntilFormatted },
+				undefined,
+				{ escape: false, sanitize: false },
+			)
+		},
+
+		/**
+		 * The same test the view switch uses: people who answered a form may see their
+		 * own responses even without the results permission.
+		 *
+		 * @return {boolean} whether this user may open the form's responses
+		 */
+		canShowResults() {
+			return (
+				(this.form.permissions ?? []).includes('results')
+				|| this.form.submissionCount > 0
+			)
 		},
 	},
 
@@ -484,6 +554,15 @@ export default {
 	},
 
 	methods: {
+		/** Open the responses of this form. */
+		showResults() {
+			this.$router
+				.push({ name: 'results', params: { hash: this.form.hash } })
+				.catch((error) => {
+					logger.debug('Navigation cancelled', { error })
+				})
+		},
+
 		onUpdateProperty(index, property, value) {
 			this.form.questions[index][property] = value
 		},
@@ -518,9 +597,15 @@ export default {
 		resizeTitle() {
 			this.$nextTick(() => {
 				const textarea = this.$refs.title
-				textarea.style.cssText = 'height: 0'
+				// Not there when the form failed to load.
+				if (!textarea) {
+					return
+				}
+				// Only the height: replacing the whole inline style would also drop the
+				// alignment the form's declared language sets.
+				textarea.style.height = '0'
 				// include 2px border
-				textarea.style.cssText = `height: ${textarea.scrollHeight + 4}px`
+				textarea.style.height = `${textarea.scrollHeight + 4}px`
 			})
 		},
 
@@ -531,9 +616,15 @@ export default {
 			// nextTick to ensure textarea is attached to DOM
 			this.$nextTick(() => {
 				const textarea = this.$refs.description
-				textarea.style.cssText = 'height: 0'
+				// Not there when the form failed to load.
+				if (!textarea) {
+					return
+				}
+				// Only the height: replacing the whole inline style would also drop the
+				// alignment the form's declared language sets.
+				textarea.style.height = '0'
 				// include 2px border
-				textarea.style.cssText = `height: ${textarea.scrollHeight + 4}px`
+				textarea.style.height = `${textarea.scrollHeight + 4}px`
 			})
 		},
 
@@ -735,22 +826,42 @@ export default {
 				return
 			}
 			this.isLoadingQuestions = true
+			const formId = this.form.id
 
 			try {
 				await axios.delete(
 					generateOcsUrl(
 						'apps/forms/api/v3/forms/{id}/questions/{questionId}',
 						{
-							id: this.form.id,
+							id: formId,
 							questionId,
 						},
 					),
 				)
-				const index = this.form.questions.findIndex(
+				emit('forms:last-updated:set', formId)
+				// Another form may be open by now, or the list may have changed; only remove
+				// the question from the form it belonged to, and only if it is still there.
+				if (this.form.id !== formId) {
+					return
+				}
+				const index = (this.form.questions ?? []).findIndex(
 					(search) => search.id === questionId,
 				)
+				if (index === -1) {
+					return
+				}
+				// The menu the delete came from goes with the card, and focus would fall to
+				// the page body; move it to the question now in its place instead.
+				const neighbour =
+					this.form.questions[index + 1] ?? this.form.questions[index - 1]
 				this.form.questions.splice(index, 1)
-				emit('forms:last-updated:set', this.form.id)
+				this.$nextTick(() => {
+					if (neighbour) {
+						this.$refs.questionList?.focusQuestion(neighbour.id)
+					} else {
+						this.$el.querySelector?.('.question-menu button')?.focus()
+					}
+				})
 			} catch (error) {
 				logger.error(`Error while removing question ${questionId}`, {
 					error,

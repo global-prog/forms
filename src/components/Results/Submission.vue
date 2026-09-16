@@ -78,6 +78,7 @@
 <script>
 import IconDelete from '@material-symbols/svg-400/outlined/delete.svg?raw'
 import IconPencil from '@material-symbols/svg-400/outlined/edit.svg?raw'
+import { translate as t } from '@nextcloud/l10n'
 import moment from '@nextcloud/moment'
 import { generateUrl } from '@nextcloud/router'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -251,7 +252,7 @@ export default {
 											(optionId) =>
 												optionsPerId[optionId].text,
 										)
-										.join(', ')
+										.join(t('forms', ', '))
 								)
 							})
 							.join('\n')
@@ -291,7 +292,10 @@ export default {
 						type: triggerType,
 						conditional: true,
 						extraSettings: question.extraSettings,
-						squashedAnswers: answers[0].text,
+						// A checkbox trigger stores one row per ticked option; show them all.
+						squashedAnswers: answers
+							.map((answer) => answer.text)
+							.join(t('forms', '; ')),
 						// The branches are kept apart from `answers`, which Answer reads as
 						// the trigger's own uploads when the trigger is a file question.
 						answers:
@@ -339,7 +343,7 @@ export default {
 				} else {
 					const squashedAnswers = answers
 						.map((answer) => answer.text)
-						.join('; ')
+						.join(t('forms', '; '))
 
 					answeredQuestionsArray.push({
 						id: question.id,
@@ -456,8 +460,10 @@ export default {
 		display: flex;
 		align-items: flex-end;
 
+		// Core gives every h3 a top margin, which stacked on the card's own padding.
 		h3 {
 			font-weight: bold;
+			margin-block: 0;
 		}
 	}
 
@@ -469,7 +475,7 @@ export default {
 
 	&-date {
 		color: var(--color-text-lighter);
-		margin-block-start: -8px;
+		margin-block-start: 2px;
 	}
 
 	&-score {

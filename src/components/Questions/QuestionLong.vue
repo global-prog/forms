@@ -99,9 +99,7 @@ export default {
 			this.$emit('update:values', [textarea.value])
 			// Clear an error left by a failed submit once the answer is given. validate()
 			// reads the `values` prop, which changes only after the parent has re-rendered.
-			if (this.errorMessage) {
-				this.$nextTick(() => this.validate())
-			}
+			this.revalidateIfInvalid()
 		},
 
 		autoSizeText() {

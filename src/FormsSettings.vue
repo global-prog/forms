@@ -34,9 +34,13 @@
 					'Allow form owners to send a confirmation email to respondents after submission.',
 				)
 			">
+			<!-- Without mail it can only be turned off: the server refuses to turn it on,
+			     and a switch left on after the mail setup went away has to stay reachable. -->
 			<NcCheckboxRadioSwitch
 				v-model="appConfig.allowConfirmationEmail"
-				:disabled="!appConfig.isMailConfigured"
+				:disabled="
+					!appConfig.isMailConfigured && !appConfig.allowConfirmationEmail
+				"
 				:loading="loading.allowConfirmationEmail"
 				type="switch"
 				@update:modelValue="onAllowConfirmationEmailChange">

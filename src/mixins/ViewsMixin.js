@@ -54,6 +54,8 @@ export default {
 		return {
 			// State-Variable
 			isLoadingForm: true,
+			// The last full load failed, so there is no complete form to show.
+			loadFailed: false,
 
 			// storage for axios cancel function
 			cancelFetchFullForm: () => {},
@@ -64,6 +66,13 @@ export default {
 			formSavingCount: 0,
 			formSaveFailed: false,
 			formSavedOnce: false,
+
+			// Per form and property: the queue its saves go out through, a counter to recognise the
+			// newest save, and the value to go back to if that one fails. A property only
+			// has a value to go back to when the caller said what it was.
+			formSaveChains: {},
+			formSaveSeq: {},
+			formSaveRollback: {},
 
 			// markdown renderer for descriptions
 			markdownit: new MarkdownIt({ breaks: true }),
@@ -197,6 +206,7 @@ export default {
 		async fetchFullForm(id, { silent = false } = {}) {
 			if (!silent) {
 				this.isLoadingForm = true
+				this.loadFailed = false
 			}
 
 			// Cancel previous request
@@ -229,6 +239,13 @@ export default {
 					logger.error(`Unexpected error fetching form ${id}`, {
 						error,
 					})
+					// A quiet reload keeps the form already on screen, and runs after
+					// something else the reader is looking at (a confirmation); only a load
+					// that leaves nothing complete to show is worth interrupting them for.
+					if (!silent) {
+						showError(t('forms', 'Could not load the form'))
+						this.loadFailed = true
+					}
 					this.isLoadingForm = false
 				}
 			} finally {
@@ -240,29 +257,75 @@ export default {
 			}
 		},
 
-		async saveFormProperty(key) {
-			this.formSavingCount++
-			try {
-				await axios.patch(
-					generateOcsUrl('apps/forms/api/v3/forms/{id}', {
-						id: this.form.id,
-					}),
-					{
-						keyValuePairs: {
-							[key]: this.form[key],
-						},
-					},
-				)
-				emit('forms:last-updated:set', this.form.id)
-				this.formSaveFailed = false
-				this.formSavedOnce = true
-			} catch (error) {
-				logger.error('Error saving form property', { error })
-				this.formSaveFailed = true
-				showError(t('forms', 'Error while saving form'))
-			} finally {
-				this.formSavingCount--
+		/**
+		 * Save one of the form's own properties.
+		 *
+		 * Saves of the same property go out one after another, each with the value as it
+		 * is when the request is sent. Settings travel as one whole object, so two
+		 * overlapping saves could otherwise finish the wrong way round and leave the server
+		 * with the older one.
+		 *
+		 * @param {string} key the property to save
+		 * @param {string|number|boolean|object|Array|null} [previous] its value before this
+		 *   change; when given, a failed save puts back the last value the server is known
+		 *   to hold, so a rejected value does not stay on screen and ride along with every
+		 *   later save
+		 * @return {Promise} settles once this save is done
+		 */
+		saveFormProperty(key, previous) {
+			const form = this.form
+			// Keyed by form too: after switching forms, a save still running for the old
+			// one must not hand its value to, or queue up with, the new one.
+			const slot = `${form.id}/${key}`
+			const seq = (this.formSaveSeq[slot] ?? 0) + 1
+			this.formSaveSeq[slot] = seq
+			if (previous !== undefined && !(slot in this.formSaveRollback)) {
+				this.formSaveRollback[slot] = previous
 			}
+			// Counted before anything is sent, so a queued save already reads as running.
+			this.formSavingCount++
+
+			const chain = (this.formSaveChains[slot] ?? Promise.resolve()).then(
+				async () => {
+					const value = form[key]
+					try {
+						await axios.patch(
+							generateOcsUrl('apps/forms/api/v3/forms/{id}', {
+								id: form.id,
+							}),
+							{
+								keyValuePairs: {
+									[key]: value,
+								},
+							},
+						)
+						emit('forms:last-updated:set', form.id)
+						if (seq === this.formSaveSeq[slot]) {
+							delete this.formSaveRollback[slot]
+							this.formSaveFailed = false
+							this.formSavedOnce = true
+						} else if (slot in this.formSaveRollback) {
+							this.formSaveRollback[slot] = value
+						}
+					} catch (error) {
+						logger.error('Error saving form property', { error })
+						// A later save still in the queue sends the newest value itself, so only
+						// the newest failure has anything to undo.
+						if (seq === this.formSaveSeq[slot]) {
+							this.formSaveFailed = true
+							if (slot in this.formSaveRollback) {
+								form[key] = this.formSaveRollback[slot]
+								delete this.formSaveRollback[slot]
+							}
+						}
+						showError(t('forms', 'Error while saving form'))
+					} finally {
+						this.formSavingCount--
+					}
+				},
+			)
+			this.formSaveChains[slot] = chain
+			return chain
 		},
 	},
 }

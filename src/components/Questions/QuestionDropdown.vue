@@ -33,6 +33,7 @@
 			:aria-labelledby="titleId"
 			:aria-describedby="description ? descriptionId : undefined">
 			<NcSelect
+				ref="select"
 				:modelValue="selectedOption"
 				:name="name || undefined"
 				:placeholder="selectOptionPlaceholder"
@@ -42,8 +43,6 @@
 				:searchable="false"
 				label="text"
 				:aria-label-combobox="text || selectOptionPlaceholder"
-				:aria-errormessage="hasError ? errorId : undefined"
-				:aria-invalid="hasError ? 'true' : undefined"
 				@invalid.prevent="validate"
 				@update:modelValue="onInput" />
 		</div>
@@ -189,6 +188,14 @@ export default {
 		},
 	},
 
+	watch: {
+		hasError: { handler: 'syncInputState', flush: 'post' },
+	},
+
+	mounted() {
+		this.syncInputState()
+	},
+
 	methods: {
 		async validate() {
 			if (this.isRequired && this.areNoneChecked) {
@@ -215,11 +222,30 @@ export default {
 				this.$emit('update:values', [
 					...new Set(option.map((opt) => opt.id)),
 				])
+			} else {
+				// Simple select
+				this.$emit('update:values', option ? [option.id] : [])
+			}
+			this.revalidateIfInvalid()
+		},
+
+		/**
+		 * NcSelect keeps unknown attributes on its outer wrapper, which has no role, so
+		 * a screen reader never hears that the question is invalid. Put the state on the
+		 * combobox input itself instead.
+		 */
+		syncInputState() {
+			const input = this.$refs.select?.$el?.querySelector?.('input.vs__search')
+			if (!input) {
 				return
 			}
-
-			// Simple select
-			this.$emit('update:values', option ? [option.id] : [])
+			if (this.hasError) {
+				input.setAttribute('aria-invalid', 'true')
+				input.setAttribute('aria-errormessage', this.errorId)
+			} else {
+				input.removeAttribute('aria-invalid')
+				input.removeAttribute('aria-errormessage')
+			}
 		},
 	},
 }

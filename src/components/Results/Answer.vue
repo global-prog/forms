@@ -281,6 +281,9 @@ export default {
 		width: 100px;
 		height: var(--default-clickable-area);
 		border-radius: var(--border-radius-element);
+		// Without an edge, white vanishes on a light page and black on a dark one.
+		border: 1px solid var(--color-border-maxcontrast);
+		box-sizing: border-box;
 		position: relative;
 		inset-block-start: 12px;
 		margin-block-start: -12px;
@@ -336,6 +339,12 @@ export default {
 			// Opaque and above the cells, which scroll underneath it.
 			background-color: var(--color-main-background);
 			z-index: 1;
+		}
+
+		// Core shades a hovered row, which the opaque label would otherwise paint over.
+		tbody tr:hover .first-column,
+		tbody tr:focus-within .first-column {
+			background-color: var(--color-background-dark);
 		}
 	}
 

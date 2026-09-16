@@ -228,8 +228,12 @@ export default {
 		 * @param {any} newVal The new Property value
 		 */
 		onPropertyChange(property, newVal) {
+			// Handed over so a refused value is put back rather than left on screen as if
+			// it were saved. For the settings object it would otherwise ride along with
+			// every later settings change and make those fail too.
+			const previous = this.form[property]
 			this.form[property] = newVal
-			this.saveFormProperty(property)
+			this.saveFormProperty(property, previous)
 		},
 
 		/**

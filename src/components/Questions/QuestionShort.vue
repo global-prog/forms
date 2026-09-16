@@ -9,6 +9,7 @@
 		:titlePlaceholder="answerType.titlePlaceholder"
 		:warningInvalid="answerType.warningInvalid"
 		:errorMessage="errorMessage"
+		:infoMessage="shownRangeHint"
 		:isTriggerQuestion="isTriggerQuestion"
 		v-on="commonListeners">
 		<div class="question__content">
@@ -20,7 +21,7 @@
 			<input
 				ref="input"
 				:aria-labelledby="titleId"
-				:aria-describedby="description ? descriptionId : undefined"
+				:aria-describedby="describedBy"
 				:aria-errormessage="hasError ? errorId : undefined"
 				:aria-invalid="hasError ? 'true' : undefined"
 				:placeholder="submissionInputPlaceholder"
@@ -83,9 +84,8 @@
 					v-if="isNumber"
 					type="number"
 					:label="t('forms', 'Minimum value')"
-					:modelValue="numberMin ?? ''"
-					@submit="onChangeNumberBound('numberMin', $event)"
-					@input="onChangeNumberBound('numberMin', $event)">
+					:modelValue="boundInputValue('numberMin')"
+					@update:modelValue="onChangeNumberBound('numberMin', $event)">
 					<template #icon>
 						<NcIconSvgWrapper :svg="IconNumeric" />
 					</template>
@@ -95,9 +95,8 @@
 					v-if="isNumber"
 					type="number"
 					:label="t('forms', 'Maximum value')"
-					:modelValue="numberMax ?? ''"
-					@submit="onChangeNumberBound('numberMax', $event)"
-					@input="onChangeNumberBound('numberMax', $event)">
+					:modelValue="boundInputValue('numberMax')"
+					@update:modelValue="onChangeNumberBound('numberMax', $event)">
 					<template #icon>
 						<NcIconSvgWrapper :svg="IconNumeric" />
 					</template>
@@ -133,6 +132,18 @@ import { INPUT_DEBOUNCE_MS } from '../../models/Constants.ts'
 import validationTypes from '../../models/ValidationTypes.js'
 import { splitRegex, validateExpression } from '../../utils/RegularExpression.js'
 
+/**
+ * Read a bound as typed into its field.
+ *
+ * @param {string|number|null|undefined} raw the field's value
+ * @return {number|undefined} the bound, or undefined for none
+ */
+function parseBound(raw) {
+	const value =
+		raw === '' || raw === null || raw === undefined ? NaN : parseFloat(raw)
+	return Number.isNaN(value) ? undefined : value
+}
+
 export default {
 	name: 'QuestionShort',
 
@@ -161,6 +172,11 @@ export default {
 			isValidationTypeMenuOpen: false,
 			/** per-instance debounced validate, created in created() */
 			debounceValidate: null,
+			/**
+			 * What the editor typed into the bound fields. A half-typed number such as
+			 * "0." is stored as 0, and showing the stored value back would eat the dot.
+			 */
+			boundDrafts: { numberMin: null, numberMax: null },
 		}
 	},
 
@@ -196,7 +212,7 @@ export default {
 		 * Id of the validation type menu
 		 */
 		validationTypeMenuId() {
-			return 'q' + this.index + '__validation_menu'
+			return this.ownElementIdPrefix + '__validation_menu'
 		},
 
 		/**
@@ -223,6 +239,47 @@ export default {
 
 		numberInteger() {
 			return this.extraSettings?.numberInteger === true
+		},
+
+		/**
+		 * The allowed range of a number answer, told to the respondent up front
+		 * rather than only after a wrong answer.
+		 *
+		 * @return {string} the constraint, or '' when there is none
+		 */
+		rangeHint() {
+			if (
+				!this.isNumber
+				|| (this.numberMin === undefined
+					&& this.numberMax === undefined
+					&& !this.numberInteger)
+			) {
+				return ''
+			}
+			return this.numberErrorMessage
+		},
+
+		/**
+		 * The range hint as shown to the respondent. Left out while the same
+		 * sentence is shown as the error, so it is not on screen twice.
+		 *
+		 * @return {string} the hint, or ''
+		 */
+		shownRangeHint() {
+			return this.readOnly && this.errorMessage !== this.rangeHint
+				? this.rangeHint
+				: ''
+		},
+
+		describedBy() {
+			const ids = []
+			if (this.description) {
+				ids.push(this.descriptionId)
+			}
+			if (this.shownRangeHint) {
+				ids.push(this.infoId)
+			}
+			return ids.length > 0 ? ids.join(' ') : undefined
 		},
 
 		/**
@@ -290,16 +347,31 @@ export default {
 
 	methods: {
 		/**
+		 * Text for a bound field: the editor's own typing while it still means the
+		 * stored bound, else the stored bound.
+		 *
+		 * @param {string} key either 'numberMin' or 'numberMax'
+		 * @return {string} the field's value; a string, because the field hands a
+		 *     number value back already parsed, and the typing is lost with it
+		 */
+		boundInputValue(key) {
+			const draft = this.boundDrafts[key]
+			if (draft !== null && parseBound(draft) === this[key]) {
+				return draft
+			}
+			return this[key] === undefined ? '' : String(this[key])
+		},
+
+		/**
 		 * store a numeric bound, or clear it when the field is emptied.
 		 *
 		 * @param {string} key either 'numberMin' or 'numberMax'
-		 * @param {Event} event the input/submit event
+		 * @param {string|number} raw the field's new value
 		 */
-		onChangeNumberBound(key, event) {
-			const raw = event?.target?.value ?? ''
-			const value =
-				raw === '' || isNaN(parseFloat(raw)) ? undefined : parseFloat(raw)
-			this.onExtraSettingsChange({ [key]: value })
+		onChangeNumberBound(key, raw) {
+			this.boundDrafts[key] =
+				raw === null || raw === undefined ? '' : String(raw)
+			this.onExtraSettingsChange({ [key]: parseBound(raw) })
 		},
 
 		/**
@@ -354,7 +426,14 @@ export default {
 			const input = this.$refs.input
 			const value = input.value
 			this.$emit('update:values', [value])
-			this.debounceValidate()
+			// A partly typed answer is often not valid yet, so wait for a pause before
+			// complaining. An error already shown is re-checked at once, so it
+			// disappears as soon as the answer is put right.
+			if (this.errorMessage) {
+				this.validate()
+			} else {
+				this.debounceValidate()
+			}
 		},
 
 		/**

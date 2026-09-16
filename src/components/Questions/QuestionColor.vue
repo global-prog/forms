@@ -100,7 +100,7 @@ export default {
 		},
 
 		valueId() {
-			return `q${this.index}_color_value`
+			return this.ownElementIdPrefix + '_color_value'
 		},
 
 		buttonDescribedBy() {
@@ -130,9 +130,7 @@ export default {
 			this.$emit('update:values', [color])
 			// Clear an error left by a failed submit once a colour is picked. validate()
 			// reads the `values` prop, which changes only after the parent has re-rendered.
-			if (this.errorMessage) {
-				this.$nextTick(() => this.validate())
-			}
+			this.revalidateIfInvalid()
 		},
 	},
 }
@@ -155,6 +153,17 @@ export default {
 	&__button {
 		position: relative;
 		margin-inline-start: calc(100% - var(--default-clickable-area));
+		// A tertiary button is see-through, and its icon would vanish on a picked
+		// colour close to the text colour; give it a ground of its own.
+		background-color: var(--color-main-background) !important;
+		border-radius: 50% !important;
+		box-shadow: 0 0 0 1px var(--color-border-maxcontrast);
+
+		// The ground above would otherwise hide the button's own hover feedback.
+		&:hover,
+		&:focus-visible {
+			background-color: var(--color-background-hover) !important;
+		}
 	}
 }
 

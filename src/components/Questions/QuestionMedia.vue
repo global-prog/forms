@@ -19,17 +19,20 @@
 		v-bind="questionProps"
 		hideRequired
 		displayOnly
+		:contentValid="url !== ''"
 		:titlePlaceholder="answerType.titlePlaceholder"
 		:warningInvalid="answerType.warningInvalid"
 		v-on="commonListeners">
 		<div class="question__content question-media">
 			<img
-				v-if="isImage && url"
-				:src="url"
+				v-if="isImage && previewUrl"
+				:src="previewUrl"
 				:alt="alt"
 				class="question-media__image"
 				referrerpolicy="no-referrer"
-				loading="lazy" />
+				loading="lazy"
+				@load="loadFailed = false"
+				@error="loadFailed = true" />
 
 			<a
 				v-else-if="!isImage && url"
@@ -56,7 +59,16 @@
 			</p>
 
 			<template v-if="!readOnly">
+				<NcNoteCard v-if="isImage && previewUrl && loadFailed" type="error">
+					{{ t('forms', 'This image could not be loaded.') }}
+				</NcNoteCard>
+				<!-- An address reads left to right in any interface language. No
+				     type="url": an address on this instance may be written relative
+				     ("/..."), which that type would flag as invalid; inputmode still
+				     brings up the address keyboard on phones. -->
 				<NcTextField
+					dir="ltr"
+					inputmode="url"
 					:label="t('forms', 'Address')"
 					placeholder="https://"
 					:modelValue="url"
@@ -86,10 +98,12 @@
 </template>
 
 <script>
+import debounce from 'debounce'
 import NcNoteCard from '@nextcloud/vue/components/NcNoteCard'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
 import Question from './Question.vue'
 import QuestionMixin from '../../mixins/QuestionMixin.js'
+import { INPUT_DEBOUNCE_MS } from '../../models/Constants.ts'
 
 export default {
 	name: 'QuestionMedia',
@@ -101,6 +115,17 @@ export default {
 	},
 
 	mixins: [QuestionMixin],
+
+	data() {
+		return {
+			/** whether the image at the current address failed to load */
+			loadFailed: false,
+			/** the address the image is loaded from, set in created() */
+			previewUrl: '',
+			/** per-instance debounced update of previewUrl, created in created() */
+			debounceUpdatePreview: null,
+		}
+	},
 
 	computed: {
 		/** @return {boolean} true for an image block, false for video */
@@ -137,6 +162,34 @@ export default {
 				return false
 			}
 		},
+	},
+
+	watch: {
+		url() {
+			// The address now reaches the parent with every keystroke. Loading each
+			// half-typed address would send requests to hosts nobody meant and flash
+			// the load error while the editor is still typing, so wait for a pause.
+			if (this.readOnly) {
+				this.previewUrl = this.url
+			} else {
+				this.debounceUpdatePreview()
+			}
+		},
+
+		previewUrl() {
+			this.loadFailed = false
+		},
+	},
+
+	created() {
+		this.previewUrl = this.url
+		this.debounceUpdatePreview = debounce(() => {
+			this.previewUrl = this.url
+		}, INPUT_DEBOUNCE_MS)
+	},
+
+	beforeUnmount() {
+		this.debounceUpdatePreview.clear()
 	},
 
 	methods: {

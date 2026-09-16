@@ -31,6 +31,7 @@
 				<NcActionInput
 					type="number"
 					:modelValue="maxFileSizeValue"
+					min="0"
 					labelOutside
 					:showTrailingButton="false"
 					:label="t('forms', 'Maximum file size')"
@@ -75,7 +76,11 @@
 					taggable
 					:modelValue="allowedFileExtensions"
 					@option:created="onAllowedFileExtensionsAdded"
-					@option:deselected="onAllowedFileExtensionsDeleted" />
+					@option:deselected="onAllowedFileExtensionsDeleted">
+					<!-- Shown as the field's placeholder: the bare extension is what is
+					     stored, though a dot or capitals are accepted too. -->
+					{{ t('forms', 'For example: pdf, docx') }}
+				</NcActionInput>
 
 				<NcActionSeparator />
 			</template>
@@ -114,7 +119,7 @@
 						:class="{ 'question__input-wrapper--dragging': dragging }"
 						role="group"
 						:aria-labelledby="titleId"
-						:aria-describedby="description ? descriptionId : undefined"
+						:aria-describedby="describedBy"
 						:aria-errormessage="hasError ? errorId : undefined"
 						:aria-invalid="hasError ? 'true' : undefined"
 						@dragenter.prevent="onDragEnter"
@@ -173,8 +178,10 @@
 					</div>
 				</li>
 			</ul>
-			<p v-if="limitsHint" class="question__file-hint">
-				{{ limitsHint }}
+			<!-- The limits come in the interface's words, inside a question laid out the
+			     form's way; <bdi> keeps their punctuation at their own end. -->
+			<p v-if="limitsHint" :id="limitsHintId" class="question__file-hint">
+				<bdi>{{ limitsHint }}</bdi>
 			</p>
 			<!-- Picking a file swaps the focused input for a spinner, so the start and end
 			     of the upload are announced here instead. -->
@@ -390,7 +397,7 @@ export default {
 				),
 			]
 			if (kinds.length) {
-				parts.push(kinds.join(', '))
+				parts.push(kinds.join(t('forms', ', ')))
 			}
 
 			if (this.extraSettings?.maxFileSize > 0) {
@@ -403,6 +410,29 @@ export default {
 			}
 
 			return parts.join(' · ')
+		},
+
+		/** @return {string} id of the limits hint */
+		limitsHintId() {
+			// A trigger shares its conditional's id, so its own elements take their own prefix.
+			return (this.ownElementIdPrefix ?? this.elementIdPrefix) + '_filehint'
+		},
+
+		/**
+		 * The upload box is described by the question's description and by the limits,
+		 * so both are heard before choosing a file.
+		 *
+		 * @return {string|undefined}
+		 */
+		describedBy() {
+			return (
+				[
+					this.description ? this.descriptionId : null,
+					this.limitsHint ? this.limitsHintId : null,
+				]
+					.filter(Boolean)
+					.join(' ') || undefined
+			)
 		},
 
 		maxAllowedFilesCount() {
@@ -434,7 +464,7 @@ export default {
 
 			if (allowedFileTypes.length) {
 				return t('forms', 'Allowed file types: {fileTypes}.', {
-					fileTypes: allowedFileTypes.join(', '),
+					fileTypes: allowedFileTypes.join(t('forms', ', ')),
 				})
 			}
 
@@ -654,11 +684,29 @@ export default {
 			})
 		},
 
-		onMaxFileSizeValueInput(maxFileSizeValue) {
-			this.maxFileSizeValue = maxFileSizeValue
-			const maxFileSize = Math.round(
-				maxFileSizeValue * FILE_SIZE_UNITS[this.maxFileSizeUnit],
+		/**
+		 * @param {string|number} value the size typed, in the chosen unit
+		 * @param {string} unit the chosen unit
+		 * @return {number} the size in bytes; 0, which means no limit, for anything
+		 *     that is not a positive number
+		 */
+		toMaxFileSize(value, unit) {
+			return Math.max(
+				0,
+				Math.round((parseFloat(value) || 0) * FILE_SIZE_UNITS[unit]),
 			)
+		},
+
+		onMaxFileSizeValueInput(maxFileSizeValue) {
+			const maxFileSize = this.toMaxFileSize(
+				maxFileSizeValue,
+				this.maxFileSizeUnit,
+			)
+			// A negative size is stored as no limit, so the field says so rather than
+			// keep showing a number that is not applied. Only a negative one: clearing
+			// "0" would wipe the field halfway through typing "0.5".
+			this.maxFileSizeValue =
+				parseFloat(maxFileSizeValue) < 0 ? '' : maxFileSizeValue
 
 			return this.onExtraSettingsChange({ maxFileSize })
 		},
@@ -669,8 +717,9 @@ export default {
 				return
 			}
 			this.maxFileSizeUnit = maxFileSizeUnit
-			const maxFileSize = Math.round(
-				this.maxFileSizeValue * FILE_SIZE_UNITS[maxFileSizeUnit],
+			const maxFileSize = this.toMaxFileSize(
+				this.maxFileSizeValue,
+				maxFileSizeUnit,
 			)
 
 			return this.onExtraSettingsChange({ maxFileSize })
@@ -679,8 +728,12 @@ export default {
 		onAllowedFileTypesChange(fileType, allowed) {
 			let allowedFileTypes = this.extraSettings.allowedFileTypes || []
 
+			// A new list rather than a push: the stored one belongs to the parent.
 			if (allowed) {
-				allowedFileTypes.push(fileType)
+				if (allowedFileTypes.includes(fileType)) {
+					return
+				}
+				allowedFileTypes = [...allowedFileTypes, fileType]
 			} else {
 				allowedFileTypes = allowedFileTypes.filter(
 					(type) => type !== fileType,
@@ -690,30 +743,69 @@ export default {
 			return this.onExtraSettingsChange({ allowedFileTypes })
 		},
 
-		onAllowedFileExtensionsAdded(fileExtension) {
-			const allowedFileExtensions =
-				this.extraSettings.allowedFileExtensions || []
-			allowedFileExtensions.push(fileExtension)
+		/**
+		 * @param {string|object} extension an extension as typed, or the select's tag
+		 * @return {string} the bare lower-case extension the server looks up. Typed
+		 *     as ".pdf", the picker was offered "..pdf" and refused every file; typed
+		 *     as "PDF", the server refused it after the upload.
+		 */
+		normalizeExtension(extension) {
+			const text =
+				typeof extension === 'object' && extension !== null
+					? (extension.label ?? '')
+					: extension
+			return String(text ?? '')
+				.trim()
+				.replace(/^\.+/, '')
+				.toLowerCase()
+		},
 
-			return this.onExtraSettingsChange({ allowedFileExtensions })
+		onAllowedFileExtensionsAdded(fileExtension) {
+			const extension = this.normalizeExtension(fileExtension)
+			const current = this.extraSettings.allowedFileExtensions || []
+			if (
+				!extension
+				|| current.some((ext) => this.normalizeExtension(ext) === extension)
+			) {
+				return
+			}
+
+			return this.onExtraSettingsChange({
+				allowedFileExtensions: [...current, extension],
+			})
 		},
 
 		onAllowedFileExtensionsDeleted(fileExtension) {
-			let allowedFileExtensions =
+			const extension = this.normalizeExtension(fileExtension)
+			const allowedFileExtensions = (
 				this.extraSettings.allowedFileExtensions || []
-			allowedFileExtensions = allowedFileExtensions.filter(
-				(extension) => extension !== fileExtension,
-			)
+			).filter((ext) => this.normalizeExtension(ext) !== extension)
 
 			return this.onExtraSettingsChange({ allowedFileExtensions })
 		},
 
-		onDeleteUploadedFile(uploadedFileId) {
+		async onDeleteUploadedFile(uploadedFileId) {
+			const removed = this.values.find(
+				(value) => value.uploadedFileId === uploadedFileId,
+			)
 			const values = this.values.filter(
 				(value) => value.uploadedFileId !== uploadedFileId,
 			)
 
 			this.$emit('update:values', values)
+			this.uploadStatus = t('forms', '{fileName} removed', {
+				fileName: removed?.fileName ?? '',
+			})
+
+			// The menu that held the button is gone with the file, so focus goes where
+			// the next file would be chosen, as after an upload.
+			await this.$nextTick()
+			const button = this.$refs.uploadButton?.$el
+			if (button && !button.disabled) {
+				button.focus()
+			} else {
+				this.$refs.fileList?.focus()
+			}
 		},
 
 		async validate() {

@@ -33,6 +33,16 @@
 					label="text"
 					@update:modelValue="onMultipleOptionsSelect" />
 			</div>
+			<!-- The select cannot show an answer that no longer exists, so it looks
+			     empty while the stored rule still waits for that answer. -->
+			<p v-if="hasMissingOption" class="condition-warning">
+				{{
+					t(
+						'forms',
+						'An answer this branch used has been deleted. Choose another answer.',
+					)
+				}}
+			</p>
 		</template>
 
 		<!-- Text-based conditions (short, long) -->
@@ -50,12 +60,8 @@
 					v-model="conditionValue"
 					:label="conditionValuePlaceholder"
 					:placeholder="conditionValuePlaceholder"
-					:error="isPatternInvalid"
-					:helperText="
-						isPatternInvalid
-							? t('forms', 'This pattern is not valid')
-							: ''
-					"
+					:error="isPatternInvalid || isValueMissing"
+					:helperText="valueHelperText"
 					class="condition-value-input" />
 			</div>
 		</template>
@@ -154,11 +160,28 @@
 
 		<!-- File-based conditions -->
 		<template v-else-if="triggerType === 'file'">
-			<div class="condition-row">
+			<!-- Two named choices rather than one switch: "off" read the same whether
+			     the branch waits for no file or has no rule at all, and those two
+			     behave oppositely. -->
+			<div
+				class="condition-row"
+				role="radiogroup"
+				:aria-label="t('forms', 'Show this branch')">
 				<NcCheckboxRadioSwitch
-					:modelValue="fileUploadedCondition"
+					type="radio"
+					:name="fileRadioName"
+					value="uploaded"
+					:modelValue="fileCondition"
 					@update:modelValue="onFileConditionChange">
-					{{ t('forms', 'File is uploaded') }}
+					{{ t('forms', 'When a file is uploaded') }}
+				</NcCheckboxRadioSwitch>
+				<NcCheckboxRadioSwitch
+					type="radio"
+					:name="fileRadioName"
+					value="none"
+					:modelValue="fileCondition"
+					@update:modelValue="onFileConditionChange">
+					{{ t('forms', 'When no file is uploaded') }}
 				</NcCheckboxRadioSwitch>
 			</div>
 		</template>
@@ -271,10 +294,31 @@ export default {
 		 * Options list for NcSelect
 		 */
 		optionsList() {
-			return this.options.map((opt) => ({
+			// An untitled option is named by its place in the list, as the editor shows
+			// it; its database id means nothing to anyone.
+			return this.options.map((opt, index) => ({
 				id: opt.id,
-				text: opt.text || t('forms', 'Option {id}', { id: opt.id }),
+				text:
+					opt.text || t('forms', 'Option {number}', { number: index + 1 }),
 			}))
+		},
+
+		/**
+		 * Whether the branch still names an answer option that has been deleted. The
+		 * branch then never opens, while the select above looks merely empty.
+		 */
+		hasMissingOption() {
+			const ids = (this.branch.conditions ?? []).flatMap((c) =>
+				this.isSingleSelect ? [c.optionId] : (c.optionIds ?? []),
+			)
+			return ids.some(
+				(id) =>
+					id !== undefined
+					&& id !== null
+					&& !this.optionsList.some(
+						(opt) => String(opt.id) === String(id),
+					),
+			)
 		},
 
 		/**
@@ -339,7 +383,32 @@ export default {
 			},
 
 			set(value) {
-				this.updateCondition({ type: value })
+				if (this.triggerType !== 'linearscale') {
+					this.updateCondition({ type: value })
+					return
+				}
+				// Each scale rule is read from its own keys, so a number typed for one
+				// kind moves to where the new kind reads it. Left behind, it would still
+				// limit the branch without being shown.
+				const current = this.branch.conditions?.[0] ?? {}
+				// The first of the keys that holds a number, so "at most" keeps the
+				// upper bound of a range rather than its lower one.
+				const pick = (...keys) =>
+					keys
+						.map((key) => current[key])
+						.find((v) => v !== undefined && v !== null && v !== '')
+				const next = { type: value }
+				if (value === 'value_min') {
+					next.min = pick('min', 'value', 'max')
+				} else if (value === 'value_max') {
+					next.max = pick('max', 'value', 'min')
+				} else if (value === 'value_range') {
+					next.min = pick('min', 'value')
+					next.max = pick('max')
+				} else {
+					next.value = pick('value', 'min', 'max')
+				}
+				this.emitUpdate({ conditions: [next] })
 			},
 		},
 
@@ -429,11 +498,43 @@ export default {
 		},
 
 		/**
-		 * File uploaded condition. Shows what is stored: a branch without a condition
-		 * matches nothing, so the switch must not look on.
+		 * The stored file condition. A branch without a condition matches nothing, so
+		 * neither choice is shown picked; a condition without the flag means
+		 * "uploaded", as both engines read it.
+		 *
+		 * @return {string} uploaded, none, or '' when there is no condition
 		 */
-		fileUploadedCondition() {
-			return this.branch.conditions?.[0]?.fileUploaded ?? false
+		fileCondition() {
+			const condition = this.branch.conditions?.[0]
+			if (!condition) {
+				return ''
+			}
+			return condition.fileUploaded === false ? 'none' : 'uploaded'
+		},
+
+		/** @return {string} the radio group name, one per branch */
+		fileRadioName() {
+			return `branch-${this.branch.id}-file`
+		},
+
+		/**
+		 * Whether a text rule is still waiting for its text. Both engines ignore such a
+		 * rule, so the branch never opens until something is entered. A new branch
+		 * has no rule yet and matches nothing either, so it is flagged the same way.
+		 */
+		isValueMissing() {
+			return this.isTextBasedTrigger && String(this.conditionValue) === ''
+		},
+
+		/** @return {string} what is wrong with the text value, or '' */
+		valueHelperText() {
+			if (this.isPatternInvalid) {
+				return t('forms', 'This pattern is not valid')
+			}
+			if (this.isValueMissing) {
+				return t('forms', 'Enter a value to finish this rule.')
+			}
+			return ''
 		},
 
 		/**
@@ -496,10 +597,10 @@ export default {
 		/**
 		 * Handle file condition change
 		 *
-		 * @param {boolean} checked Whether file is uploaded condition is checked
+		 * @param {string} choice uploaded or none
 		 */
-		onFileConditionChange(checked) {
-			const conditions = [{ fileUploaded: checked }]
+		onFileConditionChange(choice) {
+			const conditions = [{ fileUploaded: choice !== 'none' }]
 			this.emitUpdate({ conditions })
 		},
 
@@ -593,6 +694,11 @@ export default {
 
 .condition-range-input {
 	inline-size: 100px;
+}
+
+.condition-warning {
+	color: var(--color-error-text, var(--color-error));
+	margin-block: 8px 0;
 }
 
 .condition-range-separator {

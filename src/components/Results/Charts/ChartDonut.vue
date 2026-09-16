@@ -122,8 +122,16 @@ export default {
 			if (kept.length <= MAX_SLICES) {
 				return kept
 			}
-			const head = kept.slice(0, MAX_SLICES - 1)
-			const tail = kept.slice(MAX_SLICES - 1)
+			// "No response" keeps a slice of its own. Folded in with the choices it
+			// was counted as one of "N more options", which it is not.
+			const muted = kept.filter((item) => item.muted)
+			const real = kept.filter((item) => !item.muted)
+			const room = Math.max(MAX_SLICES - 1 - muted.length, 1)
+			if (real.length <= room + 1) {
+				return kept
+			}
+			const head = real.slice(0, room)
+			const tail = real.slice(room)
 			return [
 				...head,
 				{
@@ -145,6 +153,7 @@ export default {
 					muted: true,
 					children: tail,
 				},
+				...muted,
 			]
 		},
 

@@ -55,7 +55,10 @@
 		<!-- Every value the chart draws, in words. Read aloud in place of the drawing,
 		     which a screen reader can make nothing of, and shown to everyone when the
 		     library cannot load. -->
-		<dl class="chart-figure__fallback" :class="{ 'hidden-visually': !failed }">
+		<dl
+			class="chart-figure__fallback"
+			:class="{ 'hidden-visually': !failed }"
+			:aria-label="label || undefined">
 			<template v-for="(item, index) in items" :key="item.key ?? index">
 				<dt dir="auto">{{ item.label }}</dt>
 				<dd>
@@ -104,6 +107,15 @@ export default {
 		max: {
 			type: Number,
 			default: 0,
+		},
+
+		/**
+		 * What the figures are, named on the list read out in place of the drawing. A bare
+		 * run of labels and numbers does not say which is the value and which the count.
+		 */
+		label: {
+			type: String,
+			default: '',
 		},
 
 		/** Ranking totals and value distributions are counts, not shares of a whole. */

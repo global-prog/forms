@@ -142,6 +142,17 @@ export default defineComponent({
 		},
 
 		/**
+		 * Re-check a question that is showing an error once the answer changes, so the
+		 * red note goes away as soon as the respondent fixes it instead of lingering
+		 * until the next Next or Submit. It waits a tick for the new values to arrive.
+		 */
+		revalidateIfInvalid() {
+			if (this.errorMessage) {
+				this.$nextTick(() => this.validate())
+			}
+		},
+
+		/**
 		 * Set focus on next AnswerInput
 		 *
 		 * @param index Index of current option
@@ -155,9 +166,10 @@ export default defineComponent({
 		 * Focus the input matching the index
 		 *
 		 * @param index the value index
-		 * @param optionType the option type to focus
+		 * @param optionType the option type to focus. Callers shared with every question
+		 *   type (adding several options at once) only ever add choices and pass none.
 		 */
-		focusIndex(index: number, optionType: string) {
+		focusIndex(index: number, optionType: string = OptionType.Choice) {
 			// refs are not guaranteed to be in correct order - we need to find the correct item
 			const item = this.$refs.input.find((instance) => {
 				return (

@@ -475,7 +475,7 @@ export default {
 
 		titlePlaceholder: t('forms', 'Image caption'),
 		createPlaceholder: t('forms', 'Shows an image on the form'),
-		warningInvalid: t('forms', 'This block needs a caption!'),
+		warningInvalid: t('forms', 'This block needs a caption and an address!'),
 	},
 
 	/**
@@ -494,7 +494,7 @@ export default {
 
 		titlePlaceholder: t('forms', 'Video caption'),
 		createPlaceholder: t('forms', 'Links to a video from the form'),
-		warningInvalid: t('forms', 'This block needs a caption!'),
+		warningInvalid: t('forms', 'This block needs a caption and an address!'),
 	},
 
 	/**

@@ -568,6 +568,7 @@ export default {
 					this.rankedOptions.map((o) => o.id),
 				)
 			}
+			this.revalidateIfInvalid()
 		},
 	},
 }
@@ -589,7 +590,9 @@ export default {
 .ranking-unranked {
 	margin-block-end: calc(2 * var(--default-grid-baseline));
 
-	&__pool {
+	// The draggable renders its own wrapper around the list, so the spacing has to sit
+	// on the list inside it, where the chips actually are.
+	&__pool > .sort-target {
 		display: flex;
 		flex-wrap: wrap;
 		gap: var(--default-grid-baseline);
@@ -618,14 +621,10 @@ export default {
 		font-style: italic;
 		padding: var(--default-grid-baseline) 0;
 	}
-
-	li {
-		display: inline-block;
-	}
 }
 
 .ranking-ranked {
-	&__list {
+	&__list > .sort-target {
 		display: flex;
 		flex-direction: column;
 		gap: var(--default-grid-baseline);

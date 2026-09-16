@@ -32,7 +32,7 @@
 				forceDisplayActions
 				@clone="onCloneForm(form.id)"
 				@delete="onDelete(form)"
-				@mobileCloseNavigation="$emit('update:open', false)" />
+				@mobileCloseNavigation="onMobileCloseNavigation" />
 		</ul>
 	</NcDialog>
 </template>
@@ -75,7 +75,7 @@ export default defineComponent({
 		},
 	},
 
-	emits: ['update:open', 'clone', 'delete'],
+	emits: ['update:open', 'clone', 'delete', 'mobileCloseNavigation'],
 
 	setup() {
 		return { IconArchive }
@@ -102,6 +102,15 @@ export default defineComponent({
 		onCloneForm(formId) {
 			this.$emit('clone', formId)
 			this.$emit('update:open', false)
+		},
+
+		/**
+		 * A row was followed to its form. On a phone the dialog was opened from the
+		 * navigation drawer, which would otherwise stay over the form just opened.
+		 */
+		onMobileCloseNavigation() {
+			this.$emit('update:open', false)
+			this.$emit('mobileCloseNavigation')
 		},
 
 		onDelete(form) {

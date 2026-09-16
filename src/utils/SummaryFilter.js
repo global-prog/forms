@@ -17,6 +17,20 @@
 const CHOICE_TYPES = ['multiple', 'multiple_unique', 'dropdown']
 
 /**
+ * Types a response answers at most once. Two conditions on one of these could never both
+ * hold, so a second answer chosen for such a question takes the place of the first.
+ */
+const SINGLE_ANSWER_TYPES = ['multiple_unique', 'dropdown', 'linearscale', 'rating']
+
+/**
+ * @param {object} question the question
+ * @return {boolean} whether a response holds at most one answer to it
+ */
+export function holdsOneAnswer(question) {
+	return SINGLE_ANSWER_TYPES.includes(question?.type)
+}
+
+/**
  * The answers a question can be filtered by.
  *
  * @param {object} question the question
@@ -66,7 +80,8 @@ export function filterableQuestions(questions) {
  * The responses that gave every chosen answer.
  *
  * Conditions narrow one another: asked for engineers, and for those who came in person,
- * a summary describes the engineers who came in person.
+ * a summary describes the engineers who came in person. The server applies the same rule
+ * to a filtered download, so the file and the page describe the same responses.
  *
  * @param {object[]} submissions every response
  * @param {?({questionId: number, value: string}[]|{questionId: number, value: string})} filter

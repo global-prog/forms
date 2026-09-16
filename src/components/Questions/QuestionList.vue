@@ -11,7 +11,7 @@
 		direction="vertical"
 		invertSwap
 		handle=".question__drag-handle"
-		@change="onOrderChange"
+		@update="onOrderChange"
 		@start="onDragStart"
 		@end="onDragEnd">
 		<TransitionGroup
@@ -262,6 +262,12 @@ export default {
 			this.$emit('dragEnd')
 		},
 
+		/**
+		 * Runs once per drop, and only when the position changed. The draggable's own
+		 * update handler runs first and has already moved the list in the model, so the
+		 * parent reads the new order. Its `change` event would be too early: it fires
+		 * while the card is still being dragged, before anything has moved.
+		 */
 		onOrderChange() {
 			this.$emit('orderChange')
 		},
@@ -331,8 +337,10 @@ export default {
 	}
 }
 
+// A phone has no hover to reveal the button, so it stays fully visible there. A faded
+// icon reads as disabled and is too faint to find.
 .question-insert.is-mobile {
-	opacity: 0.3;
+	opacity: 1;
 }
 
 .question:hover > .question-insert,

@@ -100,9 +100,13 @@
 					aria-hidden="true">
 					<NcIconSvgWrapper :svg="IconAlertCircleOutline" />
 				</div>
-				<!-- The asterisk on the menu icon is drawn only; say it in the name too. -->
+				<!-- The asterisk on the menu icon is drawn only; say it in the name too.
+				     A conditional's trigger shares the conditional's id, so the general
+				     items below would change the conditional behind the editor's back;
+				     the conditional's own menu offers them. The trigger keeps a menu only
+				     for its type's own settings (scale range, file types, ...). -->
 				<NcActions
-					v-if="!readOnly"
+					v-if="!readOnly && (!isTriggerQuestion || $slots.actions)"
 					:id="actionsId"
 					:ariaLabel="
 						isRequired
@@ -121,7 +125,7 @@
 						</IconOverlay>
 					</template>
 					<NcActionCheckbox
-						v-if="!hideRequired"
+						v-if="!hideRequired && !isTriggerQuestion"
 						:modelValue="isRequired"
 						@update:modelValue="onRequiredChange">
 						<!-- TRANSLATORS Making this question necessary to be answered when submitting to a form -->
@@ -129,7 +133,7 @@
 					</NcActionCheckbox>
 					<!-- cross-question conditions and go-to-section branching -->
 					<NcActionButton
-						v-if="!readOnly"
+						v-if="!isTriggerQuestion"
 						closeAfterClick
 						@click="showLogicDialog = true">
 						<template #icon>
@@ -139,6 +143,7 @@
 					</NcActionButton>
 					<slot name="actions" />
 					<NcActionInput
+						v-if="!isTriggerQuestion"
 						:label="t('forms', 'Technical name of the question')"
 						:labelOutside="false"
 						:showTrailingButton="false"
@@ -160,7 +165,10 @@
 					</NcActionButton>
 					<!-- closeAfterClick: on a form with answers this opens a confirmation
 					     instead of deleting at once, and the menu would sit over it. -->
-					<NcActionButton closeAfterClick @click="onDelete">
+					<NcActionButton
+						v-if="!isTriggerQuestion"
+						closeAfterClick
+						@click="onDelete">
 						<template #icon>
 							<NcIconSvgWrapper :svg="IconDelete" />
 						</template>
@@ -205,23 +213,22 @@
 					v-html="computedDescription" />
 				<!-- eslint-enable vue/no-v-html -->
 			</div>
-			<!-- The interface's sentences, inside a question laid out the form's way:
-			     <bdi> keeps their punctuation at their own end. -->
-			<NcNoteCard v-if="hasInfo" :id="infoId" type="info">
-				<bdi>{{ infoMessage }}</bdi>
-			</NcNoteCard>
-			<!-- Short-answer and number questions validate as they are typed in, so an
-			     error can appear without focus moving and without anything being said.
-			     Polite rather than assertive: submitting can raise several of these at
-			     once, and the respondent is already being taken to the first of them. -->
-			<NcNoteCard
-				v-if="hasError"
-				:id="errorId"
-				type="error"
-				aria-live="polite">
-				<bdi>{{ errorMessage }}</bdi>
-			</NcNoteCard>
 		</div>
+
+		<!-- Outside the header: a conditional's trigger question has no header for the
+		     respondent, and its hint or error still has to be seen. -->
+		<!-- The interface's sentences, inside a question laid out the form's way:
+		     <bdi> keeps their punctuation at their own end. -->
+		<NcNoteCard v-if="hasInfo" :id="infoId" type="info">
+			<bdi>{{ infoMessage }}</bdi>
+		</NcNoteCard>
+		<!-- Short-answer and number questions validate as they are typed in, so an
+		     error can appear without focus moving and without anything being said.
+		     Polite rather than assertive: submitting can raise several of these at
+		     once, and the respondent is already being taken to the first of them. -->
+		<NcNoteCard v-if="hasError" :id="errorId" type="error" aria-live="polite">
+			<bdi>{{ errorMessage }}</bdi>
+		</NcNoteCard>
 
 		<!-- Question content -->
 		<slot />
@@ -229,7 +236,7 @@
 		<slot name="insert" />
 
 		<QuestionLogicDialog
-			v-if="!readOnly && showLogicDialog"
+			v-if="!readOnly && !isTriggerQuestion && showLogicDialog"
 			v-model:open="showLogicDialog"
 			:questionId="id"
 			:extraSettings="extraSettings"
@@ -493,20 +500,46 @@ export default {
 			return 'h' + this.headingLevel
 		},
 
+		/**
+		 * Prefix of the element ids, kept equal to QuestionMixin's so the answer
+		 * fields there point at the elements rendered here. Built from the question
+		 * id where there is one: a conditional's subquestions are numbered from
+		 * their parent, so their index repeats the next question's.
+		 *
+		 * @return {string} the prefix
+		 */
+		elementIdPrefix() {
+			return this.id === null ? 'q' + this.index : 'question' + this.id
+		},
+
+		/**
+		 * Prefix of the ids of elements a question renders for itself, as in
+		 * QuestionMixin. A conditional's trigger shares the conditional's id but
+		 * shows its own hint and error; its title and description are still the
+		 * conditional's.
+		 *
+		 * @return {string} the prefix
+		 */
+		ownElementIdPrefix() {
+			return this.isTriggerQuestion
+				? 'trigger' + this.elementIdPrefix
+				: this.elementIdPrefix
+		},
+
 		warningId() {
-			return 'q' + this.index + '_warning'
+			return this.ownElementIdPrefix + '_warning'
 		},
 
 		actionsId() {
-			return 'q' + this.index + '_actions'
+			return this.ownElementIdPrefix + '_actions'
 		},
 
 		titleId() {
-			return 'q' + this.index + '_title'
+			return this.elementIdPrefix + '_title'
 		},
 
 		descriptionId() {
-			return 'q' + this.index + '_desc'
+			return this.elementIdPrefix + '_desc'
 		},
 
 		hasDescription() {
@@ -522,11 +555,11 @@ export default {
 		},
 
 		errorId() {
-			return `q${this.index}_error`
+			return this.ownElementIdPrefix + '_error'
 		},
 
 		infoId() {
-			return `q${this.index}_info`
+			return this.ownElementIdPrefix + '_info'
 		},
 	},
 
@@ -612,6 +645,11 @@ export default {
 	justify-content: stretch;
 	margin-block-end: 64px;
 	padding-inline-start: var(--default-clickable-area);
+	// Scrolling a question into view lines it up with the top of the scroller,
+	// where the sticky top bar would cover it.
+	scroll-margin-block-start: calc(
+		var(--default-clickable-area) + 2 * var(--app-navigation-padding, 4px) + 8px
+	);
 	background-color: var(--color-main-background);
 
 	&--editable {

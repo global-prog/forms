@@ -18,7 +18,8 @@
 		:open="open"
 		:name="t('forms', 'Import questions')"
 		size="normal"
-		@update:open="$emit('update:open', $event)">
+		:noClose="importing"
+		@update:open="onUpdateOpen">
 		<!-- aria-busy while a list loads; the spinners carry names of their own. Not a live
 		     region: that would read out every question of a long form once it arrived. -->
 		<div
@@ -61,7 +62,6 @@
 					     running import is still working through. -->
 					<select
 						:value="selectedFormId ?? ''"
-						:aria-label="t('forms', 'Form to copy questions from')"
 						:disabled="importing"
 						@change="onSelectForm">
 						<option disabled value="">
@@ -240,6 +240,20 @@ export default {
 
 	methods: {
 		/**
+		 * Closing mid-copy would unmount the dialog while the server keeps creating
+		 * copies, and the editor would never hear about them. Escape and the backdrop
+		 * still reach here even with the close button hidden, so they are ignored too.
+		 *
+		 * @param {boolean} isOpen the requested state
+		 */
+		onUpdateOpen(isOpen) {
+			if (this.importing && !isOpen) {
+				return
+			}
+			this.$emit('update:open', isOpen)
+		},
+
+		/**
 		 * @param {string} type the answer type
 		 * @return {string} its human label
 		 */
@@ -341,6 +355,7 @@ export default {
 		async onImport() {
 			this.importing = true
 			const created = []
+			const copiedIds = []
 			// Fixed up front, so nothing that changes the selection mid-way can cut the
 			// import short while it still reports success.
 			const toCopy = this.importable.filter((question) =>
@@ -357,6 +372,7 @@ export default {
 						{ fromId: question.id },
 					)
 					created.push(OcsResponse2Data(response))
+					copiedIds.push(question.id)
 				}
 				this.$emit('imported', created)
 				this.$emit('update:open', false)
@@ -368,6 +384,9 @@ export default {
 						? t('forms', 'Only some questions could be copied')
 						: t('forms', 'Could not copy the questions'),
 				)
+				// The dialog stays open for a retry, which should only cover what failed;
+				// leaving the copied ones ticked would copy them a second time.
+				this.chosen = this.chosen.filter((id) => !copiedIds.includes(id))
 				if (created.length) {
 					this.$emit('imported', created)
 				}

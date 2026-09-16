@@ -397,10 +397,7 @@ export default {
 		onValueChange(date) {
 			if (!date) {
 				this.$emit('update:values', [])
-				return
-			}
-
-			if (this.isRangeQuestion) {
+			} else if (this.isRangeQuestion) {
 				this.$emit('update:values', [
 					moment(date[0]).format(this.answerType.storageFormat),
 					moment(date[1]).format(this.answerType.storageFormat),
@@ -410,6 +407,7 @@ export default {
 					moment(date).format(this.answerType.storageFormat),
 				])
 			}
+			this.revalidateIfInvalid()
 		},
 
 		/**

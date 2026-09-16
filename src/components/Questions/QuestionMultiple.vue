@@ -112,6 +112,12 @@
 						class="question__input"
 						:label="t('forms', 'Other answer')"
 						:required="otherAnswer !== undefined"
+						:aria-errormessage="
+							hasError && isOtherTextMissing ? errorId : undefined
+						"
+						:aria-invalid="
+							hasError && isOtherTextMissing ? 'true' : undefined
+						"
 						:modelValue="cachedOtherAnswerText"
 						@update:modelValue="onOtherAnswerTextChange" />
 				</div>
@@ -286,6 +292,18 @@ export default {
 			)
 		},
 
+		/**
+		 * "Other" is ticked but its text box holds nothing but spaces
+		 */
+		isOtherTextMissing() {
+			return (
+				this.otherAnswer !== undefined
+				&& this.otherAnswer
+					.slice(QUESTION_EXTRASETTINGS_OTHER_PREFIX.length)
+					.trim() === ''
+			)
+		},
+
 		choices: {
 			get() {
 				return this.sortOptionsOfType(this.options, OptionType.Choice)
@@ -359,6 +377,15 @@ export default {
 
 	methods: {
 		async validate() {
+			// A ticked "Other" with an empty box is saved as the bare prefix. The server
+			// either rejects that as unanswered or drops it silently, so stop here where
+			// the respondent can still see which box needs text. The form itself is
+			// novalidate, so the input's own required attribute does not catch this.
+			if (this.isOtherTextMissing) {
+				this.errorMessage = t('forms', 'Please type your "Other" answer')
+				return false
+			}
+
 			if (this.isRequired && this.areNoneChecked) {
 				this.errorMessage = t('forms', 'You must answer this question')
 				return false
@@ -417,6 +444,7 @@ export default {
 
 		onChange(value) {
 			this.$emit('update:values', this.isUnique ? [value].flat() : value)
+			this.revalidateIfInvalid()
 		},
 
 		/**
@@ -594,6 +622,7 @@ export default {
 							prefixedValue,
 						],
 			)
+			this.revalidateIfInvalid()
 		},
 	},
 }

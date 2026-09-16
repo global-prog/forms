@@ -37,6 +37,17 @@ html {
 }
 
 /*
+ * Form controls hidden this way (a rating's radios, a file question's input) take focus
+ * but never show themselves, so the focus exception above must not apply to them: with
+ * the offset back, the browser scrolls the page sideways to reach the focused control.
+ */
+[dir] input.hidden-visually {
+	inset-inline-start: auto;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
+/*
   Chart palette.
 
   Fixed hexes, not Nextcloud's theme variables, and deliberately so. A categorical palette
@@ -159,9 +170,12 @@ html {
  * legible on screen, all but blank on paper, and nothing in the preview says so.
  *
  * Rather than restate a colour on every printed element, the handful of tokens that carry
- * text and edges are redefined for print, which the components already read. The chart
- * series stay as they are: css/forms.css defines the light palette on :root and the dark
- * one under [data-theme-dark], so the same override brings the light series back with it.
+ * text and edges are redefined for print, which the components already read.
+ *
+ * The chart series need their own rule. Both palettes are declared on the chart
+ * containers themselves, not inherited from the page, so an override on the root would
+ * lose to them. The light values are restated here on the same selectors the dark
+ * palette uses; with equal specificity, the later rule wins.
  */
 @media print {
 	:root,
@@ -178,6 +192,16 @@ html {
 		--color-text-maxcontrast: #555;
 		--color-border: #999;
 		--color-border-dark: #777;
+	}
+
+	.question-summary,
+	.quiz-insights,
+	[data-theme-dark] .question-summary,
+	[data-theme-dark] .quiz-insights,
+	[data-theme-dark-highcontrast] .question-summary,
+	[data-theme-dark-highcontrast] .quiz-insights,
+	[data-theme-default] .question-summary,
+	[data-theme-default] .quiz-insights {
 		--chart-series-1: #2a78d6;
 		--chart-series-2: #d4551f;
 		--chart-series-3: #12805d;

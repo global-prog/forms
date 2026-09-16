@@ -6,8 +6,9 @@
 <!--
   Narrow the summary to the responses that gave certain answers, so every chart below it
   describes that group alone: how the engineers rated the service, what the first-year
-  students who came in person chose. Each answer added narrows the one before it, and the
-  rules live in utils/SummaryFilter.js.
+  students who came in person chose. Each answer added narrows the one before it; for a
+  question answered only once, a second answer replaces the first. The rules live in
+  utils/SummaryFilter.js.
 -->
 <template>
 	<div v-if="questionOptions.length" class="summary-filter">
@@ -33,7 +34,7 @@
 				trackBy="id"
 				@update:modelValue="onAnswer" />
 		</div>
-		<ul v-if="conditions.length" class="summary-filter__chips">
+		<ul v-if="conditions.length" ref="chips" class="summary-filter__chips">
 			<li v-for="(condition, index) in conditions" :key="index">
 				<NcChip
 					:text="conditionLabel(condition)"
@@ -75,7 +76,11 @@
 <script>
 import NcChip from '@nextcloud/vue/components/NcChip'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
-import { filterableQuestions, filterAnswers } from '../../utils/SummaryFilter.js'
+import {
+	filterableQuestions,
+	filterAnswers,
+	holdsOneAnswer,
+} from '../../utils/SummaryFilter.js'
 
 export default {
 	name: 'SummaryFilter',
@@ -186,20 +191,46 @@ export default {
 					&& condition.value === added.value,
 			)
 			if (!already) {
-				this.$emit('update:modelValue', [...this.conditions, added])
+				// A response gives one answer to a single choice, a scale or a rating, so
+				// "Engineering" and "Science" together would match nobody. The new answer
+				// replaces the old one instead of emptying the summary.
+				const question = this.questions.find(
+					(candidate) => candidate.id === added.questionId,
+				)
+				const kept = holdsOneAnswer(question)
+					? this.conditions.filter(
+							(condition) => condition.questionId !== added.questionId,
+						)
+					: this.conditions
+				this.$emit('update:modelValue', [...kept, added])
 			}
 			// Ready for the next condition rather than sitting on the one just added.
 			this.pendingQuestionId = null
+			// That removes the answer picker, which had focus; the question picker is
+			// always there and is where the next condition starts.
+			this.focusQuestionPicker()
 		},
 
 		/**
 		 * @param {number} index the condition to drop
 		 */
 		removeCondition(index) {
+			// Closing a chip removes its button along with the focus it held.
+			const hadFocus =
+				this.$refs.chips?.contains(document.activeElement) ?? false
 			this.$emit(
 				'update:modelValue',
 				this.conditions.filter((condition, at) => at !== index),
 			)
+			if (hadFocus) {
+				this.focusQuestionPicker()
+			}
+		},
+
+		focusQuestionPicker() {
+			this.$nextTick(() => {
+				this.$el?.querySelector?.('.summary-filter__select input')?.focus()
+			})
 		},
 
 		/**

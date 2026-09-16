@@ -105,7 +105,14 @@
 			:label="t('forms', 'Header image address')"
 			placeholder="https://"
 			type="url"
+			:maxlength="settingsMaxLength"
 			:disabled="formArchived || locked"
+			:error="headerImageError !== ''"
+			:helperText="headerImageError"
+			:aria-describedby="
+				headerImageBroken ? 'forms-settings__header-image-error' : undefined
+			"
+			@update:modelValue="headerImageError = ''"
 			@change="onHeaderImageChange" />
 		<!-- An address typed into a box tells the author nothing about whether it is the
 		     right picture, or a picture at all. Shown here, a typo is obvious at once
@@ -119,8 +126,11 @@
 				class="settings-header-image__preview"
 				@load="headerImageBroken = false"
 				@error="headerImageBroken = true" />
+			<!-- The load fails after the author has moved on, so it is announced. -->
 			<p
 				v-if="headerImageBroken"
+				id="forms-settings__header-image-error"
+				role="alert"
 				class="settings-hint settings-header-image__error">
 				{{ t('forms', 'That address did not load a picture.') }}
 			</p>
@@ -133,7 +143,19 @@
 			clearable
 			:modelValue="accentColor || undefined"
 			@update:modelValue="onAccentColorChange">
-			<NcButton :disabled="formArchived || locked" variant="secondary" wide>
+			<NcButton
+				:ariaLabel="accentColorLabel"
+				:disabled="formArchived || locked"
+				variant="secondary"
+				wide>
+				<!-- The colour itself, so the author sees what is set without opening the
+				     picker. The label says it in words. -->
+				<template v-if="accentColor" #icon>
+					<span
+						class="settings-colour__swatch"
+						:style="{ backgroundColor: accentColor }"
+						aria-hidden="true" />
+				</template>
 				{{
 					accentColor
 						? t('forms', 'Change accent colour')
@@ -171,7 +193,7 @@
 				{{
 					t(
 						'forms',
-						'A form shared by link is often opened by people who are not signed in, so their language is unknown and the form falls back to this instance default. Pinning a language here sets the reading direction for every respondent.',
+						'Visitors who are not signed in see the site default language. Choose a language to set the language and reading direction for everyone.',
 					)
 				}}
 			</p>
@@ -190,10 +212,12 @@
 				:label="t('forms', 'Also notify these addresses')"
 				:placeholder="t('forms', 'name@example.com, other@example.com')"
 				:disabled="formArchived || locked"
+				:maxlength="settingsMaxLength"
 				inputmode="email"
 				dir="ltr"
-				:error="invalidNotifyEmails.length > 0"
+				:error="notifyEmailsTooLong || invalidNotifyEmails.length > 0"
 				:helperText="notifyEmailsHelperText"
+				@update:modelValue="notifyEmailsTooLong = false"
 				@change="onNotifyEmailsChange" />
 		</div>
 		<h4 class="settings-group">{{ t('forms', 'Availability') }}</h4>
@@ -213,7 +237,7 @@
 				:ariaLabel="t('forms', 'Expiration date')"
 				:clearable="false"
 				:format="stringifyDate"
-				:min="minDate"
+				:min="expirationMinDate"
 				:minuteStep="5"
 				:modelValue="expirationDate"
 				type="datetime"
@@ -252,8 +276,10 @@
 			<p v-else class="settings-hint">
 				{{ stringifyOpeningDate(openingDate) }}
 			</p>
+			<!-- Appears once a date is picked, away from where focus is, so it is announced. -->
 			<p
 				v-if="closesBeforeOpening"
+				role="alert"
 				class="settings-hint settings-hint--warning">
 				{{ t('forms', 'The form expires before it opens.') }}
 			</p>
@@ -310,10 +336,19 @@
 				|| (locked && form.lockedUntil !== 0)
 				|| !isCurrentUserOwner
 			"
+			aria-describedby="forms-settings__lock-form"
 			type="switch"
 			@update:modelValue="onFormLockChange">
 			{{ t('forms', 'Lock form permanently') }}
 		</NcCheckboxRadioSwitch>
+		<p id="forms-settings__lock-form" class="settings-hint">
+			{{
+				t(
+					'forms',
+					'The form and its settings cannot be changed until the owner unlocks it. Responses are still accepted.',
+				)
+			}}
+		</p>
 		<NcCheckboxRadioSwitch
 			:modelValue="formArchived"
 			aria-describedby="forms-settings__archive-form"
@@ -488,7 +523,7 @@
 <script>
 import { getCurrentUser } from '@nextcloud/auth'
 import { loadState } from '@nextcloud/initial-state'
-import { translate as t } from '@nextcloud/l10n'
+import { translatePlural as n, translate as t } from '@nextcloud/l10n'
 import moment from '@nextcloud/moment'
 import { vOnClickOutside as ClickOutside } from '@vueuse/components'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -564,6 +599,17 @@ export default {
 			confirmationEmailBody: this.form?.confirmationEmailBody || '',
 			/** Set by the preview's own load and error events, not guessed from the text */
 			headerImageBroken: false,
+			/** Why the typed header image address was not saved, or '' */
+			headerImageError: '',
+			/** Whether the typed list of extra addresses was too long to save */
+			notifyEmailsTooLong: false,
+			/**
+			 * The custom submission message as it was when the switch turned it off, so
+			 * turning the switch back on brings the text back instead of an empty box.
+			 */
+			stashedSubmissionMessage: '',
+			/** The server refuses the whole settings object if any text in it is longer */
+			settingsMaxLength: 2048,
 			/*
 			 * Text fields edit a local copy and save when the author leaves the field or
 			 * presses Enter. Saving per keystroke sent a request for every letter, and
@@ -646,6 +692,20 @@ export default {
 			return this.formSettings.accentColor || ''
 		},
 
+		/** @return {string|undefined} the colour button's label, naming the colour once one is set */
+		accentColorLabel() {
+			if (!this.accentColor) {
+				return undefined
+			}
+			return t(
+				'forms',
+				'Change accent colour, current colour {colour}',
+				{ colour: this.accentColor },
+				undefined,
+				{ escape: false, sanitize: false },
+			)
+		},
+
 		/** @return {boolean} whether the owner wants an email per response */
 		notifyOwner() {
 			return this.formSettings.notifyOwner === true
@@ -710,10 +770,26 @@ export default {
 
 		/** @return {string} the hint under the extra addresses field */
 		notifyEmailsHelperText() {
+			if (this.notifyEmailsTooLong) {
+				return t('forms', 'This list of addresses is too long.')
+			}
 			if (this.invalidNotifyEmails.length > 0) {
-				return t('forms', 'Not a valid address: {list}', {
-					list: this.invalidNotifyEmails.join(', '),
-				})
+				// The separator is translated so an Arabic sentence gets its own comma, and
+				// the Latin addresses are isolated so they do not reorder the sentence
+				// around them in a right-to-left sidebar.
+				return n(
+					'forms',
+					'Not a valid address: {list}',
+					'Not valid addresses: {list}',
+					this.invalidNotifyEmails.length,
+					{
+						list:
+							'\u2068'
+							+ this.invalidNotifyEmails.join(t('forms', ', '))
+							+ '\u2069',
+					},
+					{ escape: false, sanitize: false },
+				)
 			}
 			return t('forms', 'Separate addresses with commas.')
 		},
@@ -789,6 +865,13 @@ export default {
 		/** @return {Date} the opening time, for the picker */
 		openingDate() {
 			return moment(this.opensAt, 'X').toDate()
+		},
+
+		/** @return {Date} the earliest expiry to offer: not before the form opens */
+		expirationMinDate() {
+			return this.opensLater && this.openingDate > this.minDate
+				? this.openingDate
+				: this.minDate
 		},
 
 		/** @return {boolean} whether the expiry date comes first, so it never opens */
@@ -934,6 +1017,18 @@ export default {
 	},
 
 	watch: {
+		/*
+		 * The sidebar stays mounted when another form is opened, so nothing typed or
+		 * kept for the previous form may carry over to this one.
+		 */
+		'form.id': function () {
+			this.headerImageDraft = this.headerImage
+			this.headerImageError = ''
+			this.notifyEmailsDraft = this.notifyEmails
+			this.notifyEmailsTooLong = false
+			this.stashedSubmissionMessage = ''
+		},
+
 		'form.confirmationEmailSubject': function (val) {
 			this.confirmationEmailSubject = val || ''
 		},
@@ -1072,10 +1167,44 @@ export default {
 		},
 
 		/**
+		 * @param {string} value any text
+		 * @return {boolean} whether the server would refuse it as a settings value
+		 */
+		isTooLongForSettings(value) {
+			// The server counts bytes, and an Arabic letter takes two of them.
+			return new TextEncoder().encode(value).length > this.settingsMaxLength
+		},
+
+		/**
 		 * Saves the banner address once the author leaves the field.
 		 */
 		onHeaderImageChange() {
-			const value = this.headerImageDraft.trim()
+			let value = this.headerImageDraft.trim()
+			this.headerImageError = ''
+			// "example.com/logo.png" would be stored as it is and then load as a path on
+			// this server, a broken picture on the form. An address with no scheme at all
+			// most likely means https.
+			if (
+				value !== ''
+				&& !this.isHttpUrl(value)
+				&& !/^[a-z][a-z\d+.-]*:/i.test(value)
+				&& this.isHttpUrl('https://' + value)
+			) {
+				value = 'https://' + value
+				this.headerImageDraft = value
+			}
+			if (value !== '' && !this.isHttpUrl(value)) {
+				this.headerImageError = t(
+					'forms',
+					'Enter a full address starting with https://',
+				)
+				return
+			}
+			// Saving it would fail, and every later settings change with it.
+			if (this.isTooLongForSettings(value)) {
+				this.headerImageError = t('forms', 'This address is too long.')
+				return
+			}
 			if (value === this.headerImage) {
 				return
 			}
@@ -1103,14 +1232,9 @@ export default {
 		 * @param {boolean} checked email the owner on each response
 		 */
 		onNotifyOwnerChange(checked) {
-			// The extra addresses are hidden while the switch is off, and the server mails
-			// them whenever any are stored, so turning it off has to clear them too -
-			// otherwise colleagues keep getting mail the author can no longer see.
-			this.updateSettings(
-				checked
-					? { notifyOwner: true }
-					: { notifyOwner: false, notifyEmails: null },
-			)
+			// The extra addresses stay stored while the switch is off: the server mails
+			// nobody then, and turning it back on should not mean typing them all again.
+			this.updateSettings({ notifyOwner: checked })
 		},
 
 		/**
@@ -1133,7 +1257,9 @@ export default {
 			const value = this.splitEmails(this.notifyEmailsDraft).join(', ')
 			// Show the tidied list even when it matches what is stored already.
 			this.notifyEmailsDraft = value
-			if (value === this.notifyEmails) {
+			// Saving it would fail, and every later settings change with it.
+			this.notifyEmailsTooLong = this.isTooLongForSettings(value)
+			if (this.notifyEmailsTooLong || value === this.notifyEmails) {
 				return
 			}
 			this.updateSettings({ notifyEmails: value || null })
@@ -1145,11 +1271,16 @@ export default {
 
 		onFormExpiresChange(checked) {
 			if (checked) {
-				this.$emit(
-					'update:formProp',
-					'expires',
-					moment().add(1, 'hour').unix(),
-				) // Expires in one hour.
+				// In an hour, unless the form only opens later: then a week after it opens,
+				// so the default never closes the form before it has opened.
+				// A form that opened long ago still gets the hour, not a date already past.
+				const expires = moment.max(
+					moment().add(1, 'hour'),
+					this.opensLater
+						? moment(this.opensAt, 'X').add(7, 'days')
+						: moment(),
+				)
+				this.$emit('update:formProp', 'expires', expires.unix())
 			} else {
 				this.$emit('update:formProp', 'expires', 0)
 			}
@@ -1159,12 +1290,25 @@ export default {
 		 * @param {boolean} checked wait for a set time before taking responses
 		 */
 		onOpensLaterChange(checked) {
-			// Tomorrow on the hour is a likelier start than this very minute.
-			this.updateSettings({
-				opensAt: checked
-					? moment().add(1, 'day').startOf('hour').unix()
-					: null,
-			})
+			if (!checked) {
+				this.updateSettings({ opensAt: null })
+				return
+			}
+			// Tomorrow on the hour is a likelier start than this very minute, but not when
+			// the form expires before then: an hour before the expiry instead, and never in
+			// the past.
+			let opens = moment().add(1, 'day').startOf('hour')
+			if (
+				this.formExpires
+				&& !this.isExpired
+				&& opens.unix() >= this.form.expires
+			) {
+				opens = moment.max(
+					moment().add(5, 'minutes'),
+					moment(this.form.expires, 'X').subtract(1, 'hour'),
+				)
+			}
+			this.updateSettings({ opensAt: opens.unix() })
 		},
 
 		/**
@@ -1267,9 +1411,15 @@ export default {
 		 */
 		onUpdateHasCustomSubmissionMessage() {
 			if (this.hasCustomSubmissionMessage) {
+				// Kept for this visit, so an accidental switch-off does not lose the text.
+				this.stashedSubmissionMessage = this.form.submissionMessage || ''
 				this.$emit('update:formProp', 'submissionMessage', null)
 			} else {
-				this.$emit('update:formProp', 'submissionMessage', '')
+				this.$emit(
+					'update:formProp',
+					'submissionMessage',
+					this.stashedSubmissionMessage,
+				)
 			}
 		},
 
@@ -1384,6 +1534,14 @@ export default {
 
 .settings-colour {
 	margin-block: 8px 4px;
+
+	&__swatch {
+		block-size: 16px;
+		border-radius: 50%;
+		box-shadow: 0 0 0 1px var(--color-border-dark);
+		display: block;
+		inline-size: 16px;
+	}
 }
 
 .settings-header-image {

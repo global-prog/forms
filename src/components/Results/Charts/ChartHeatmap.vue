@@ -37,14 +37,14 @@
 						class="chart-heatmap__column-head"
 						scope="col"
 						dir="auto">
-						{{ column.label }}
+						<span class="chart-heatmap__label">{{ column.label }}</span>
 					</th>
 				</tr>
 			</thead>
 			<tbody>
 				<tr v-for="(row, rowIndex) in rows" :key="row.key">
 					<th class="chart-heatmap__row-head" scope="row" dir="auto">
-						{{ row.label }}
+						<span class="chart-heatmap__label">{{ row.label }}</span>
 					</th>
 					<td
 						v-for="(cell, columnIndex) in cells[rowIndex]"
@@ -66,7 +66,13 @@
  */
 const MAX_TINT = 0.55
 
-import { savePng, startChartCanvas } from './chartImage.js'
+import { savePng, startChartCanvas, wrapText } from './chartImage.js'
+
+/**
+ * Narrowest picture a heatmap is saved as. A two-by-three grid is only a few hundred pixels
+ * wide, and a picture that narrow squeezed the question above it into a column of a few words.
+ */
+const MIN_EXPORT_WIDTH = 480
 
 export default {
 	name: 'ChartHeatmap',
@@ -142,9 +148,12 @@ export default {
 			// screen, and all of it belongs in the picture.
 			const width = Math.ceil(table.scrollWidth)
 			const height = Math.ceil(table.scrollHeight)
+			// The table keeps its own size and is centred in a picture that is never narrow.
+			const exportWidth = Math.max(width, MIN_EXPORT_WIDTH)
+			const offsetX = (exportWidth - width) / 2
 
 			const { canvas, context, padding, titleHeight, ink } = startChartCanvas({
-				width,
+				width: exportWidth,
 				height,
 				title,
 				direction,
@@ -162,7 +171,7 @@ export default {
 					continue
 				}
 				const cellStyle = window.getComputedStyle(cell)
-				const x = rect.left - origin.left + padding
+				const x = rect.left - origin.left + padding + offsetX
 				const y = rect.top - origin.top + padding + titleHeight
 
 				const fill = cellStyle.backgroundColor
@@ -180,12 +189,33 @@ export default {
 				context.textBaseline = 'middle'
 				const centred = cellStyle.textAlign === 'center'
 				context.textAlign = centred ? 'center' : 'start'
-				const textX = centred
-					? x + rect.width / 2
-					: direction === 'rtl'
-						? x + rect.width - 4
-						: x + 4
-				context.fillText(text, textX, y + rect.height / 2)
+				// Each label reads in its own direction (dir="auto"), as on screen: an
+				// English option in an Arabic table starts at the left edge of its cell.
+				const cellRtl = cellStyle.direction === 'rtl'
+				context.direction = cellRtl ? 'rtl' : 'ltr'
+				const paddingStart = parseFloat(cellStyle.paddingInlineStart) || 4
+				const paddingEnd = parseFloat(cellStyle.paddingInlineEnd) || 4
+				const textWidth = Math.max(rect.width - paddingStart - paddingEnd, 1)
+				const middle = y + rect.height / 2
+				if (centred) {
+					context.fillText(text, x + rect.width / 2, middle, textWidth)
+					continue
+				}
+				// A row label is often a whole sentence and wraps inside its cell on screen.
+				// Written out on one line it ran across the neighbouring cells and over their
+				// numbers, so it is broken to the cell's width the same way, centred on the
+				// cell's middle.
+				const textX = cellRtl
+					? x + rect.width - paddingStart
+					: x + paddingStart
+				const fontSize = parseFloat(cellStyle.fontSize) || 14
+				const lineHeight =
+					parseFloat(cellStyle.lineHeight) || fontSize * 1.25
+				const lines = wrapText(context, text, textWidth)
+				lines.forEach((line, index) => {
+					const offset = (index - (lines.length - 1) / 2) * lineHeight
+					context.fillText(line, textX, middle + offset, textWidth)
+				})
 			}
 
 			table.classList.remove('chart-heatmap__table--paper')
@@ -254,10 +284,12 @@ export default {
 	// A cross-tab's labels are whole question options, which can be sentences. They wrap
 	// within a sane width rather than stretching the table off the screen. A grid's
 	// headers are short by nature and are left at the width they have always had.
-	&--wrap-labels &__column-head,
-	&--wrap-labels &__row-head {
+	// Browsers ignore a width cap on a table cell itself, so the cap sits on the text
+	// inside it.
+	&--wrap-labels &__label {
+		display: block;
 		max-inline-size: 22ch;
-		overflow-wrap: break-word;
+		overflow-wrap: anywhere;
 	}
 
 	&__row-head {
