@@ -31,11 +31,15 @@
 			<h2 dir="auto" :style="{ textAlign: authorTextAlign }">
 				{{ formTitle }}
 			</h2>
-			<p>
+			<!-- A live region, so a finished search or a deletion is announced. -->
+			<p role="status">
 				{{
-					t('forms', '{amount} responses', {
-						amount: filteredSubmissionsCount,
-					})
+					n(
+						'forms',
+						'%n response',
+						'%n responses',
+						filteredSubmissionsCount,
+					)
 				}}
 			</p>
 
@@ -77,14 +81,14 @@
 							{{ t('forms', 'Create spreadsheet') }}
 						</NcActionButton>
 						<template v-if="canEditForm && form.fileId">
-							<NcActionButton
-								:href="fileUrl"
-								type="tertiary-no-background">
+							<!-- A link, not a button: inside the collapsed menu on a phone a
+							     button has nothing to navigate with. -->
+							<NcActionLink :href="fileUrl" closeAfterClick>
 								<template #icon>
 									<NcIconSvgWrapper :svg="IconTable" />
 								</template>
 								{{ t('forms', 'Open spreadsheet') }}
-							</NcActionButton>
+							</NcActionLink>
 							<NcActionButton closeAfterClick @click="onReExport">
 								<template #icon>
 									<NcIconSvgWrapper :svg="IconRefresh" />
@@ -128,7 +132,7 @@
 							<template #icon>
 								<NcIconSvgWrapper :svg="IconDownload" />
 							</template>
-							{{ t('forms', 'Download') }}
+							{{ downloadLabel }}
 						</NcActionButton>
 						<NcActionButton
 							v-if="canDeleteSubmissions && !noSubmissions"
@@ -147,7 +151,7 @@
 							<template #icon>
 								<NcIconSvgWrapper :svg="IconBack" />
 							</template>
-							{{ t('forms', 'Download') }}
+							{{ downloadLabel }}
 						</NcActionButton>
 						<NcActionSeparator />
 						<NcActionButton
@@ -172,7 +176,7 @@
 							<template #icon>
 								<NcIconSvgWrapper :svg="IconFileExcelOutline" />
 							</template>
-							XSLX
+							XLSX
 						</NcActionButton>
 					</template>
 				</NcActions>
@@ -199,13 +203,33 @@
 			</div>
 		</header>
 
-		<!-- Loading submissions -->
+		<!-- Loading submissions. Only when there is nothing of this view to show yet:
+		     replacing a list that is on screen would take the pagination buttons, and
+		     the keyboard focus on them, away with it. -->
 		<NcEmptyContent
-			v-if="loadingResults"
+			v-if="showFullLoader"
 			class="forms-emptycontent"
 			:name="t('forms', 'Loading responses …')">
 			<template #icon>
 				<NcLoadingIcon :size="64" />
+			</template>
+		</NcEmptyContent>
+
+		<!-- Loading failed. A toast alone disappears and leaves a page that looks empty. -->
+		<NcEmptyContent
+			v-else-if="loadError"
+			class="forms-emptycontent"
+			:name="t('forms', 'Responses could not be loaded')">
+			<template #icon>
+				<NcIconSvgWrapper :svg="IconPoll" :size="64" />
+			</template>
+			<template #action>
+				<NcButton @click="loadFormResults">
+					<template #icon>
+						<NcIconSvgWrapper :svg="IconRefresh" />
+					</template>
+					{{ t('forms', 'Try again') }}
+				</NcButton>
 			</template>
 		</NcEmptyContent>
 
@@ -254,7 +278,9 @@
 		     does not, because that belongs to the reader. -->
 		<!-- The filter belongs to the reader, like the view switcher above it, so it is
 		     laid out in the reader's direction rather than the form's. -->
-		<section v-else-if="activeResponseView.id === 'summary'">
+		<section
+			v-else-if="activeResponseView.id === 'summary'"
+			:aria-busy="loadingResults ? 'true' : 'false'">
 			<SummaryFilter
 				v-if="submissions.length > 1"
 				v-model="summaryFilter"
@@ -293,10 +319,22 @@
 		</section>
 
 		<!-- Responses view for individual responses -->
-		<section v-else :dir="formDirection" :lang="formLanguage || undefined">
+		<section
+			v-else
+			ref="responsesSection"
+			tabindex="-1"
+			class="responses-section"
+			:aria-busy="loadingResults ? 'true' : 'false'"
+			:dir="formDirection"
+			:lang="formLanguage || undefined">
+			<NcLoadingIcon
+				v-if="loadingResults"
+				class="responses-section__loading"
+				:name="t('forms', 'Loading responses …')" />
 			<Submission
 				v-for="submission in submissions"
 				:key="submission.id"
+				:data-submission-id="submission.id"
 				:formHash="form.hash"
 				:submission="submission"
 				:questions="questions"
@@ -349,11 +387,13 @@ import axios from '@nextcloud/axios'
 import { getFilePickerBuilder, showError, showSuccess } from '@nextcloud/dialogs'
 import { emit } from '@nextcloud/event-bus'
 import { FileType } from '@nextcloud/files'
+import { translate as t } from '@nextcloud/l10n'
 import moment from '@nextcloud/moment'
 import { generateOcsUrl, generateUrl } from '@nextcloud/router'
 import { useIsSmallMobile } from '@nextcloud/vue'
 import debounce from 'debounce'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
+import NcActionLink from '@nextcloud/vue/components/NcActionLink'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcActionSeparator from '@nextcloud/vue/components/NcActionSeparator'
 import NcAppContent from '@nextcloud/vue/components/NcAppContent'
@@ -406,6 +446,7 @@ export default {
 
 	components: {
 		NcActionButton,
+		NcActionLink,
 		NcActionSeparator,
 		NcActions,
 		NcAppContent,
@@ -466,6 +507,13 @@ export default {
 			isDownloadActionOpened: false,
 			printedAt: '',
 			loadingResults: true,
+			/** The last load failed, so what is on screen cannot be trusted */
+			loadError: false,
+			/** Which view the loaded submissions belong to; the summary loads them all */
+			loadedView: null,
+			/** Counts loads, so a slow one that finishes late is ignored */
+			loadSeq: 0,
+			loadController: null,
 			skipReloadOnOffsetChange: false,
 
 			picker: null,
@@ -593,6 +641,41 @@ export default {
 			return applySummaryFilter(this.submissions, this.summaryFilter)
 		},
 
+		/**
+		 * The page-wide loader, shown only when there is nothing of this view on screen.
+		 * Switching from the summary to the responses must still wait: the summary has
+		 * every response loaded, and the list would briefly draw all of them unpaginated.
+		 *
+		 * @return {boolean}
+		 */
+		showFullLoader() {
+			return (
+				this.loadingResults
+				&& (!this.submissions.length
+					|| this.loadedView !== this.activeResponseView.id)
+			)
+		},
+
+		/**
+		 * The summary filter is not visible in the responses view, so only the summary
+		 * applies it to a download.
+		 *
+		 * @return {boolean}
+		 */
+		downloadIsFiltered() {
+			return (
+				this.activeResponseView.id === 'summary'
+				&& this.summaryFilter?.length > 0
+			)
+		},
+
+		/** @return {string} the download entry, saying when it is only a subset */
+		downloadLabel() {
+			return this.downloadIsFiltered
+				? t('forms', 'Download filtered responses')
+				: t('forms', 'Download')
+		},
+
 		isFormArchived() {
 			return this.form.state === FormState.FormArchived
 		},
@@ -655,6 +738,13 @@ export default {
 		async hash() {
 			// Another form's questions: an answer chosen for this one means nothing there.
 			this.summaryFilter = []
+			// Nor are its responses: drop them, and any load still running for them, so
+			// the page-wide loader shows instead of the old list under the new title.
+			this.loadSeq++
+			this.loadController?.abort()
+			this.loadController = null
+			this.submissions = []
+			this.loadedView = null
 			await this.fetchFullForm(this.form.id)
 			this.loadFormResults()
 			SetWindowTitle(this.formTitle)
@@ -689,39 +779,54 @@ export default {
 
 	methods: {
 		async onUnlinkFile() {
-			await axios.patch(
-				generateOcsUrl('apps/forms/api/v3/forms/{formId}', {
-					formId: this.form.id,
-				}),
-				{
-					keyValuePairs: {
-						fileId: null,
-						fileFormat: null,
+			try {
+				await axios.patch(
+					generateOcsUrl('apps/forms/api/v3/forms/{formId}', {
+						formId: this.form.id,
+					}),
+					{
+						keyValuePairs: {
+							fileId: null,
+							fileFormat: null,
+						},
 					},
-				},
-			)
+				)
 
-			const updatedForm = {
-				...this.form,
-				fileFormat: null,
-				fileId: null,
-				filePath: null,
+				const updatedForm = {
+					...this.form,
+					fileFormat: null,
+					fileId: null,
+					filePath: null,
+				}
+				this.$emit('update:form', updatedForm)
+				emit('forms:last-updated:set', this.form.id)
+			} catch (error) {
+				logger.error('Error while unlinking the file', { error })
+				showError(t('forms', 'There was an error while unlinking the file'))
 			}
-			this.$emit('update:form', updatedForm)
-			emit('forms:last-updated:set', this.form.id)
 		},
 
 		async loadFormResults() {
+			// Switching views, paging and searching each start a load. Only the newest
+			// may land, or a slow summary could overwrite the page that replaced it.
+			const seq = ++this.loadSeq
+			this.loadController?.abort()
+			const controller = new AbortController()
+			this.loadController = controller
+			const view = this.activeResponseView.id
+
 			this.loadingResults = true
+			this.loadError = false
 			logger.debug(`Loading responses for form ${this.form.hash}`)
 
 			try {
 				let response = null
-				if (this.activeResponseView.id === 'summary') {
+				if (view === 'summary') {
 					response = await axios.get(
 						generateOcsUrl('apps/forms/api/v3/forms/{id}/submissions', {
 							id: this.form.id,
 						}),
+						{ signal: controller.signal },
 					)
 				} else {
 					response = await axios.get(
@@ -734,7 +839,11 @@ export default {
 								query: this.submissionSearch,
 							},
 						),
+						{ signal: controller.signal },
 					)
+				}
+				if (seq !== this.loadSeq) {
+					return
 				}
 				const data = OcsResponse2Data(response)
 
@@ -745,11 +854,21 @@ export default {
 				)
 				this.questions = data.questions
 				this.filteredSubmissionsCount = data.filteredSubmissionsCount
+				this.loadedView = view
 			} catch (error) {
+				// A newer load took over (and aborted this one); its outcome is the one
+				// that counts.
+				if (seq !== this.loadSeq) {
+					return
+				}
 				logger.error('Error while loading responses', { error })
+				this.loadError = true
 				showError(t('forms', 'An error occurred while loading responses'))
 			} finally {
-				this.loadingResults = false
+				if (seq === this.loadSeq) {
+					this.loadingResults = false
+					this.loadController = null
+				}
 			}
 		},
 
@@ -779,8 +898,9 @@ export default {
 		async onDownloadFile(fileFormat) {
 			// A filtered summary downloads what it describes, so the spreadsheet and the
 			// page on screen say the same thing. The linked file is untouched by this: it
-			// stays a copy of every response.
-			const filter = this.summaryFilter?.length
+			// stays a copy of every response. The responses view does not show the
+			// filter, so a download from there is always every response.
+			const filter = this.downloadIsFiltered
 				? '&filter=' + encodeURIComponent(JSON.stringify(this.summaryFilter))
 				: ''
 			const exportUrl =
@@ -908,7 +1028,7 @@ export default {
 				)
 			} catch (error) {
 				logger.error('Error while exporting to Files', { error })
-				showError(t('forms', 'There was an error, while exporting to Files'))
+				showError(t('forms', 'There was an error while exporting to Files'))
 			}
 		},
 
@@ -971,8 +1091,37 @@ export default {
 				const index = this.submissions.findIndex(
 					(search) => search.id === id,
 				)
-				this.submissions.splice(index, 1)
+				// Where keyboard focus goes next: the response that takes this one's
+				// place, or the one before it when this was the last on the page.
+				const nextId = (
+					this.submissions[index + 1] ?? this.submissions[index - 1]
+				)?.id
+				this.filteredSubmissionsCount = Math.max(
+					0,
+					this.filteredSubmissionsCount - 1,
+				)
+				this.form.submissionCount = Math.max(
+					0,
+					(this.form.submissionCount ?? 1) - 1,
+				)
 				emit('forms:last-updated:set', this.form.id)
+
+				if (this.submissions.length === 1 && this.offset > 0) {
+					// The page is now empty, so go back one. The last card stays until
+					// that page arrives: an empty list would swap the whole section for
+					// the page-wide loader.
+					this.skipReloadOnOffsetChange = true
+					this.offset = Math.max(0, this.offset - this.limit)
+					await this.loadFormResults()
+					this.skipReloadOnOffsetChange = false
+				} else {
+					if (index > -1) {
+						this.submissions.splice(index, 1)
+					}
+					// Refill the page from the one after it.
+					await this.loadFormResults()
+				}
+				this.$nextTick(() => this.focusAfterDelete(nextId))
 			} catch (error) {
 				logger.error(`Error while deleting response ${id}`, { error })
 				showError(
@@ -998,6 +1147,9 @@ export default {
 				)
 				this.submissions = []
 				this.form.submissionCount = 0
+				this.filteredSubmissionsCount = 0
+				this.summaryFilter = []
+				showSuccess(t('forms', 'All responses deleted'))
 				emit('forms:last-updated:set', this.form.id)
 			} catch (error) {
 				logger.error('Error while deleting responses', { error })
@@ -1005,6 +1157,25 @@ export default {
 			} finally {
 				this.loadingResults = false
 			}
+		},
+
+		/**
+		 * Put keyboard focus back into the list after a deletion, instead of leaving it
+		 * on the menu that was just removed along with its response.
+		 *
+		 * @param {number|undefined} nextId the response to move to, if still on the page
+		 */
+		focusAfterDelete(nextId) {
+			const section = this.$refs.responsesSection
+			if (!section) {
+				return
+			}
+			const card =
+				nextId === undefined
+					? null
+					: section.querySelector(`[data-submission-id="${nextId}"]`)
+			const target = card?.querySelector('button') ?? section
+			target.focus({ preventScroll: !!card })
 		},
 
 		formatDateAnswers(submissions, questions) {
@@ -1215,6 +1386,17 @@ export default {
 
 .bottom-pagination {
 	margin-bottom: 24px;
+}
+
+.responses-section {
+	// Only ever focused by script, after a deletion; a ring would frame the whole list.
+	&:focus {
+		outline: none;
+	}
+
+	&__loading {
+		margin-block-end: 16px;
+	}
 }
 </style>
 

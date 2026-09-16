@@ -103,6 +103,33 @@ export function wrapText(context, text, width) {
 }
 
 /**
+ * A title broken into lines, at most `limit` of them.
+ *
+ * A title that needs more is cut at the end of the last line and marked with an ellipsis,
+ * so a reader of the picture can tell there was more rather than taking a sentence that
+ * stops mid-way as the whole question.
+ *
+ * @param {CanvasRenderingContext2D} context the context whose font the text is measured in
+ * @param {string} text the title
+ * @param {number} width the width to fit
+ * @param {number} [limit] the most lines to use
+ * @return {string[]} the lines
+ */
+export function titleLines(context, text, width, limit = 3) {
+	const lines = wrapText(context, text, width)
+	if (lines.length <= limit) {
+		return lines
+	}
+	const kept = lines.slice(0, limit)
+	let last = kept[limit - 1]
+	while (last && context.measureText(`${last}…`).width > width) {
+		last = last.slice(0, -1)
+	}
+	kept[limit - 1] = `${last.trimEnd()}…`
+	return kept
+}
+
+/**
  * A question's text, made safe to use as a file name.
  *
  * @param {string} title the question
@@ -169,7 +196,7 @@ export function startChartCanvas({
 	const canvas = document.createElement('canvas')
 	const context = canvas.getContext('2d')
 	context.font = `bold 16px ${family}`
-	const lines = wrapText(context, title, width).slice(0, 3)
+	const lines = titleLines(context, title, width)
 	const titleHeight = lines.length ? lines.length * 22 + padding : 0
 
 	canvas.width = (width + 2 * padding) * scale

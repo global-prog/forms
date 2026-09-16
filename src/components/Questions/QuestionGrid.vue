@@ -18,76 +18,90 @@
 				:name="name || undefined"
 				:aria-labelledby="titleId"
 				:aria-describedby="description ? descriptionId : undefined">
-				<table class="answer-grid">
-					<thead>
-						<tr>
-							<th class="first-column"></th>
+				<!-- A grid with several columns is wider than a phone. Only the table scrolls
+				     sideways, not the whole form, and the row labels stay in view while it
+				     does. Every cell holds a focusable control, so keyboard users can still
+				     reach each column. -->
+				<div class="answer-grid__scroll">
+					<table class="answer-grid">
+						<thead>
+							<tr>
+								<th class="first-column"></th>
 
-							<th
-								v-for="column in columns"
-								:key="column.local ? 'option-local' : column.id"
-								scope="col">
-								{{ column.text }}
-							</th>
-						</tr>
-					</thead>
-					<tbody>
-						<tr
-							v-for="row in rows"
-							:key="row.local ? 'option-local' : row.id">
-							<th class="first-column" scope="row">{{ row.text }}</th>
-							<td
-								v-for="column in columns"
-								:key="column.local ? 'option-local' : column.id">
-								<template v-if="questionType === 'radio'">
-									<NcCheckboxRadioSwitch
-										:aria-errormessage="
-											hasError ? errorId : undefined
-										"
-										:aria-invalid="hasError ? 'true' : undefined"
-										:aria-label="cellLabel(row, column)"
-										:modelValue="values[row.id]"
-										:value="column.id.toString()"
-										:name="`${row.id}-answer`"
-										type="radio"
-										@update:modelValue="
-											onChangeCheckboxRadio(row.id, $event)
-										" />
-								</template>
+								<th
+									v-for="column in columns"
+									:key="column.local ? 'option-local' : column.id"
+									scope="col">
+									{{ column.text }}
+								</th>
+							</tr>
+						</thead>
+						<tbody>
+							<tr
+								v-for="row in rows"
+								:key="row.local ? 'option-local' : row.id">
+								<th class="first-column" scope="row">
+									{{ row.text }}
+								</th>
+								<td
+									v-for="column in columns"
+									:key="column.local ? 'option-local' : column.id">
+									<template v-if="questionType === 'radio'">
+										<NcCheckboxRadioSwitch
+											:aria-errormessage="
+												hasError ? errorId : undefined
+											"
+											:aria-invalid="
+												hasError ? 'true' : undefined
+											"
+											:aria-label="cellLabel(row, column)"
+											:modelValue="values[row.id]"
+											:value="column.id.toString()"
+											:name="`${row.id}-answer`"
+											type="radio"
+											@update:modelValue="
+												onChangeCheckboxRadio(row.id, $event)
+											" />
+									</template>
 
-								<template v-if="questionType === 'checkbox'">
-									<NcCheckboxRadioSwitch
-										:aria-errormessage="
-											hasError ? errorId : undefined
-										"
-										:aria-invalid="hasError ? 'true' : undefined"
-										:aria-label="cellLabel(row, column)"
-										:modelValue="values[row.id] || []"
-										:value="column.id.toString()"
-										:name="`${row.id}-answer`"
-										type="checkbox"
-										@update:modelValue="
-											onChangeCheckboxRadio(row.id, $event)
-										" />
-								</template>
+									<template v-if="questionType === 'checkbox'">
+										<NcCheckboxRadioSwitch
+											:aria-errormessage="
+												hasError ? errorId : undefined
+											"
+											:aria-invalid="
+												hasError ? 'true' : undefined
+											"
+											:aria-label="cellLabel(row, column)"
+											:modelValue="values[row.id] || []"
+											:value="column.id.toString()"
+											:name="`${row.id}-answer`"
+											type="checkbox"
+											@update:modelValue="
+												onChangeCheckboxRadio(row.id, $event)
+											" />
+									</template>
 
-								<template v-if="questionType === 'number'">
-									<NcInputField
-										type="number"
-										:aria-label="cellLabel(row, column)"
-										:modelValue="plainValues[row.id][column.id]"
-										@update:modelValue="
-											onChangeTextNumber(
-												row.id,
-												column.id,
-												$event,
-											)
-										" />
-								</template>
-							</td>
-						</tr>
-					</tbody>
-				</table>
+									<template v-if="questionType === 'number'">
+										<NcInputField
+											type="number"
+											:aria-label="cellLabel(row, column)"
+											:modelValue="
+												plainValues[row.id][column.id]
+											"
+											@update:modelValue="
+												onChangeTextNumber(
+													row.id,
+													column.id,
+													$event,
+												)
+											" />
+									</template>
+								</td>
+							</tr>
+						</tbody>
+					</table>
+				</div>
 			</fieldset>
 		</template>
 
@@ -101,7 +115,7 @@
 				<Draggable
 					v-model="columns"
 					class="question__content"
-					:animation="300"
+					:animation="sortAnimation()"
 					direction="vertical"
 					handle=".option__drag-handle"
 					invertSwap
@@ -139,7 +153,7 @@
 				<Draggable
 					v-model="rows"
 					class="question__content"
-					:animation="300"
+					:animation="sortAnimation()"
 					direction="vertical"
 					handle=".option__drag-handle"
 					invertSwap
@@ -181,7 +195,7 @@
 </template>
 
 <script>
-import { translatePlural as n, translate as t } from '@nextcloud/l10n'
+import { translate as t } from '@nextcloud/l10n'
 import { VueDraggable as Draggable } from 'vue-draggable-plus'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcInputField from '@nextcloud/vue/components/NcInputField'
@@ -269,40 +283,37 @@ export default {
 
 	methods: {
 		async validate() {
-			if (
-				this.isRequired
-				&& (this.values.length === 0 || this.values === null)
-			) {
+			// Once the grid has been touched, values is an object keyed by row, not an
+			// array, so its length says nothing. A cleared number cell ('') or an unticked
+			// checkbox row ([]) still leaves a key behind; the server does not count those
+			// as an answer, so neither may the form, or the respondent only learns about it
+			// from a generic error when submitting.
+			if (this.isRequired && !this.hasAnyAnswer()) {
 				this.errorMessage = t('forms', 'You must answer this question')
 				return false
 			}
 
-			if (!this.isUnique) {
-				// Validate limits
-				const max = this.extraSettings.optionsLimitMax ?? 0
-				const min = this.extraSettings.optionsLimitMin ?? 0
-				if (max && this.values.length > max) {
-					this.errorMessage = n(
-						'forms',
-						'You must choose at most one option',
-						'You must choose a maximum of %n options',
-						max,
-					)
-					return false
-				}
-				if (min && this.values.length < min) {
-					this.errorMessage = n(
-						'forms',
-						'You must choose at least one option',
-						'You must choose at least %n options',
-						min,
-					)
-					return false
-				}
-			}
-
 			this.errorMessage = null
 			return true
+		},
+
+		/**
+		 * Whether at least one cell of the grid holds an answer
+		 *
+		 * @return {boolean}
+		 */
+		hasAnyAnswer() {
+			const isFilled = (value) =>
+				value !== '' && value !== null && value !== undefined
+			return Object.values(this.values ?? {}).some((rowValue) => {
+				if (Array.isArray(rowValue)) {
+					return rowValue.some(isFilled)
+				}
+				if (rowValue && typeof rowValue === 'object') {
+					return Object.values(rowValue).some(isFilled)
+				}
+				return isFilled(rowValue)
+			})
 		},
 
 		onDragStart() {
@@ -434,12 +445,28 @@ export default {
 .options-list-transition-leave-to {
 	opacity: 0;
 	transform: translateX(var(--default-clickable-area));
+
+	// Items slide in from the end side, which is the left in a right-to-left form.
+	[dir='rtl'] & {
+		transform: translateX(calc(-1 * var(--default-clickable-area)));
+	}
 }
 
 /* ensure leaving items are taken out of layout flow so that moving
    animations can be calculated correctly. */
 .options-list-transition-leave-active {
 	position: absolute;
+}
+
+// A fieldset is as wide as its content by default, so without this the scroll
+// container below would never be narrower than the table and never scroll.
+fieldset {
+	min-inline-size: 0;
+}
+
+.answer-grid__scroll {
+	overflow-x: auto;
+	max-inline-size: 100%;
 }
 
 .answer-grid {
@@ -485,10 +512,16 @@ export default {
 		// A row's label is a heading now, so a screen reader can say which row a cell is
 		// in; it should still read as the plain text it looked like before.
 		font-weight: normal;
-		min-width: 200px;
+		// On a phone a fixed 200px label column would leave almost no room for the
+		// answer columns; long labels wrap instead.
+		min-width: min(200px, 40vw);
+		overflow-wrap: anywhere;
 		text-align: start;
 		position: sticky;
 		inset-inline-start: 0;
+		// The cells scroll underneath the sticky label, so it needs a solid ground.
+		background-color: var(--color-main-background);
+		z-index: 1;
 	}
 }
 </style>

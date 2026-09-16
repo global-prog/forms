@@ -255,13 +255,16 @@ export default {
 </script>
 
 <style lang="scss" scoped>
+// The library's focus glow also shows on a mouse click into the panel, so it is off
+// for :focus, but a keyboard user still needs to see where focus went.
 .app-sidebar__tab:focus {
 	box-shadow: none;
 }
 
-h3 {
-	font-weight: bold;
-	margin-inline-start: 8px;
-	margin-block-end: 8px;
+// Doubled class: the library's own :focus rule sets outline: 0 at the same specificity,
+// and which stylesheet loads last is not ours to decide.
+.app-sidebar__tab.app-sidebar__tab:focus-visible {
+	outline: 2px solid var(--color-primary-element);
+	outline-offset: -2px;
 }
 </style>

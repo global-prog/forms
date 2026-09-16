@@ -87,6 +87,19 @@ export default defineComponent({
 
 	methods: {
 		/**
+		 * How long the drag-and-drop library animates a reordered item. It sets the
+		 * transition inline, so a stylesheet cannot switch it off for people who asked
+		 * the system for less motion; this has to.
+		 *
+		 * @param ms the animation length when motion is welcome
+		 */
+		sortAnimation(ms: number = 300): number {
+			return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+				? 0
+				: ms
+		},
+
+		/**
 		 * Set focus on next AnswerInput
 		 *
 		 * @param index Index of current option

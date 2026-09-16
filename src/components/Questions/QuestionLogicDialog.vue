@@ -68,9 +68,20 @@
 						<select
 							:value="rule.questionId"
 							:aria-label="t('forms', 'Question this rule looks at')"
+							:aria-describedby="
+								ruleProblem(rule) === 'missing'
+									? problemId(index)
+									: undefined
+							"
 							@change="onRuleQuestion(index, $event)">
 							<option disabled value="">
 								{{ t('forms', 'Choose a question') }}
+							</option>
+							<option
+								v-if="ruleKind(rule) === 'missing'"
+								disabled
+								:value="rule.questionId">
+								{{ t('forms', 'Deleted question') }}
 							</option>
 							<option
 								v-for="candidate in sourceCandidates"
@@ -85,7 +96,11 @@
 						<!-- choice questions: pick an option -->
 						<select
 							v-if="ruleKind(rule) === 'choice'"
-							:value="rule.conditions?.[0]?.optionId ?? ''"
+							:value="
+								rule.conditions?.[0]?.optionId
+								?? rule.conditions?.[0]?.optionIds?.[0]
+								?? ''
+							"
 							:aria-label="t('forms', 'Answer that must be chosen')"
 							@change="onRuleOption(index, $event)">
 							<option disabled value="">
@@ -122,6 +137,14 @@
 								:value="rule.conditions?.[0]?.value ?? ''"
 								:placeholder="t('forms', 'Value')"
 								:aria-label="t('forms', 'Value to compare against')"
+								:aria-invalid="
+									ruleProblem(rule) === 'pattern'
+										? 'true'
+										: undefined
+								"
+								:aria-describedby="
+									ruleProblem(rule) ? problemId(index) : undefined
+								"
 								@input="onRuleValue(index, $event)" />
 						</template>
 
@@ -129,7 +152,10 @@
 						<template v-else-if="ruleKind(rule) === 'number'">
 							<select
 								:value="rule.conditions?.[0]?.type ?? 'value_equals'"
-								@change="onRuleType(index, $event)">
+								:aria-label="
+									t('forms', 'How the number is compared')
+								"
+								@change="onRuleType(index, $event, true)">
 								<option value="value_equals">
 									{{ t('forms', 'is') }}
 								</option>
@@ -145,12 +171,40 @@
 							</select>
 							<input
 								type="number"
-								:value="rule.conditions?.[0]?.value ?? ''"
+								:value="numberValue(rule)"
 								:aria-label="t('forms', 'Number to compare against')"
+								:aria-describedby="
+									ruleProblem(rule) ? problemId(index) : undefined
+								"
 								@input="onRuleValue(index, $event, true)" />
 						</template>
 
-						<span v-else class="logic__empty">
+						<!-- time questions: one bound, in the answer's own HH:mm format -->
+						<template v-else-if="ruleKind(rule) === 'time'">
+							<select
+								:value="timeOperator(rule)"
+								:aria-label="t('forms', 'How the time is compared')"
+								@change="onTimeOperator(index, $event)">
+								<option value="min">
+									{{ t('forms', 'is at or after') }}
+								</option>
+								<option value="max">
+									{{ t('forms', 'is at or before') }}
+								</option>
+							</select>
+							<input
+								type="time"
+								:value="timeBound(rule)"
+								:aria-label="t('forms', 'Time to compare against')"
+								:aria-describedby="
+									ruleProblem(rule) ? problemId(index) : undefined
+								"
+								@input="onTimeValue(index, $event)" />
+						</template>
+
+						<span
+							v-else-if="ruleKind(rule) === 'unknown'"
+							class="logic__empty">
 							{{
 								t(
 									'forms',
@@ -159,9 +213,26 @@
 							}}
 						</span>
 
-						<NcButton variant="tertiary" @click="removeRule(index)">
+						<NcButton
+							variant="tertiary"
+							:aria-label="
+								t('forms', 'Remove rule {number}', {
+									number: index + 1,
+								})
+							"
+							@click="removeRule(index)">
 							{{ t('forms', 'Remove') }}
 						</NcButton>
+
+						<!-- Such a rule never matches, or matches everyone, without any other sign.
+						     No live role: it changes as the editor types, and the fields it
+						     concerns already point at it. -->
+						<p
+							v-if="ruleProblem(rule)"
+							:id="problemId(index)"
+							class="logic__warning">
+							{{ problemText(rule) }}
+						</p>
 					</div>
 
 					<NcButton variant="secondary" @click="addRule">
@@ -173,14 +244,6 @@
 			<!-- ------------------------------------------------ answer key -->
 			<template v-if="isQuiz">
 				<h4 class="logic__heading">{{ t('forms', 'Answer key') }}</h4>
-				<p class="logic__empty">
-					{{
-						t(
-							'forms',
-							'Leave blank to exclude this question from scoring.',
-						)
-					}}
-				</p>
 
 				<label class="logic__row">
 					<span>{{ t('forms', 'Points') }}</span>
@@ -192,6 +255,17 @@
 						:aria-label="t('forms', 'Points for a correct answer')"
 						@input="onPointsChange" />
 				</label>
+
+				<!-- Scoring is skipped only when there is no correct answer; a blank Points
+				     value still scores 1, so the hint belongs with the answer, not above Points. -->
+				<p class="logic__empty">
+					{{
+						t(
+							'forms',
+							'Leave the correct answer empty to exclude this question from scoring.',
+						)
+					}}
+				</p>
 
 				<!-- choice questions: tick the correct options -->
 				<template v-if="options.length > 0">
@@ -258,6 +332,11 @@
 					<span class="logic__option">{{ option.text }}</span>
 					<select
 						:value="targetOf(option.id)"
+						:aria-label="
+							t('forms', 'Where to go after the answer {option}', {
+								option: option.text,
+							})
+						"
 						@change="onTarget(option.id, $event)">
 						<option value="next">{{ t('forms', 'Next page') }}</option>
 						<option
@@ -277,14 +356,35 @@
 </template>
 
 <script>
+import { translate as t } from '@nextcloud/l10n'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
+import {
+	compilePattern,
+	DATE_STORAGE_FORMATS,
+} from '../../utils/DisplayConditions.js'
 
 /** Source types the condition engine understands, grouped by the input they need */
 const CHOICE_TYPES = ['multiple_unique', 'dropdown', 'multiple']
 const TEXT_TYPES = ['short', 'long']
-const NUMBER_TYPES = ['linearscale', 'time']
+const NUMBER_TYPES = ['linearscale']
+// The server compares times as H:i strings in min/max, not as numbers.
+const TIME_TYPES = ['time']
+
+/**
+ * @param {string|undefined} type a numeric condition type
+ * @return {string} the key both engines read that condition's number from
+ */
+function numberKey(type) {
+	if (type === 'value_min') {
+		return 'min'
+	}
+	if (type === 'value_max') {
+		return 'max'
+	}
+	return 'value'
+}
 
 export default {
 	name: 'QuestionLogicDialog',
@@ -352,9 +452,12 @@ export default {
 			return this.allQuestions
 				.slice(0, this.ownIndex)
 				.filter((q) =>
-					[...CHOICE_TYPES, ...TEXT_TYPES, ...NUMBER_TYPES].includes(
-						q.type,
-					),
+					[
+						...CHOICE_TYPES,
+						...TEXT_TYPES,
+						...NUMBER_TYPES,
+						...TIME_TYPES,
+					].includes(q.type),
 				)
 		},
 
@@ -485,7 +588,7 @@ export default {
 		ruleKind(rule) {
 			const source = this.allQuestions.find((q) => q.id === rule.questionId)
 			if (!source) {
-				return 'unknown'
+				return 'missing'
 			}
 			if (CHOICE_TYPES.includes(source.type)) {
 				return 'choice'
@@ -496,7 +599,109 @@ export default {
 			if (NUMBER_TYPES.includes(source.type)) {
 				return 'number'
 			}
+			if (TIME_TYPES.includes(source.type)) {
+				return 'time'
+			}
 			return 'unknown'
+		},
+
+		/**
+		 * Rules that cannot match are stored without complaint and then hide the
+		 * question from every respondent, so they are pointed out while editing.
+		 *
+		 * @param {object} rule the rule to check
+		 * @return {string|null} missing, incomplete or pattern; null for a usable rule
+		 */
+		ruleProblem(rule) {
+			const kind = this.ruleKind(rule)
+			const condition = rule.conditions?.[0] ?? {}
+			switch (kind) {
+				case 'missing':
+					return 'missing'
+				case 'choice':
+					return (condition.optionId === undefined
+						|| condition.optionId === null)
+						&& !condition.optionIds?.length
+						? 'incomplete'
+						: null
+				case 'text':
+					if ((condition.value ?? '') === '') {
+						return 'incomplete'
+					}
+					return condition.type === 'regex'
+						&& compilePattern(String(condition.value)) === null
+						? 'pattern'
+						: null
+				case 'number':
+					return this.numberValue(rule) === '' ? 'incomplete' : null
+				case 'time':
+					return DATE_STORAGE_FORMATS.time.pattern.test(
+						this.timeBound(rule),
+					)
+						? null
+						: 'incomplete'
+				default:
+					return null
+			}
+		},
+
+		/**
+		 * @param {object} rule a rule with a problem
+		 * @return {string} what the editor should do about it
+		 */
+		problemText(rule) {
+			switch (this.ruleProblem(rule)) {
+				case 'missing':
+					return t(
+						'forms',
+						'The question this rule used has been deleted, so the rule can never match. Remove the rule.',
+					)
+				case 'pattern':
+					return t('forms', 'This pattern is not valid')
+				default:
+					return this.ruleKind(rule) === 'choice'
+						? t('forms', 'Choose an answer to finish this rule.')
+						: t('forms', 'Enter a value to finish this rule.')
+			}
+		},
+
+		/**
+		 * @param {number} index the rule's position
+		 * @return {string} id of the rule's warning
+		 */
+		problemId(index) {
+			return `logic-${this.questionId}-rule-${index}-problem`
+		},
+
+		/**
+		 * @param {object} rule a numeric rule
+		 * @return {number|string} the stored number, or '' when there is none
+		 */
+		numberValue(rule) {
+			const condition = rule.conditions?.[0] ?? {}
+			// Older rules kept the bound of value_min/value_max in `value`.
+			const value = condition[numberKey(condition.type)] ?? condition.value
+			return typeof value === 'number' && !isNaN(value) ? value : ''
+		},
+
+		/**
+		 * @param {object} rule a time rule
+		 * @return {string} min for "at or after", max for "at or before"
+		 */
+		timeOperator(rule) {
+			const condition = rule.conditions?.[0] ?? {}
+			return condition.max !== undefined && condition.min === undefined
+				? 'max'
+				: 'min'
+		},
+
+		/**
+		 * @param {object} rule a time rule
+		 * @return {string} the stored HH:mm bound, or ''
+		 */
+		timeBound(rule) {
+			const bound = rule.conditions?.[0]?.[this.timeOperator(rule)]
+			return typeof bound === 'string' ? bound : ''
 		},
 
 		/**
@@ -571,16 +776,33 @@ export default {
 		 * @param {Event} event the select change
 		 */
 		onRuleOption(index, event) {
-			this.updateRule(index, [{ optionId: Number(event.target.value) }])
+			const id = Number(event.target.value)
+			// Checkbox questions are matched on a list of options that must all be ticked.
+			const source = this.allQuestions.find(
+				(q) => q.id === this.rules[index]?.questionId,
+			)
+			this.updateRule(index, [
+				source?.type === 'multiple' ? { optionIds: [id] } : { optionId: id },
+			])
 		},
 
 		/**
 		 * @param {number} index rule being edited
 		 * @param {Event} event the select change
+		 * @param {boolean} numeric whether the rule compares numbers
 		 */
-		onRuleType(index, event) {
+		onRuleType(index, event, numeric = false) {
 			const existing = this.rules[index]?.conditions?.[0] ?? {}
-			this.updateRule(index, [{ ...existing, type: event.target.value }])
+			const type = event.target.value
+			if (!numeric) {
+				this.updateRule(index, [{ ...existing, type }])
+				return
+			}
+			// The number moves to the key the new operator is read from.
+			const value = this.numberValue(this.rules[index])
+			this.updateRule(index, [
+				{ type, [numberKey(type)]: value === '' ? undefined : value },
+			])
 		},
 
 		/**
@@ -591,8 +813,38 @@ export default {
 		onRuleValue(index, event, numeric = false) {
 			const existing = this.rules[index]?.conditions?.[0] ?? {}
 			const raw = event.target.value
+			if (!numeric) {
+				this.updateRule(index, [{ ...existing, value: raw }])
+				return
+			}
+			const number = parseFloat(raw)
 			this.updateRule(index, [
-				{ ...existing, value: numeric ? parseFloat(raw) : raw },
+				{
+					type: existing.type,
+					[numberKey(existing.type)]: isNaN(number) ? undefined : number,
+				},
+			])
+		},
+
+		/**
+		 * @param {number} index rule being edited
+		 * @param {Event} event the select change
+		 */
+		onTimeOperator(index, event) {
+			const bound = this.timeBound(this.rules[index])
+			this.updateRule(index, [
+				{ type: 'date_range', [event.target.value]: bound },
+			])
+		},
+
+		/**
+		 * @param {number} index rule being edited
+		 * @param {Event} event the input event
+		 */
+		onTimeValue(index, event) {
+			const operator = this.timeOperator(this.rules[index])
+			this.updateRule(index, [
+				{ type: 'date_range', [operator]: event.target.value },
 			])
 		},
 
@@ -702,6 +954,12 @@ export default {
 
 	&__empty {
 		color: var(--color-text-maxcontrast);
+	}
+
+	&__warning {
+		color: var(--color-error-text, var(--color-error));
+		flex-basis: 100%;
+		margin: 0;
 	}
 }
 </style>

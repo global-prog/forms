@@ -38,8 +38,9 @@
 
 				<NcActionInput
 					type="multiselect"
-					:modelValue="maxFileSizeUnit"
+					:modelValue="selectedUnit"
 					:options="availableUnits"
+					:ariaLabelCombobox="t('forms', 'Maximum file size unit')"
 					required
 					:clearable="false"
 					:searchable="false"
@@ -81,7 +82,7 @@
 		</template>
 
 		<div class="question__content">
-			<ul>
+			<ul ref="fileList" tabindex="-1">
 				<NcListItem
 					v-for="uploadedFile of values"
 					:key="uploadedFile.uploadedFileId"
@@ -148,8 +149,17 @@
 								@input="onFileInput" />
 						</label>
 						<NcButton
+							ref="uploadButton"
 							:disabled="
 								!readOnly || values.length >= maxAllowedFilesCount
+							"
+							:aria-label="
+								n(
+									'forms',
+									'Choose a file',
+									'Choose files',
+									maxAllowedFilesCount,
+								)
 							"
 							variant="tertiary-no-background"
 							@click="toggleFileInput">
@@ -165,6 +175,11 @@
 			</ul>
 			<p v-if="limitsHint" class="question__file-hint">
 				{{ limitsHint }}
+			</p>
+			<!-- Picking a file swaps the focused input for a spinner, so the start and end
+			     of the upload are announced here instead. -->
+			<p class="hidden-visually" role="status" aria-live="polite">
+				{{ uploadStatus }}
 			</p>
 		</div>
 		<template #insert>
@@ -308,6 +323,7 @@ export default {
 		return {
 			fileTypes,
 			fileLoading: false,
+			uploadStatus: '',
 			maxFileSizeUnit: Object.keys(FILE_SIZE_UNITS)[0],
 			maxFileSizeValue: '',
 			allowedFileTypesDialogOpened: false,
@@ -317,8 +333,24 @@ export default {
 	},
 
 	computed: {
+		/** @return {Array<{id: string, label: string}>} the size units, with readable names */
 		availableUnits() {
-			return Object.keys(FILE_SIZE_UNITS)
+			const labels = {
+				kb: t('forms', 'KB'),
+				mb: t('forms', 'MB'),
+				gb: t('forms', 'GB'),
+			}
+			return Object.keys(FILE_SIZE_UNITS).map((id) => ({
+				id,
+				label: labels[id] ?? id.toUpperCase(),
+			}))
+		},
+
+		/** @return {{id: string, label: string}|undefined} the unit currently chosen */
+		selectedUnit() {
+			return this.availableUnits.find(
+				(unit) => unit.id === this.maxFileSizeUnit,
+			)
 		},
 
 		dragging() {
@@ -374,7 +406,12 @@ export default {
 		},
 
 		maxAllowedFilesCount() {
-			return this.extraSettings?.maxAllowedFilesCount || 1
+			// Anything below one would remove the upload box and make the question
+			// impossible to answer.
+			return Math.max(
+				1,
+				parseInt(this.extraSettings?.maxAllowedFilesCount) || 1,
+			)
 		},
 
 		allowedFileExtensions() {
@@ -549,6 +586,10 @@ export default {
 
 			formData.append('shareHash', loadState('forms', 'shareHash', null))
 
+			// Only a respondent who was working in this question gets focus back; a
+			// dropped file must not pull focus away from wherever it is.
+			const hadFocus = this.$el?.contains?.(document.activeElement) ?? false
+
 			const url = generateOcsUrl(
 				'apps/forms/api/v3/forms/{id}/submissions/files/{questionId}',
 				{
@@ -560,11 +601,13 @@ export default {
 			let response
 			try {
 				this.fileLoading = true
+				this.uploadStatus = t('forms', 'Uploading …')
 				response = await axios.post(url, formData, {
 					headers: { 'Content-Type': 'multipart/form-data' },
 				})
 			} catch (error) {
 				logger.error('Error while submitting the form', { error })
+				this.uploadStatus = ''
 				showError(
 					t(
 						'forms',
@@ -582,15 +625,32 @@ export default {
 				this.fileLoading = false
 			}
 
-			this.$emit('update:values', [
-				...this.values,
-				...OcsResponse2Data(response),
-			])
+			const uploaded = OcsResponse2Data(response)
+			this.$emit('update:values', [...this.values, ...uploaded])
+			this.uploadStatus = n(
+				'forms',
+				'%n file uploaded',
+				'%n files uploaded',
+				uploaded.length,
+			)
+
+			if (hadFocus) {
+				await this.$nextTick()
+				const button = this.$refs.uploadButton?.$el
+				if (button && !button.disabled) {
+					button.focus()
+				} else {
+					this.$refs.fileList?.focus()
+				}
+			}
 		},
 
 		onMaxAllowedFilesCountInput(maxAllowedFilesCount) {
 			return this.onExtraSettingsChange({
-				maxAllowedFilesCount: parseInt(maxAllowedFilesCount),
+				maxAllowedFilesCount: Math.max(
+					1,
+					parseInt(maxAllowedFilesCount) || 1,
+				),
 			})
 		},
 
@@ -603,7 +663,11 @@ export default {
 			return this.onExtraSettingsChange({ maxFileSize })
 		},
 
-		onMaxFileSizeUnitInput(maxFileSizeUnit) {
+		onMaxFileSizeUnitInput(option) {
+			const maxFileSizeUnit = option?.id ?? option
+			if (!FILE_SIZE_UNITS[maxFileSizeUnit]) {
+				return
+			}
 			this.maxFileSizeUnit = maxFileSizeUnit
 			const maxFileSize = Math.round(
 				this.maxFileSizeValue * FILE_SIZE_UNITS[maxFileSizeUnit],
@@ -687,8 +751,11 @@ export default {
 
 	&__loading {
 		display: flex;
+		align-items: center;
 		justify-content: center;
-		width: 300px;
+		gap: 8px;
+		inline-size: 100%;
+		max-inline-size: 300px;
 	}
 
 	&__file-hint {

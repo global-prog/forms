@@ -649,7 +649,7 @@ class SubmissionService {
 
 				// If answered, validate the conditional structure
 				if ($questionAnswered) {
-					$this->validateConditionalQuestion($question, $answers[$questionId], $formOwnerId);
+					$this->validateConditionalQuestion($question, $answers[$questionId], $formOwnerId, $formId);
 				}
 				continue;
 			}
@@ -1041,9 +1041,10 @@ class SubmissionService {
 	 * @param array $question The conditional question
 	 * @param array $answerData The answer data for the conditional question
 	 * @param string $formOwnerId Owner of the form
+	 * @param int $formId Id of the form, needed to look up files uploaded to subquestions
 	 * @throws \InvalidArgumentException if validation failed
 	 */
-	private function validateConditionalQuestion(array $question, array $answerData, string $formOwnerId): void {
+	private function validateConditionalQuestion(array $question, array $answerData, string $formOwnerId, int $formId): void {
 		// Answer structure should have 'trigger' key
 		// For conditional questions, the answerData may be structured differently
 		// Check if this is a structured conditional answer or a flat array
@@ -1077,7 +1078,7 @@ class SubmissionService {
 		if (\count($activeBranches) > 0) {
 			// Merge subquestion of all active branches
 			$subQuestions = array_merge(...array_column($activeBranches, 'subQuestions'));
-			$this->validateSubmission($subQuestions, $subQuestionAnswers, $formOwnerId);
+			$this->validateSubmission($subQuestions, $subQuestionAnswers, $formOwnerId, $formId);
 		}
 	}
 
@@ -1132,24 +1133,37 @@ class SubmissionService {
 				// Single select: check if selected option matches any condition
 				foreach ($conditions as $condition) {
 					$optionId = $condition['optionId'] ?? null;
+					// A single-option list is the same rule, stored as a checkbox question stores it.
+					if ($optionId === null && is_array($condition['optionIds'] ?? null) && count($condition['optionIds']) === 1) {
+						$optionId = reset($condition['optionIds']);
+					}
 					if ($optionId !== null && in_array((string)$optionId, $triggerAnswer, true)) {
 						return true;
 					}
 				}
 				return false;
 			case Constants::ANSWER_TYPE_MULTIPLE:
-				// Multi-select: all condition option IDs must be selected
+				// Multi-select: a condition matches when all of its option IDs are selected,
+				// and any matching condition is enough, as on the client.
 				foreach ($conditions as $condition) {
 					$optionIds = $condition['optionIds'] ?? [];
+					// Rules saved by older editors named a single option in optionId.
+					if (empty($optionIds) && isset($condition['optionId'])) {
+						$optionIds = [$condition['optionId']];
+					}
 					if (empty($optionIds) || !is_array($optionIds)) {
 						continue;
 					}
+					$allSelected = true;
 					foreach ($optionIds as $optionId) {
 						if (!in_array((string)$optionId, $triggerAnswer, true)) {
-							return false;
+							$allSelected = false;
+							break;
 						}
 					}
-					return true;
+					if ($allSelected) {
+						return true;
+					}
 				}
 				return false;
 			case Constants::ANSWER_TYPE_SHORT:
@@ -1180,7 +1194,15 @@ class SubmissionService {
 				}
 				return false;
 			case Constants::ANSWER_TYPE_LINEARSCALE:
-				$numValue = (float)($triggerAnswer[0] ?? 0);
+				// An unanswered scale matches nothing; reading it as 0 made "at most" and
+				// "is not" rules true for a respondent who never picked a value.
+				if (!isset($triggerAnswer[0]) || !is_numeric($triggerAnswer[0])) {
+					return false;
+				}
+				$numValue = (float)$triggerAnswer[0];
+				// A bound that is not a number (a cleared field is stored as '') leaves that
+				// side open, as on the client. Compared raw, 5 <= '' is false in PHP 8.
+				$bound = static fn ($value, float $open): float => is_numeric($value) ? (float)$value : $open;
 				foreach ($conditions as $condition) {
 					$type = $condition['type'] ?? Constants::CONDITION_TYPE_VALUE_EQUALS;
 					if ($type === Constants::CONDITION_TYPE_VALUE_EQUALS) {
@@ -1192,18 +1214,19 @@ class SubmissionService {
 							return true;
 						}
 					} elseif ($type === Constants::CONDITION_TYPE_VALUE_RANGE) {
-						$min = $condition['min'] ?? -PHP_FLOAT_MAX;
-						$max = $condition['max'] ?? PHP_FLOAT_MAX;
+						$min = $bound($condition['min'] ?? null, -PHP_FLOAT_MAX);
+						$max = $bound($condition['max'] ?? null, PHP_FLOAT_MAX);
 						if ($numValue >= $min && $numValue <= $max) {
 							return true;
 						}
 					} elseif ($type === Constants::CONDITION_TYPE_VALUE_MIN) {
-						$min = $condition['min'] ?? -PHP_FLOAT_MAX;
+						// Rules saved by older editors kept the bound in `value`.
+						$min = $bound($condition['min'] ?? $condition['value'] ?? null, -PHP_FLOAT_MAX);
 						if ($numValue >= $min) {
 							return true;
 						}
 					} elseif ($type === Constants::CONDITION_TYPE_VALUE_MAX) {
-						$max = $condition['max'] ?? PHP_FLOAT_MAX;
+						$max = $bound($condition['max'] ?? $condition['value'] ?? null, PHP_FLOAT_MAX);
 						if ($numValue <= $max) {
 							return true;
 						}
@@ -1234,7 +1257,10 @@ class SubmissionService {
 				if (empty($dateValue)) {
 					return false;
 				}
-				$format = Constants::ANSWER_PHPDATETIME_FORMAT[$triggerType] ?? 'Y-m-d';
+				// The leading "!" zeroes every field the format does not set. Without it
+				// each parse takes the current time of day, so an answer on the very day of
+				// a "from" bound could compare as earlier than the bound.
+				$format = '!' . (Constants::ANSWER_PHPDATETIME_FORMAT[$triggerType] ?? 'Y-m-d');
 				$date = \DateTime::createFromFormat($format, $dateValue);
 				if (!$date) {
 					return false;
@@ -1269,8 +1295,20 @@ class SubmissionService {
 	 * @return bool True if the pattern matches, false otherwise
 	 */
 	private function safeRegexMatch(string $pattern, string $subject): bool {
-		if (empty($pattern) || strlen($subject) > 10000) {
+		if ($pattern === '' || strlen($subject) > 10000) {
 			return false;
+		}
+
+		// Editors type a bare pattern, which the client reads as-is; a pattern written as
+		// /body/flags keeps the flags both engines share (i, m, s). Either way the body is
+		// re-wrapped in a control character, so a slash inside it needs no escaping, and
+		// always gets u so that "." matches a whole Arabic letter, as it does in the browser.
+		// The D modifier stops $ matching before a trailing newline, which the client's
+		// check would not do.
+		if (preg_match('~^/(.*)/([ims]*)$~sD', $pattern, $parts) === 1) {
+			$pattern = "\x01" . $parts[1] . "\x01" . $parts[2] . 'u';
+		} else {
+			$pattern = "\x01" . $pattern . "\x01u";
 		}
 
 		// Validate regex syntax

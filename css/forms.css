@@ -143,6 +143,7 @@ html {
 	.question-list-move,
 	.question-list-enter-active,
 	.question-list-leave-active,
+	.branch-list-move,
 	.branch-list-enter-active,
 	.branch-list-leave-active {
 		transition: none !important;

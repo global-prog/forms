@@ -51,16 +51,23 @@
 				{{ printedConditions }}</bdi
 			>
 		</p>
-		<p v-if="conditions.length" class="summary-filter__count" role="status">
-			{{
-				n(
-					'forms',
-					'Showing %n of {total} response',
-					'Showing %n of {total} responses',
-					shown,
-					{ total },
-				)
-			}}
+		<!-- Always in the page: a screen reader announces changes to a live region it
+		     already knows, so one created along with its text usually goes unsaid. -->
+		<p
+			class="summary-filter__count"
+			:class="{ 'summary-filter__count--idle': !conditions.length }"
+			role="status">
+			<template v-if="conditions.length">
+				{{
+					n(
+						'forms',
+						'Showing %n of {total} response',
+						'Showing %n of {total} responses',
+						shown,
+						{ total },
+					)
+				}}
+			</template>
 		</p>
 	</div>
 </template>
@@ -240,6 +247,11 @@ export default {
 	&__count {
 		color: var(--color-text-maxcontrast);
 		margin-block: 8px 0;
+
+		// Empty and taking no room until there is a filter to count.
+		&--idle {
+			margin-block: 0;
+		}
 	}
 
 	&__printed {

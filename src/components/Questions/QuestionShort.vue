@@ -158,6 +158,8 @@ export default {
 		return {
 			validationTypes,
 			isValidationTypeMenuOpen: false,
+			/** per-instance debounced validate, created in created() */
+			debounceValidate: null,
 		}
 	},
 
@@ -227,26 +229,62 @@ export default {
 		 * "the input is not a valid number".
 		 */
 		numberErrorMessage() {
-			const min = this.numberMin
-			const max = this.numberMax
-			let msg
+			// Bounds are isolated as left-to-right runs, so a negative bound keeps its
+			// minus sign in front of the digits inside a right-to-left sentence.
+			const isolate = (value) => '\u2066' + value + '\u2069'
+			const min =
+				this.numberMin === undefined ? undefined : isolate(this.numberMin)
+			const max =
+				this.numberMax === undefined ? undefined : isolate(this.numberMax)
+			// Whole sentences per case rather than two joined ones: a translation of the
+			// first half need not end in a way the second half can follow.
+			if (this.numberInteger) {
+				if (min !== undefined && max !== undefined) {
+					return t(
+						'forms',
+						'Enter a whole number between {min} and {max}',
+						{ min, max },
+					)
+				}
+				if (min !== undefined) {
+					return t('forms', 'Enter a whole number of at least {min}', {
+						min,
+					})
+				}
+				if (max !== undefined) {
+					return t('forms', 'Enter a whole number of at most {max}', {
+						max,
+					})
+				}
+				return t('forms', 'Enter a whole number')
+			}
 			if (min !== undefined && max !== undefined) {
-				msg = t('forms', 'Enter a number between {min} and {max}', {
+				return t('forms', 'Enter a number between {min} and {max}', {
 					min,
 					max,
 				})
-			} else if (min !== undefined) {
-				msg = t('forms', 'Enter a number of at least {min}', { min })
-			} else if (max !== undefined) {
-				msg = t('forms', 'Enter a number of at most {max}', { max })
-			} else {
-				msg = this.validationObject.errorMessage
 			}
-			if (this.numberInteger) {
-				msg += ' ' + t('forms', 'Whole numbers only.')
+			if (min !== undefined) {
+				return t('forms', 'Enter a number of at least {min}', { min })
 			}
-			return msg
+			if (max !== undefined) {
+				return t('forms', 'Enter a number of at most {max}', { max })
+			}
+			return this.validationObject.errorMessage
 		},
+	},
+
+	created() {
+		// Built per instance: a debounced function shared through `methods` keeps one
+		// timer and one `this` for every question on the page, and throws when a second
+		// question calls it before the first one's timer has run.
+		this.debounceValidate = debounce(() => this.validate(), INPUT_DEBOUNCE_MS)
+	},
+
+	beforeUnmount() {
+		// validate() reads the input element, which is gone once the question has left
+		// the page (a page change or a deleted question) before the timer ran.
+		this.debounceValidate.clear()
 	},
 
 	methods: {
@@ -309,10 +347,6 @@ export default {
 			this.errorMessage = null
 			return true
 		},
-
-		debounceValidate: debounce(async function () {
-			this.validate()
-		}, INPUT_DEBOUNCE_MS),
 
 		onInput() {
 			/** @type {HTMLInputElement} */
@@ -393,6 +427,11 @@ export default {
 	min-height: var(--default-clickable-area);
 
 	&:disabled {
+		// The editor shows a preview of the field; keep it looking like the long-answer
+		// preview instead of the browser's greyed-out disabled style.
+		background-color: var(--color-main-background);
+		color: var(--color-main-text);
+		opacity: 1;
 		width: calc(100% - var(--default-clickable-area)) !important;
 		margin-inline-start: -12px;
 	}
@@ -404,8 +443,15 @@ export default {
 	inset-block-start: 4px;
 }
 
-:deep(input:invalid) {
-	// nextcloud/server#36548
+// nextcloud/server#36548. Only once the field has been used or a submit has
+// failed: `:invalid` alone also matches every empty required field, and the editor's
+// required title input, before anyone has typed. Two rules, because a browser that
+// does not know `:user-invalid` drops a whole selector list containing it.
+:deep(input:user-invalid) {
+	border-color: var(--color-error) !important;
+}
+
+:deep(input[aria-invalid='true']) {
 	border-color: var(--color-error) !important;
 }
 </style>

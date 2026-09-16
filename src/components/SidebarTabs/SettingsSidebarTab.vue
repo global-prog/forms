@@ -9,13 +9,7 @@
 			v-if="locked"
 			type="info"
 			:heading="t('forms', 'Form is locked')"
-			:text="
-				t('forms', 'Lock by {lockedBy}, expires: {lockedUntil}', {
-					lockedBy: form.lockedBy ? form.lockedBy : form.ownerId,
-					lockedUntil:
-						lockedUntil === '' ? t('forms', 'never') : lockedUntil,
-				})
-			" />
+			:text="lockNotice" />
 		<NcButton
 			v-if="locked && isCurrentUserOwner"
 			wide
@@ -36,7 +30,7 @@
 			{{ t('forms', 'Store responses anonymously') }}
 		</NcCheckboxRadioSwitch>
 		<NcCheckboxRadioSwitch
-			:title="disableSubmitMultipleExplanation"
+			:description="disableSubmitMultipleExplanation || undefined"
 			:modelValue="submitMultiple"
 			:disabled="disableSubmitMultiple || formArchived || locked"
 			type="switch"
@@ -107,15 +101,17 @@
 			}}
 		</p>
 		<NcTextField
+			v-model="headerImageDraft"
 			:label="t('forms', 'Header image address')"
 			placeholder="https://"
+			type="url"
 			:disabled="formArchived || locked"
-			:modelValue="headerImage"
-			@update:modelValue="onHeaderImageChange" />
+			@change="onHeaderImageChange" />
 		<!-- An address typed into a box tells the author nothing about whether it is the
 		     right picture, or a picture at all. Shown here, a typo is obvious at once
-		     instead of on the form itself. -->
-		<div v-if="headerImage" class="settings-header-image">
+		     instead of on the form itself. Only the saved address is previewed, so the
+		     browser is not asked for every half-typed one along the way. -->
+		<div v-if="isHttpUrl(headerImage)" class="settings-header-image">
 			<img
 				:key="headerImage"
 				:src="headerImage"
@@ -129,9 +125,12 @@
 				{{ t('forms', 'That address did not load a picture.') }}
 			</p>
 		</div>
+		<!-- clearable adds a "no colour" choice, the only way back to the theme colour
+		     once one has been picked. -->
 		<NcColorPicker
 			class="settings-colour"
-			:modelValue="accentColor || '#0082c9'"
+			clearable
+			:modelValue="accentColor || undefined"
 			@update:modelValue="onAccentColorChange">
 			<NcButton :disabled="formArchived || locked" variant="secondary">
 				{{
@@ -141,31 +140,41 @@
 				}}
 			</NcButton>
 		</NcColorPicker>
-		<div class="settings-language">
-			<label for="forms-settings__language" class="settings-language__label">
-				{{ t('forms', 'Form language') }}
-			</label>
-			<NcSelect
-				inputId="forms-settings__language"
-				aria-describedby="forms-settings__language-hint"
-				class="settings-language__select"
-				:clearable="false"
-				:disabled="formArchived || locked"
-				label="label"
-				:modelValue="selectedLanguageOption"
-				:options="languageOptions"
-				:searchable="false"
-				trackBy="id"
-				@update:modelValue="onLanguageChange" />
+		<!-- The select does not pass aria-describedby on to its input, so the hint is tied
+		     to a group around both instead. -->
+		<div
+			role="group"
+			aria-labelledby="forms-settings__language-label"
+			aria-describedby="forms-settings__language-hint">
+			<div class="settings-language">
+				<label
+					id="forms-settings__language-label"
+					for="forms-settings__language"
+					class="settings-language__label">
+					{{ t('forms', 'Form language') }}
+				</label>
+				<NcSelect
+					inputId="forms-settings__language"
+					class="settings-language__select"
+					:clearable="false"
+					:disabled="formArchived || locked"
+					label="label"
+					labelOutside
+					:modelValue="selectedLanguageOption"
+					:options="languageOptions"
+					:searchable="false"
+					trackBy="id"
+					@update:modelValue="onLanguageChange" />
+			</div>
+			<p id="forms-settings__language-hint" class="settings-hint">
+				{{
+					t(
+						'forms',
+						'A form shared by link is often opened by people who are not signed in, so their language is unknown and the form falls back to this instance default. Pinning a language here sets the reading direction for every respondent.',
+					)
+				}}
+			</p>
 		</div>
-		<p id="forms-settings__language-hint" class="settings-hint">
-			{{
-				t(
-					'forms',
-					'A form shared by link is often opened by people who are not signed in, so their language is unknown and the form falls back to this instance default. Pinning a language here sets the reading direction for every respondent.',
-				)
-			}}
-		</p>
 		<h4 class="settings-group">{{ t('forms', 'Notifications') }}</h4>
 		<NcCheckboxRadioSwitch
 			:modelValue="notifyOwner"
@@ -176,11 +185,15 @@
 		</NcCheckboxRadioSwitch>
 		<div v-show="notifyOwner && !formArchived" class="settings-div--indent">
 			<NcTextField
+				v-model="notifyEmailsDraft"
 				:label="t('forms', 'Also notify these addresses')"
 				:placeholder="t('forms', 'name@example.com, other@example.com')"
 				:disabled="formArchived || locked"
-				:modelValue="notifyEmails"
-				@update:modelValue="onNotifyEmailsChange" />
+				inputmode="email"
+				dir="ltr"
+				:error="invalidNotifyEmails.length > 0"
+				:helperText="notifyEmailsHelperText"
+				@change="onNotifyEmailsChange" />
 		</div>
 		<h4 class="settings-group">{{ t('forms', 'Availability') }}</h4>
 		<NcCheckboxRadioSwitch
@@ -191,19 +204,22 @@
 			{{ t('forms', 'Set expiration date') }}
 		</NcCheckboxRadioSwitch>
 		<div v-show="formExpires && !formArchived" class="settings-div--indent">
+			<!-- The picker has no disabled state of its own, so a locked form shows the
+			     date as text instead. -->
 			<NcDateTimePicker
+				v-if="!locked"
 				id="expiresDatetimePicker"
+				:ariaLabel="t('forms', 'Expiration date')"
 				:clearable="false"
-				:disabled="locked"
-				:disabledDate="notBeforeToday"
-				:disabledTime="notBeforeNow"
-				:editable="false"
 				:format="stringifyDate"
+				:min="minDate"
 				:minuteStep="5"
-				:showSecond="false"
 				:modelValue="expirationDate"
 				type="datetime"
 				@update:modelValue="onExpirationDateChange" />
+			<p v-else class="settings-hint">
+				{{ stringifyDate(expirationDate) }}
+			</p>
 			<NcCheckboxRadioSwitch
 				:modelValue="form.showExpiration"
 				:disabled="locked"
@@ -221,17 +237,20 @@
 		</NcCheckboxRadioSwitch>
 		<div v-show="opensLater && !formArchived" class="settings-div--indent">
 			<NcDateTimePicker
+				v-if="!locked"
 				id="opensAtDatetimePicker"
+				:ariaLabel="t('forms', 'Opening time')"
 				:clearable="false"
-				:disabled="locked"
-				:disabledDate="notBeforeToday"
-				:editable="false"
 				:format="stringifyOpeningDate"
+				:min="minDate"
+				:max="formExpires && !isExpired ? expirationDate : undefined"
 				:minuteStep="5"
-				:showSecond="false"
 				:modelValue="openingDate"
 				type="datetime"
 				@update:modelValue="onOpeningDateChange" />
+			<p v-else class="settings-hint">
+				{{ stringifyOpeningDate(openingDate) }}
+			</p>
 			<p
 				v-if="closesBeforeOpening"
 				class="settings-hint settings-hint--warning">
@@ -249,12 +268,20 @@
 			v-show="hasMaxSubmissions && !formArchived"
 			class="settings-div--indent">
 			<NcInputField
-				v-model="maxSubmissionsValue"
+				v-model="maxSubmissionsDraft"
 				type="number"
 				:min="1"
+				:step="1"
+				inputmode="numeric"
 				:disabled="locked"
 				:label="t('forms', 'Maximum number of responses')"
-				@update:modelValue="onMaxSubmissionsValueChange" />
+				:error="maxSubmissionsError"
+				:helperText="
+					maxSubmissionsError
+						? t('forms', 'Enter a whole number of 1 or more')
+						: ''
+				"
+				@change="onMaxSubmissionsValueChange" />
 			<p class="settings-hint">
 				{{
 					t(
@@ -312,11 +339,10 @@
 		</NcCheckboxRadioSwitch>
 		<div
 			v-show="hasCustomSubmissionMessage"
-			class="settings-div--indent submission-message"
-			:tabindex="editMessage ? undefined : '0'"
-			@focus="editMessage = true">
+			class="settings-div--indent submission-message">
 			<textarea
 				v-if="!formArchived && (editMessage || !form.submissionMessage)"
+				ref="submissionMessageInput"
 				v-click-outside="
 					() => {
 						editMessage = false
@@ -336,13 +362,28 @@
 				class="submission-message__input"
 				@blur="editMessage = false"
 				@change="onSubmissionMessageChange" />
-			<!-- eslint-disable vue/no-v-html -->
-			<div
-				v-else
-				:aria-label="t('forms', 'Custom submission message')"
-				class="submission-message__output"
-				v-html="submissionMessageHTML" />
-			<!-- eslint-enable vue/no-v-html -->
+			<!-- The rendered message may hold links, so it stays plain content; a click on it
+			     still opens the editor, and the button beside it is the way in for keyboards
+			     and screen readers. Opening from a click does not trip the textarea's
+			     click-outside, whose listener is only added once the textarea has mounted,
+			     after that click is over. -->
+			<template v-else>
+				<!-- eslint-disable vue/no-v-html -->
+				<div
+					class="submission-message__output"
+					:class="{
+						'submission-message__output--editable': canEditMessage,
+					}"
+					@click="startEditMessage"
+					v-html="submissionMessageHTML" />
+				<!-- eslint-enable vue/no-v-html -->
+				<NcButton
+					v-if="canEditMessage"
+					variant="tertiary"
+					@click="startEditMessage">
+					{{ t('forms', 'Edit submission message') }}
+				</NcButton>
+			</template>
 			<div
 				id="forms-submission-message-description"
 				class="submission-message__description">
@@ -393,14 +434,28 @@
 							onConfirmationEmailQuestionIdSelectionChange
 						" />
 				</div>
-				<p class="confirmation-email__placeholder-hint">
-					{{ t('forms', 'Available placeholders:') }}
-					<code>{formTitle}</code>, <code>{formDescription}</code>,
-					<template v-if="quizMode">
-						<code>{score}</code>, <code>{maxScore}</code>,
-					</template>
-					{{ t('forms', 'and field labels.') }}
-				</p>
+				<!-- Each placeholder is its own left-to-right chip, so the list reads the same
+				     in a right-to-left sidebar and no separator has to be translated. -->
+				<div class="confirmation-email__placeholder-hint">
+					<p>{{ t('forms', 'Available placeholders:') }}</p>
+					<ul class="confirmation-email__placeholders">
+						<li v-for="token in emailPlaceholderTokens" :key="token">
+							<code dir="ltr">{{ token }}</code>
+						</li>
+					</ul>
+					<!-- The server keys an answer by the question's technical name, or else its
+					     title, reduced to lower-case Latin letters and digits. A title in any
+					     other script reduces to nothing, hence the pointer to the technical name. -->
+					<p>
+						{{
+							t(
+								'forms',
+								'Answers can be inserted too, using the technical name of the question in lower-case Latin letters and digits, for example {example}.',
+								{ example: '{email}' },
+							)
+						}}
+					</p>
+				</div>
 				<NcInputField
 					v-model="confirmationEmailSubject"
 					:disabled="locked || isConfirmationEmailConfigurationBlocked"
@@ -432,6 +487,7 @@
 <script>
 import { getCurrentUser } from '@nextcloud/auth'
 import { loadState } from '@nextcloud/initial-state'
+import { translate as t } from '@nextcloud/l10n'
 import moment from '@nextcloud/moment'
 import { vOnClickOutside as ClickOutside } from '@vueuse/components'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -507,6 +563,17 @@ export default {
 			confirmationEmailBody: this.form?.confirmationEmailBody || '',
 			/** Set by the preview's own load and error events, not guessed from the text */
 			headerImageBroken: false,
+			/*
+			 * Text fields edit a local copy and save when the author leaves the field or
+			 * presses Enter. Saving per keystroke sent a request for every letter, and
+			 * replies arriving out of order could leave a half-typed value stored.
+			 */
+			headerImageDraft: this.form?.settings?.headerImage || '',
+			notifyEmailsDraft: this.form?.settings?.notifyEmails || '',
+			maxSubmissionsDraft: this.form?.maxSubmissions ?? 1,
+			maxSubmissionsError: false,
+			/** Earliest time the date pickers offer; the past is never a useful choice */
+			minDate: new Date(),
 		}
 	},
 
@@ -590,6 +657,65 @@ export default {
 
 		isCurrentUserOwner() {
 			return getCurrentUser().uid === this.form.ownerId
+		},
+
+		/**
+		 * Who holds the lock and for how long, as one sentence per case so translators
+		 * never have to fit a separately translated "never" into it.
+		 *
+		 * @return {string} the notice text
+		 */
+		lockNotice() {
+			const lockedBy = this.form.lockedBy || this.form.ownerId
+			const currentUser = getCurrentUser()
+			// Only the account id is known for anyone else; for oneself the display name is.
+			const user =
+				currentUser && lockedBy === currentUser.uid
+					? currentUser.displayName || lockedBy
+					: lockedBy
+			if (this.lockedUntil === '') {
+				return t('forms', 'Locked permanently by {user}', { user })
+			}
+			return t('forms', 'Locked by {user}, unlocks {time}', {
+				user,
+				time: this.lockedUntil,
+			})
+		},
+
+		/** @return {boolean} whether the custom submission message can be opened for editing */
+		canEditMessage() {
+			return !this.formArchived && !this.locked
+		},
+
+		/**
+		 * The addresses the server would skip. It drops anything that is not an address
+		 * without saying so, so the author is told here.
+		 *
+		 * @return {string[]} the saved entries that do not look like an email address
+		 */
+		invalidNotifyEmails() {
+			return this.splitEmails(this.notifyEmails).filter(
+				(entry) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(entry),
+			)
+		},
+
+		/** @return {string} the hint under the extra addresses field */
+		notifyEmailsHelperText() {
+			if (this.invalidNotifyEmails.length > 0) {
+				return t('forms', 'Not a valid address: {list}', {
+					list: this.invalidNotifyEmails.join(', '),
+				})
+			}
+			return t('forms', 'Separate addresses with commas.')
+		},
+
+		/** @return {string[]} the placeholders a confirmation email can use */
+		emailPlaceholderTokens() {
+			const tokens = ['{formTitle}', '{formDescription}']
+			if (this.quizMode) {
+				tokens.push('{score}', '{maxScore}')
+			}
+			return tokens
 		},
 
 		isFormLockedPermanently() {
@@ -678,16 +804,6 @@ export default {
 				this.form.maxSubmissions !== null
 				&& this.form.maxSubmissions !== undefined
 			)
-		},
-
-		maxSubmissionsValue: {
-			get() {
-				return this.form.maxSubmissions ?? 1
-			},
-
-			set(value) {
-				this.$emit('update:formProp', 'maxSubmissions', value)
-			},
 		},
 
 		isExpired() {
@@ -817,6 +933,19 @@ export default {
 			this.confirmationEmailBody = val || ''
 		},
 
+		headerImage(val) {
+			this.headerImageDraft = val
+		},
+
+		notifyEmails(val) {
+			this.notifyEmailsDraft = val
+		},
+
+		'form.maxSubmissions': function (val) {
+			this.maxSubmissionsDraft = val ?? 1
+			this.maxSubmissionsError = false
+		},
+
 		confirmationEmailQuestions: {
 			handler() {
 				const selectedRecipientId = this.form.confirmationEmailQuestionId
@@ -918,35 +1047,87 @@ export default {
 		},
 
 		/**
-		 * @param {string} value banner image address
+		 * @param {string} value any text
+		 * @return {boolean} whether it is a complete web address worth previewing
 		 */
-		onHeaderImageChange(value) {
-			// Typing is not failing: the warning goes away on every change and comes back
-			// only if the browser cannot load what was typed. The :key on the image makes
-			// it re-request rather than keep the last result.
-			this.headerImageBroken = false
-			this.updateSettings({ headerImage: value })
+		isHttpUrl(value) {
+			if (!value) {
+				return false
+			}
+			try {
+				const url = new URL(value)
+				return url.protocol === 'https:' || url.protocol === 'http:'
+			} catch {
+				return false
+			}
 		},
 
 		/**
-		 * @param {string} value the chosen colour
+		 * Saves the banner address once the author leaves the field.
+		 */
+		onHeaderImageChange() {
+			const value = this.headerImageDraft.trim()
+			if (value === this.headerImage) {
+				return
+			}
+			// A new address gets a fresh chance: the warning comes back only if the browser
+			// cannot load it. The :key on the image makes it re-request rather than keep
+			// the last result.
+			this.headerImageBroken = false
+			// null rather than '': setSettings() drops empty values, removing the key.
+			this.updateSettings({ headerImage: value || null })
+		},
+
+		/**
+		 * @param {string|undefined} value the chosen colour, or undefined for "no colour"
 		 */
 		onAccentColorChange(value) {
-			this.updateSettings({ accentColor: value })
+			// The picker's trigger button is disabled on a read-only form, but the popover
+			// is not the button, so the guard lives here as well.
+			if (this.formArchived || this.locked) {
+				return
+			}
+			this.updateSettings({ accentColor: value || null })
 		},
 
 		/**
 		 * @param {boolean} checked email the owner on each response
 		 */
 		onNotifyOwnerChange(checked) {
-			this.updateSettings({ notifyOwner: checked })
+			// The extra addresses are hidden while the switch is off, and the server mails
+			// them whenever any are stored, so turning it off has to clear them too -
+			// otherwise colleagues keep getting mail the author can no longer see.
+			this.updateSettings(
+				checked
+					? { notifyOwner: true }
+					: { notifyOwner: false, notifyEmails: null },
+			)
 		},
 
 		/**
-		 * @param {string} value comma separated additional recipients
+		 * @param {string} value the field's text
+		 * @return {string[]} the entries, split on any separator people commonly type
 		 */
-		onNotifyEmailsChange(value) {
-			this.updateSettings({ notifyEmails: value })
+		splitEmails(value) {
+			// The server splits on commas only; semicolons and the Arabic comma and
+			// semicolon are just as natural to type.
+			return (value || '')
+				.split(/[,;\u060C\u061B\s]+/)
+				.filter((entry) => entry !== '')
+		},
+
+		/**
+		 * Saves the extra recipients once the author leaves the field, normalised to the
+		 * comma-separated list the server expects.
+		 */
+		onNotifyEmailsChange() {
+			const value = this.splitEmails(this.notifyEmailsDraft).join(', ')
+			// Show the tidied list even when it matches what is stored already.
+			this.notifyEmailsDraft = value
+			if (value === this.notifyEmails) {
+				return
+			}
+			this.updateSettings({ notifyEmails: value || null })
 		},
 
 		onAllowCommentsChange(checked) {
@@ -1015,8 +1196,19 @@ export default {
 			this.$emit('update:formProp', 'maxSubmissions', checked ? 1 : null)
 		},
 
-		onMaxSubmissionsValueChange(value) {
-			if (value > 0) {
+		/**
+		 * Saves the response limit once the author leaves the field. An empty, zero or
+		 * fractional value is refused rather than sent: the server stores it as given,
+		 * and an empty one would silently remove the limit.
+		 */
+		onMaxSubmissionsValueChange() {
+			const value = Number(this.maxSubmissionsDraft)
+			if (!Number.isInteger(value) || value < 1) {
+				this.maxSubmissionsError = true
+				return
+			}
+			this.maxSubmissionsError = false
+			if (value !== this.form.maxSubmissions) {
 				this.$emit('update:formProp', 'maxSubmissions', value)
 			}
 		},
@@ -1039,6 +1231,21 @@ export default {
 				'state',
 				isArchived ? FormState.FormArchived : FormState.FormClosed,
 			)
+		},
+
+		/**
+		 * Swaps the rendered message for the textarea and moves focus into it, so neither
+		 * a keyboard nor a mouse user has to find the field a second time.
+		 *
+		 * @param {MouseEvent} [event] the click that asked for it
+		 */
+		startEditMessage(event) {
+			// A link inside the message should just be followed, not open the editor too.
+			if (!this.canEditMessage || event?.target?.closest?.('a')) {
+				return
+			}
+			this.editMessage = true
+			this.$nextTick(() => this.$refs.submissionMessageInput?.focus())
 		},
 
 		onSubmissionMessageChange({ target }) {
@@ -1131,26 +1338,6 @@ export default {
 		 */
 		parseTimestampToDate(value) {
 			return moment(value, 'X').toDate()
-		},
-
-		/**
-		 * Prevent selecting a day before today
-		 *
-		 * @param {Date} datetime the datepicker Date
-		 * @return {boolean}
-		 */
-		notBeforeToday(datetime) {
-			return datetime < moment().add(-1, 'day').toDate()
-		},
-
-		/**
-		 * Prevent selecting a time before the current one
-		 *
-		 * @param {Date} datetime the datepicker Date
-		 * @return {boolean}
-		 */
-		notBeforeNow(datetime) {
-			return datetime < moment().toDate()
 		},
 	},
 }
@@ -1263,8 +1450,12 @@ export default {
 		border: 2px solid var(--color-border-maxcontrast);
 		border-radius: var(--border-radius-large);
 
-		&:hover {
-			border-color: var(--color-primary-element);
+		&--editable {
+			cursor: text;
+
+			&:hover {
+				border-color: var(--color-primary-element);
+			}
 		}
 	}
 }
@@ -1288,6 +1479,15 @@ export default {
 		color: var(--color-text-maxcontrast);
 		font-size: var(--font-size-small);
 		margin-top: calc(var(--default-grid-baseline) * 2);
+	}
+
+	&__placeholders {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--default-grid-baseline);
+		list-style: none;
+		margin-block: var(--default-grid-baseline);
+		padding: 0;
 	}
 
 	&__select {

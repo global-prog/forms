@@ -3,13 +3,13 @@
   - SPDX-License-Identifier: AGPL-3.0-or-later
 -->
 <template>
+	<!-- No toolbar role: it promises one tab stop with arrow keys between the controls,
+	     which this bar does not have. The view switch labels its own radio group. -->
 	<div
-		:aria-label="t('forms', 'View mode')"
 		class="top-bar"
 		:class="{
 			'top-bar--has-sidebar': sidebarOpened,
-		}"
-		role="toolbar">
+		}">
 		<PillMenu
 			v-if="!canOnlySubmit && currentView"
 			:active="currentView"
@@ -251,6 +251,9 @@ export default {
 	position: sticky;
 	top: 0;
 	z-index: 100;
+	// Content scrolls under the sticky bar, and the tertiary Print and Share buttons
+	// are transparent, so the bar needs its own ground.
+	background-color: var(--color-main-background);
 
 	&--has-sidebar {
 		// Remove margin as the toggle button does not exist when open

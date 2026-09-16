@@ -20,7 +20,11 @@
 		<NcEmptyContent
 			v-if="isLoadingForm"
 			class="emtpycontent"
-			:name="t('forms', 'Loading {title} …', { title: form.title })">
+			:name="
+				t('forms', 'Loading {title} …', { title: form.title }, undefined, {
+					escape: false,
+				})
+			">
 			<template #icon>
 				<NcLoadingIcon :size="64" />
 			</template>
@@ -31,9 +35,13 @@
 			class="emtpycontent"
 			:name="t('forms', 'Form is archived')"
 			:description="
-				t('forms', 'Form \'{title}\' is archived and cannot be modified.', {
-					title: form.title,
-				})
+				t(
+					'forms',
+					'Form \'{title}\' is archived and cannot be modified.',
+					{ title: form.title },
+					undefined,
+					{ escape: false },
+				)
 			">
 			<template #icon>
 				<NcIconSvgWrapper :svg="IconLock" :size="64" />
@@ -56,6 +64,8 @@
 								? t('forms', 'never')
 								: lockedUntilFormatted,
 					},
+					undefined,
+					{ escape: false },
 				)
 			">
 			<template #icon>
@@ -118,6 +128,13 @@
 				</p>
 			</header>
 
+			<!-- Autosave status: title and description save as they are typed, and
+			     otherwise only a failure was ever reported. Outside the header, which is
+			     laid out in the form's language; this line is in the reader's. -->
+			<p class="save-status" aria-live="polite">
+				{{ saveStatus }}
+			</p>
+
 			<section :dir="formDirection" :lang="formLanguage || undefined">
 				<!-- Questions list -->
 				<QuestionList
@@ -140,7 +157,8 @@
 					@delete="(question) => deleteQuestion(question.id)"
 					@moveDown="onMoveDown"
 					@moveUp="onMoveUp"
-					@orderChange="onQuestionOrderChange"
+					@dragStart="onQuestionDragStart"
+					@orderChange="onQuestionOrderChange(orderBeforeDrag)"
 					@addQuestion="addQuestion" />
 
 				<!-- Add new questions menu -->
@@ -189,9 +207,10 @@ import IconDelete from '@material-symbols/svg-400/outlined/delete.svg?raw'
 import IconImport from '@material-symbols/svg-400/outlined/library_add.svg?raw'
 import IconLock from '@material-symbols/svg-400/outlined/lock.svg?raw'
 import axios from '@nextcloud/axios'
-import { showError } from '@nextcloud/dialogs'
+import { showError, showSuccess } from '@nextcloud/dialogs'
 import { emit } from '@nextcloud/event-bus'
 import { loadState } from '@nextcloud/initial-state'
+import { translatePlural as n, translate as t } from '@nextcloud/l10n'
 import moment from '@nextcloud/moment'
 import { generateOcsUrl } from '@nextcloud/router'
 import { useIsMobile } from '@nextcloud/vue'
@@ -268,6 +287,14 @@ export default {
 			// when set to a number, the next created question will be inserted at this index
 			insertMenuOpenedIndex: null,
 
+			// Question order saves: a counter to recognise the newest, a queue that sends
+			// them one at a time, the ids to restore if the newest fails, and the ids a
+			// drag started from.
+			orderSaveSeq: 0,
+			orderSaveChain: Promise.resolve(),
+			orderRollback: null,
+			orderBeforeDrag: null,
+
 			/** The question the delete dialog is asking about, or null when it is closed */
 			questionPendingDelete: null,
 			showConfirmDeleteQuestion: false,
@@ -307,17 +334,35 @@ export default {
 			)
 			const title = question?.text?.trim()
 			const responses = this.form?.submissionCount ?? 0
+			// n() rather than t(): the count has to choose the plural form, and Arabic has six.
 			return title
-				? t(
+				? n(
 						'forms',
-						'"{question}" and any answers given to it in the {count} responses already received will be deleted. It cannot be undone.',
-						{ question: title, count: responses },
+						'"{question}" and any answers given to it in the %n response already received will be deleted. It cannot be undone.',
+						'"{question}" and any answers given to it in the %n responses already received will be deleted. It cannot be undone.',
+						responses,
+						{ question: title },
+						// The dialog shows the message as text; escaping would put entities
+						// such as &amp; on screen.
+						{ escape: false },
 					)
-				: t(
+				: n(
 						'forms',
-						'This question and any answers given to it in the {count} responses already received will be deleted. It cannot be undone.',
-						{ count: responses },
+						'This question and any answers given to it in the %n response already received will be deleted. It cannot be undone.',
+						'This question and any answers given to it in the %n responses already received will be deleted. It cannot be undone.',
+						responses,
 					)
+		},
+
+		/** @return {string} what the title and description autosave is doing */
+		saveStatus() {
+			if (this.formSavingCount > 0) {
+				return t('forms', 'Saving …')
+			}
+			if (this.formSaveFailed) {
+				return t('forms', 'Not saved')
+			}
+			return this.formSavedOnce ? t('forms', 'All changes saved') : ''
 		},
 
 		hasQuestions() {
@@ -433,11 +478,12 @@ export default {
 
 		onMoveUp(index) {
 			if (index > 0) {
+				const previous = this.form.questions.map((question) => question.id)
 				;[this.form.questions[index - 1], this.form.questions[index]] = [
 					this.form.questions[index],
 					this.form.questions[index - 1],
 				]
-				this.onQuestionOrderChange()
+				this.onQuestionOrderChange(previous)
 			}
 		},
 
@@ -519,6 +565,27 @@ export default {
 			for (const question of created) {
 				this.form.questions.push({ ...question, answers: [] })
 			}
+			if (created.length === 0) {
+				return
+			}
+			emit('forms:last-updated:set', this.form.id)
+			// The copies land at the end of what may be a long form, out of sight once the
+			// dialog closes, so say that it worked and take the editor to the first of them.
+			showSuccess(
+				n(
+					'forms',
+					'%n question imported',
+					'%n questions imported',
+					created.length,
+				),
+			)
+			// The dialog closes in the same update, and its focus trap hands focus back to
+			// the button that opened it one macrotask after unmounting; move on after that.
+			this.$nextTick(() => {
+				setTimeout(() => {
+					this.$refs.questionList?.focusQuestion(created[0].id)
+				}, 0)
+			})
 		},
 
 		async addQuestion(type, subtype = null, position = null) {
@@ -743,35 +810,87 @@ export default {
 				logger.error(`Error while duplicating question ${id}`, {
 					error,
 				})
-				showError('There was an error while duplicating the question')
+				showError(
+					t('forms', 'There was an error while duplicating the question'),
+				)
 			} finally {
 				this.isLoadingQuestions = false
 			}
 		},
 
-		/**
-		 * Reorder questions on dragEnd
-		 */
-		async onQuestionOrderChange() {
-			this.isLoadingQuestions = true
-			const newOrder = this.form.questions.map((question) => question.id)
+		/** Remember the order a drag starts from; the list has already moved by the time it reports. */
+		onQuestionDragStart() {
+			this.orderBeforeDrag = this.form.questions.map((question) => question.id)
+		},
 
-			try {
-				await axios.patch(
-					generateOcsUrl('apps/forms/api/v3/forms/{id}/questions', {
-						id: this.form.id,
-					}),
-					{
-						newOrder,
-					},
-				)
-				emit('forms:last-updated:set', this.form.id)
-			} catch (error) {
-				logger.error('Error while saving form', { error })
-				showError(t('forms', 'Error while saving form'))
-			} finally {
-				this.isLoadingQuestions = false
+		/**
+		 * Save the order the editor now shows.
+		 *
+		 * The list moves before the request is sent, so a failed save would leave the editor
+		 * showing an order respondents never get. Saves also go out one after another: each
+		 * carries the whole order, and two overlapping ones could finish the wrong way round
+		 * and leave the server with the older of the two.
+		 *
+		 * @param {Array<number>|null} previous question ids in the order before this change
+		 * @return {Promise} settles once this save is done
+		 */
+		onQuestionOrderChange(previous = null) {
+			const seq = ++this.orderSaveSeq
+			const newOrder = this.form.questions.map((question) => question.id)
+			// The order to go back to is the last one the server is known to hold: the one
+			// before the first change that is still waiting to be saved.
+			if (this.orderRollback === null) {
+				this.orderRollback = previous
 			}
+			this.isLoadingQuestions = true
+
+			this.orderSaveChain = this.orderSaveChain.then(async () => {
+				try {
+					await axios.patch(
+						generateOcsUrl('apps/forms/api/v3/forms/{id}/questions', {
+							id: this.form.id,
+						}),
+						{
+							newOrder,
+						},
+					)
+					emit('forms:last-updated:set', this.form.id)
+					this.orderRollback = seq === this.orderSaveSeq ? null : newOrder
+				} catch (error) {
+					logger.error('Error while saving question order', { error })
+					// A later save still in the queue sends a complete order of its own, so
+					// only the newest failure has anything to undo.
+					if (seq === this.orderSaveSeq) {
+						this.restoreQuestionOrder(this.orderRollback)
+						this.orderRollback = null
+						showError(
+							t('forms', 'The new question order could not be saved'),
+						)
+					}
+				} finally {
+					if (seq === this.orderSaveSeq) {
+						this.isLoadingQuestions = false
+					}
+				}
+			})
+			return this.orderSaveChain
+		},
+
+		/**
+		 * Put the questions back into a saved order. Questions that order does not know
+		 * about go to the end.
+		 *
+		 * @param {Array<number>|null} order question ids
+		 */
+		restoreQuestionOrder(order) {
+			if (!order) {
+				return
+			}
+			const rank = new Map(order.map((id, position) => [id, position]))
+			const last = order.length
+			this.form.questions = [...this.form.questions].sort(
+				(a, b) => (rank.get(a.id) ?? last) - (rank.get(b.id) ?? last),
+			)
 		},
 	},
 }
@@ -858,6 +977,20 @@ export default {
 		}
 	}
 
+	// Sits in the gap under the header, lined up with the description text
+	// (the header's 32px start padding plus the textarea's own 12px).
+	.save-status {
+		color: var(--color-text-maxcontrast);
+		font-size: var(--font-size-small, 13px);
+		line-height: 20px;
+		// Reserve the line so the questions do not jump when the status appears.
+		min-height: 20px;
+		margin-block: -24px 4px;
+		padding-inline: 44px 12px;
+		width: 100%;
+		max-width: 750px;
+	}
+
 	// Questions container
 	section {
 		position: relative;
@@ -885,11 +1018,13 @@ export default {
 				display: block;
 				// Out to the card's own edges, past the padding that leaves room for the
 				// drag handles. Both literals mirror Question.vue's own
-				// `padding: 8px 8px 8px 56px` - deriving the start from
+				// `padding-inline: 56px 8px` - deriving the start from
 				// --default-clickable-area looked tidier and was wrong: that token is
 				// 34px here, not the 44px the 56 was built from, so the rule stopped
-				// 10px short of the edge.
-				margin: 0 -8px 20px -56px;
+				// 10px short of the edge. Logical sides, like that padding: in a
+				// right-to-left form the handle gutter is on the right.
+				margin-block: 0 20px;
+				margin-inline: -56px -8px;
 			}
 
 			.question__header__title__text {
@@ -920,11 +1055,20 @@ export default {
 			display: flex;
 			align-items: center;
 			align-self: flex-start;
+			// Two labelled buttons plus the start margin are wider than a small phone,
+			// so let the second one drop to its own row rather than overflow.
+			flex-wrap: wrap;
 			gap: 4px;
 			margin-block-end: 16px;
+			max-width: calc(100% - var(--default-clickable-area));
 
 			// To align with text
 			margin-inline-start: var(--default-clickable-area);
+
+			@media (max-width: 400px) {
+				max-width: 100%;
+				margin-inline-start: 0;
+			}
 		}
 	}
 }

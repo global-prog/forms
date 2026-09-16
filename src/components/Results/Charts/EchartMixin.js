@@ -4,7 +4,7 @@
  */
 
 import logger from '../../../utils/Logger.js'
-import { colourKey, fileNameFor, PAPER, wrapText } from './chartImage.js'
+import { colourKey, fileNameFor, PAPER, titleLines, wrapText } from './chartImage.js'
 import { forget, onThemeChange, whenNearView } from './chartScheduler.js'
 import { loadEcharts, readChartTheme } from './echartsLoader.js'
 
@@ -129,27 +129,48 @@ export default {
 		 * its text keeps the contrast it has on screen, with the title written above it
 		 * in the direction the question reads.
 		 *
+		 * Throws when there is nothing to draw from - the library did not load, or the
+		 * drawing could not be turned into an image - so the caller can say so rather
+		 * than the button silently doing nothing.
+		 *
 		 * @param {string} title the question, written above the chart and naming the file
 		 * @param {string} direction 'rtl' or 'ltr', how the title reads
 		 */
 		async downloadImage(title, direction = 'ltr') {
+			if (this.failed) {
+				throw new Error('The chart library is not available')
+			}
+			if (!this.echarts) {
+				// Still on its way on a slow connection: wait for it rather than
+				// ignoring the click.
+				this.echarts = await loadEcharts()
+				this.ready = true
+				await this.$nextTick()
+			}
 			this.start()
 			if (!this.chart || !this.$refs.chart) {
-				return
+				throw new Error('The chart has not been drawn')
 			}
 			const scale = 2
 			const padding = 24
 			const width = this.$refs.chart.clientWidth
 			const height = this.$refs.chart.clientHeight
+			// The picture is at least as wide as the whole figure, and never narrow. A
+			// ring is a small fixed box, and sizing the picture to it squeezed the title
+			// into a column a few words wide and ran the key off its edge. The drawing
+			// keeps its own size and is centred.
+			const exportWidth = Math.max(width, this.$el.clientWidth || 0, 480)
+			const drawingX = padding + (exportWidth - width) / 2
 			const style = window.getComputedStyle(this.$refs.chart)
+			const family = style.fontFamily || 'sans-serif'
 			// Paper, like the drawing above it and like the printed report.
 			const background = PAPER.surface
 			const ink = PAPER.ink
 
 			const canvas = document.createElement('canvas')
 			const context = canvas.getContext('2d')
-			context.font = `bold 16px ${style.fontFamily || 'sans-serif'}`
-			const lines = wrapText(context, title, width).slice(0, 3)
+			context.font = `bold 16px ${family}`
+			const lines = titleLines(context, title, exportWidth)
 			const titleHeight = lines.length ? lines.length * 22 + padding : 0
 			// A ring and a stacked bar keep their key in the page rather than in the
 			// drawing, so a picture of the drawing alone is unlabelled colour. A chart
@@ -173,27 +194,40 @@ export default {
 			paperFor.set(colourKey(screen.muted), PAPER.muted)
 			// Anything that is not one of ours is left as it is.
 			const toPaper = (colour) => paperFor.get(colourKey(colour)) ?? colour
+			// Each entry is wrapped to the room beside its swatch, so a long option is
+			// set on several lines instead of running off the edge of the picture. The
+			// lines are counted now because the canvas has to be sized before anything
+			// is drawn on it.
+			const swatch = 12
+			const legendFont = `14px ${family}`
+			context.font = legendFont
 			const legend = (this.legendRows?.() ?? []).map((row) => ({
 				...row,
 				colour: toPaper(row.colour),
+				lines: wrapText(context, row.label, exportWidth - swatch - 8),
 			}))
 			const legendLine = 22
+			const legendLineCount = legend.reduce(
+				(sum, row) => sum + Math.max(row.lines.length, 1),
+				0,
+			)
 			const legendHeight = legend.length
-				? legend.length * legendLine + padding
+				? legendLineCount * legendLine + padding
 				: 0
-			canvas.width = (width + 2 * padding) * scale
+			// Sizing a canvas resets its context, so everything set on it is set after.
+			canvas.width = (exportWidth + 2 * padding) * scale
 			canvas.height =
 				(height + titleHeight + legendHeight + 2 * padding) * scale
 			context.scale(scale, scale)
 			context.fillStyle = background
 			context.fillRect(0, 0, canvas.width, canvas.height)
 
-			context.font = `bold 16px ${style.fontFamily || 'sans-serif'}`
+			context.font = `bold 16px ${family}`
 			context.fillStyle = ink
 			context.direction = direction === 'rtl' ? 'rtl' : 'ltr'
 			context.textAlign = 'start'
 			context.textBaseline = 'top'
-			const x = direction === 'rtl' ? width + padding : padding
+			const x = direction === 'rtl' ? exportWidth + padding : padding
 			lines.forEach((line, index) => {
 				context.fillText(line, x, padding + index * 22)
 			})
@@ -242,7 +276,7 @@ export default {
 				})
 				context.drawImage(
 					image,
-					padding,
+					drawingX,
 					padding + titleHeight,
 					width,
 					height,
@@ -254,27 +288,26 @@ export default {
 			// The key, under the drawing: a swatch in the series colour and the words the
 			// page shows beside it.
 			if (legend.length) {
-				const swatch = 12
-				context.font = `14px ${style.fontFamily || 'sans-serif'}`
+				context.font = legendFont
 				context.textBaseline = 'middle'
-				legend.forEach((row, index) => {
-					const y =
-						padding
-						+ titleHeight
-						+ height
-						+ padding / 2
-						+ index * legendLine
-						+ legendLine / 2
-					const boxX =
-						direction === 'rtl' ? width + padding - swatch : padding
+				const boxX =
+					direction === 'rtl' ? exportWidth + padding - swatch : padding
+				const textX =
+					direction === 'rtl'
+						? exportWidth + padding - swatch - 8
+						: padding + swatch + 8
+				let line = 0
+				legend.forEach((row) => {
+					const top = padding + titleHeight + height + padding / 2
+					const y = top + line * legendLine + legendLine / 2
+					// The swatch sits beside the first line of its entry.
 					context.fillStyle = row.colour || ink
 					context.fillRect(boxX, y - swatch / 2, swatch, swatch)
 					context.fillStyle = ink
-					const textX =
-						direction === 'rtl'
-							? width + padding - swatch - 8
-							: padding + swatch + 8
-					context.fillText(row.label, textX, y)
+					row.lines.forEach((text, index) => {
+						context.fillText(text, textX, y + index * legendLine)
+					})
+					line += Math.max(row.lines.length, 1)
 				})
 			}
 

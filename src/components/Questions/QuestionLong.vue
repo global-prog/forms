@@ -96,6 +96,11 @@ export default {
 		onInput() {
 			const textarea = this.$refs.textarea
 			this.$emit('update:values', [textarea.value])
+			// Clear an error left by a failed submit once the answer is given. validate()
+			// reads the `values` prop, which changes only after the parent has re-rendered.
+			if (this.errorMessage) {
+				this.$nextTick(() => this.validate())
+			}
 		},
 
 		autoSizeText() {
@@ -123,6 +128,7 @@ export default {
 		// Just overrides Server CSS-Styling for disabled inputs. -> Not Good??
 		background-color: var(--color-main-background);
 		color: var(--color-main-text);
+		opacity: 1;
 		width: calc(100% - var(--default-clickable-area)) !important;
 		margin-inline-start: -12px;
 	}

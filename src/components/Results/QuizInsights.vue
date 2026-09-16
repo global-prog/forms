@@ -34,6 +34,11 @@
 			</div>
 		</dl>
 
+		<!-- Says what the columns are: along the bottom the score, and each column how
+		     many people got it. The figures under the chart are read after this. -->
+		<h4 v-if="distribution.length" class="quiz-insights__subtitle">
+			{{ t('forms', 'How many people got each score') }}
+		</h4>
 		<ChartFigure
 			v-if="distribution.length"
 			class="quiz-insights__chart"

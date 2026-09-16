@@ -9,7 +9,14 @@
 			<h3 dir="auto">
 				{{ submission.userDisplayName }}
 			</h3>
-			<NcActions class="submission-menu" forceMenu>
+			<NcActions
+				class="submission-menu"
+				:ariaLabel="
+					t('forms', 'Actions for response from {name}', {
+						name: submission.userDisplayName,
+					})
+				"
+				forceMenu>
 				<NcActionRouter
 					v-if="canEditSubmission"
 					:to="{
@@ -189,15 +196,7 @@ export default {
 						id: question.id,
 						text: question.text,
 						type: question.type,
-						answers: answers.map((answer) => {
-							return {
-								id: answer.id,
-								text: answer.text,
-								url: generateUrl('/f/{fileId}', {
-									fileId: answer.fileId,
-								}),
-							}
-						}),
+						answers: this.fileAnswers(answers),
 					})
 				} else if (question.type === 'grid') {
 					const optionsPerId = {}
@@ -281,14 +280,23 @@ export default {
 							}))
 							.filter((sub) => sub.answer),
 					)
+					const triggerType = question.extraSettings.triggerType
 					answeredQuestionsArray.push({
 						id: question.id,
 						text: question.text,
-						type: question.extraSettings.triggerType,
+						type: triggerType,
 						conditional: true,
 						extraSettings: question.extraSettings,
 						squashedAnswers: answers[0].text,
-						answers: subQuestions.map((sub) => this.parseQuestions(sub)),
+						// The branches are kept apart from `answers`, which Answer reads as
+						// the trigger's own uploads when the trigger is a file question.
+						answers:
+							triggerType === 'file'
+								? this.fileAnswers(answers)
+								: undefined,
+						branchAnswers: subQuestions.map((sub) =>
+							this.parseQuestions(sub),
+						),
 					})
 				} else if (['date', 'time'].includes(question.type)) {
 					const squashedAnswers = answers
@@ -338,6 +346,20 @@ export default {
 				}
 			})
 			return answeredQuestionsArray
+		},
+
+		/**
+		 * @param {object[]} answers the stored answers to a file question
+		 * @return {object[]} each upload with a link to open it
+		 */
+		fileAnswers(answers) {
+			return answers.map((answer) => ({
+				id: answer.id,
+				text: answer.text,
+				url: generateUrl('/f/{fileId}', {
+					fileId: answer.fileId,
+				}),
+			}))
 		},
 
 		onDelete() {
@@ -436,7 +458,8 @@ export default {
 	}
 
 	&-menu {
-		margin: 0 0 12px var(--default-grid-baseline);
+		margin-block: 0 12px;
+		margin-inline-start: var(--default-grid-baseline);
 		display: inline-block;
 	}
 

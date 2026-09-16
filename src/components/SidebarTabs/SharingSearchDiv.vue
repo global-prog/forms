@@ -13,11 +13,7 @@
 			:placeholder="t('forms', 'Search for user, group or team …')"
 			:aria-label-listbox="t('forms', 'Search for user, group or team …')"
 			@search="asyncSearch"
-			@update:modelValue="addShare">
-			<template #no-options>
-				{{ noResultText }}
-			</template>
-		</NcSelectUsers>
+			@update:modelValue="addShare" />
 	</div>
 </template>
 

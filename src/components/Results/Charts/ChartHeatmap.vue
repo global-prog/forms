@@ -228,6 +228,13 @@ export default {
 		--chart-series-1: #2a78d6;
 
 		color: #222222;
+
+		// A stuck row label reports where it is stuck, not where it sits in the table.
+		// Once a wide matrix has been scrolled sideways, measuring it that way painted
+		// the labels over the data and left their own column empty.
+		.chart-heatmap__row-head {
+			position: static;
+		}
 	}
 
 	&__table {

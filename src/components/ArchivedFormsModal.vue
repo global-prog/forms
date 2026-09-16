@@ -28,6 +28,7 @@
 				v-for="form in shownForms"
 				:key="form.id"
 				:form="form"
+				:readOnly="!ownedIds.has(form.id)"
 				forceDisplayActions
 				@clone="onCloneForm(form.id)"
 				@delete="onDelete(form)"
@@ -65,9 +66,16 @@ export default defineComponent({
 			type: Array,
 			required: true,
 		},
+
+		// Ids of the forms the user owns. The list also holds archived forms shared with
+		// the user, which must not offer the owner-only Unarchive and Delete.
+		ownedIds: {
+			type: Set,
+			default: () => new Set(),
+		},
 	},
 
-	emits: ['update:open', 'clone'],
+	emits: ['update:open', 'clone', 'delete'],
 
 	setup() {
 		return { IconArchive }
@@ -98,6 +106,9 @@ export default defineComponent({
 
 		onDelete(form) {
 			this.shownForms = this.shownForms.filter(({ id }) => id !== form.id)
+			// The parent holds the real list: without this the form stays in app state
+			// and reappears the next time the list is rebuilt.
+			this.$emit('delete', form.id)
 		},
 	},
 })

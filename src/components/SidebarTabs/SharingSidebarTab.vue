@@ -9,13 +9,7 @@
 			v-if="locked"
 			type="info"
 			:heading="t('forms', 'Form is locked')"
-			:text="
-				t('forms', 'Lock by {lockedBy}, expires: {lockedUntil}', {
-					lockedBy: form.lockedBy ? form.lockedBy : form.ownerId,
-					lockedUntil:
-						lockedUntil === '' ? t('forms', 'never') : lockedUntil,
-				})
-			" />
+			:text="lockedNotice" />
 		<SharingSearchDiv
 			:currentShares="form.shares"
 			:showLoading="isLoading"
@@ -33,7 +27,7 @@
 			<span class="share-div__desc">{{ t('forms', 'Share link') }}</span>
 			<NcActions>
 				<NcActionButton
-					:disabled="locked || !isCurrentUserOwner"
+					:disabled="locked || !isCurrentUserOwner || isLoading"
 					@click="addPublicLink">
 					<template #icon>
 						<NcIconSvgWrapper :svg="IconPlus" />
@@ -77,7 +71,7 @@
 					</NcActionButton>
 					<NcActionButton
 						v-if="isEmbeddable"
-						@click="copyEmbeddingCode(share)">
+						@click="copyEmbeddingCode($event, share)">
 						<template #icon>
 							<NcIconSvgWrapper :svg="IconCodeBrackets" />
 						</template>
@@ -85,7 +79,7 @@
 					</NcActionButton>
 					<NcActionButton
 						v-else
-						:disabled="locked || !isCurrentUserOwner"
+						:disabled="locked || !isCurrentUserOwner || isLoading"
 						@click="makeEmbeddable(share)">
 						<template #icon>
 							<NcIconSvgWrapper :svg="IconLinkBoxVariantOutline" />
@@ -95,7 +89,7 @@
 					</NcActionButton>
 					<NcActionButton
 						closeAfterClick
-						:disabled="locked || !isCurrentUserOwner"
+						:disabled="locked || !isCurrentUserOwner || isLoading"
 						@click="removeShare(share)">
 						<template #icon>
 							<NcIconSvgWrapper :svg="IconDelete" />
@@ -105,7 +99,7 @@
 					<NcActionButton
 						v-if="appConfig.allowPublicLink"
 						closeAfterClick
-						:disabled="locked || !isCurrentUserOwner"
+						:disabled="locked || !isCurrentUserOwner || isLoading"
 						@click="addPublicLink">
 						<template #icon>
 							<NcIconSvgWrapper :svg="IconPlus" />
@@ -130,10 +124,15 @@
 			@closed="qrDialogText = ''" />
 
 		<!-- Removing a link is not an edit, it is a withdrawal: every copy of it that has
-		     been sent out stops working, and a replacement cannot carry the same address. -->
+		     been sent out stops working, and a replacement cannot carry the same address.
+		     The same dialog confirms removing a person, group or team, worded for that. -->
 		<NcDialog
 			v-model:open="showConfirmRemoveShare"
-			:name="t('forms', 'Remove link')"
+			:name="
+				isRemovingLink
+					? t('forms', 'Remove link')
+					: t('forms', 'Remove access')
+			"
 			:message="confirmRemoveShareMessage"
 			:buttons="confirmRemoveShareButtons" />
 
@@ -215,6 +214,7 @@
 				:share="share"
 				:locked="locked"
 				:isCurrentUserOwner="isCurrentUserOwner"
+				:busy="isLoading"
 				@removeShare="removeShare"
 				@update:share="updateShare" />
 		</TransitionGroup>
@@ -235,6 +235,7 @@ import { getCurrentUser } from '@nextcloud/auth'
 import axios from '@nextcloud/axios'
 import { showError } from '@nextcloud/dialogs'
 import { loadState } from '@nextcloud/initial-state'
+import { translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl } from '@nextcloud/router'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionLink from '@nextcloud/vue/components/NcActionLink'
@@ -311,8 +312,44 @@ export default {
 			/** The link the removal dialog is asking about, or null when it is closed */
 			sharePendingRemove: null,
 			showConfirmRemoveShare: false,
+			/**
+			 * Kept apart from sharePendingRemove, which is cleared on confirm, so the dialog
+			 * does not change its wording while it is closing.
+			 */
+			pendingRemoveIsLink: true,
+			pendingRemoveName: '',
+			pendingRemoveLink: '',
+		}
+	},
 
-			confirmRemoveShareButtons: [
+	computed: {
+		lockedNotice() {
+			const lockedBy = this.form.lockedBy
+				? this.form.lockedBy
+				: this.form.ownerId
+			if (this.lockedUntil === '') {
+				return t('forms', 'Locked by {lockedBy}', { lockedBy }, undefined, {
+					escape: false,
+					sanitize: false,
+				})
+			}
+			// Shown as plain text, so the values need no HTML escaping or sanitising.
+			return t(
+				'forms',
+				'Locked by {lockedBy} until {lockedUntil}',
+				{ lockedBy, lockedUntil: this.lockedUntil },
+				undefined,
+				{ escape: false, sanitize: false },
+			)
+		},
+
+		/** Whether the removal dialog is about a public link rather than a person, group or team */
+		isRemovingLink() {
+			return this.pendingRemoveIsLink
+		},
+
+		confirmRemoveShareButtons() {
+			return [
 				{
 					label: t('forms', 'Cancel'),
 					icon: IconCancel,
@@ -322,18 +359,19 @@ export default {
 					},
 				},
 				{
-					label: t('forms', 'Remove link'),
+					label: this.isRemovingLink
+						? t('forms', 'Remove link')
+						: t('forms', 'Remove access'),
+
 					icon: IconDelete,
 					variant: 'error',
 					callback: () => {
 						this.removeShareConfirmed()
 					},
 				},
-			],
-		}
-	},
+			]
+		},
 
-	computed: {
 		/**
 		 * What removing this link costs, which is not obvious from a menu item reading
 		 * "Remove link". Every copy already sent out stops working at once, and a new
@@ -342,8 +380,16 @@ export default {
 		 * @return {string} the question to put before withdrawing it
 		 */
 		confirmRemoveShareMessage() {
-			const share = this.sharePendingRemove
-			if (!share) {
+			if (!this.isRemovingLink) {
+				return t(
+					'forms',
+					'{name} will no longer be able to open or manage this form.',
+					{ name: this.pendingRemoveName },
+					undefined,
+					{ escape: false, sanitize: false },
+				)
+			}
+			if (!this.pendingRemoveLink) {
 				return t(
 					'forms',
 					'Anyone holding this link will no longer be able to open the form, and a new link cannot repeat this address.',
@@ -352,7 +398,7 @@ export default {
 			return t(
 				'forms',
 				'{link} will stop working. Anyone holding it will no longer be able to open the form, and a new link cannot repeat this address.',
-				{ link: this.getPublicShareLink(share) },
+				{ link: this.pendingRemoveLink },
 			)
 		},
 
@@ -419,6 +465,10 @@ export default {
 		},
 
 		async addPublicLink() {
+			// A second tap before the first request returns would create a duplicate link.
+			if (this.isLoading) {
+				return
+			}
 			this.isLoading = true
 
 			try {
@@ -463,6 +513,10 @@ export default {
 		 * @param {object} updatedShare the updated object
 		 */
 		async updateShare(updatedShare) {
+			// Every update carries the whole permission list; overlapping ones would undo each other.
+			if (this.isLoading) {
+				return
+			}
 			this.isLoading = true
 
 			try {
@@ -495,25 +549,28 @@ export default {
 		},
 
 		/**
-		 * Remove share
+		 * Withdraw a share, after asking.
 		 *
-		 * @param {object} share the share to delete
-		 */
-		/**
-		 * Withdraw a share link, after asking.
-		 *
-		 * @param {object} share the link to withdraw
+		 * @param {object} share the link, person, group or team to remove
 		 */
 		removeShare(share) {
 			this.sharePendingRemove = share
+			this.pendingRemoveIsLink =
+				share.shareType === this.SHARE_TYPES.SHARE_TYPE_LINK
+			this.pendingRemoveName = share.displayName || share.shareWith
+			this.pendingRemoveLink = this.pendingRemoveIsLink
+				? this.getPublicShareLink(share)
+				: ''
 			this.showConfirmRemoveShare = true
 		},
 
-		/** Withdraw the link the dialog named, once it has been agreed to. */
+		/** Withdraw the share the dialog named, once it has been agreed to. */
 		async removeShareConfirmed() {
 			const share = this.sharePendingRemove
 			this.sharePendingRemove = null
 			this.showConfirmRemoveShare = false
+			// No isLoading check here: the remove buttons are already disabled while a
+			// request runs, and dropping a removal the user has just confirmed would be silent.
 			if (!share) {
 				return
 			}

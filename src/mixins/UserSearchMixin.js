@@ -1,5 +1,7 @@
 import { getCurrentUser } from '@nextcloud/auth'
 import axios from '@nextcloud/axios'
+import { showError } from '@nextcloud/dialogs'
+import { translate as t } from '@nextcloud/l10n'
 /**
  * SPDX-FileCopyrightText: 2021 Nextcloud GmbH and Nextcloud contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
@@ -26,6 +28,8 @@ export default {
 			// Search Results
 			recommendations: [],
 			suggestions: [],
+			// Increases with each search, so only the newest reply is shown
+			searchToken: 0,
 		}
 	},
 	computed: {
@@ -40,17 +44,6 @@ export default {
 				&& this.query.trim() !== ''
 				&& this.query.length > this.minSearchStringLength
 			)
-		},
-		/**
-		 * Text when there is no Results to be shown
-		 *
-		 * @return {string}
-		 */
-		noResultText() {
-			if (!this.query) {
-				return t('forms', 'No recommendations. Start typing.')
-			}
-			return t('forms', 'No elements found.')
 		},
 	},
 	methods: {
@@ -87,6 +80,9 @@ export default {
 		 */
 		async getSuggestions(query, shareType) {
 			this.loading = true
+			// Replies can arrive out of order; a slow one for an older query must not
+			// replace the list for the newer one, nor stop its spinner.
+			const token = ++this.searchToken
 
 			// Search for all used share-types, except public link.
 			shareType ??= this.SHARE_TYPES_USED.filter(
@@ -107,6 +103,10 @@ export default {
 					},
 				)
 
+				if (token !== this.searchToken) {
+					return
+				}
+
 				const data = OcsResponse2Data(request)
 				const exact = data.exact
 				delete data.exact // removing exact from general results
@@ -117,8 +117,17 @@ export default {
 				this.suggestions = exactSuggestions.concat(suggestions)
 			} catch (error) {
 				logger.error('Loading Suggestions failed.', { error })
+				if (token === this.searchToken) {
+					// Without this an error looks the same as "no such account"
+					this.suggestions = []
+					showError(
+						t('forms', 'Could not search accounts, please try again'),
+					)
+				}
 			} finally {
-				this.loading = false
+				if (token === this.searchToken) {
+					this.loading = false
+				}
 			}
 		},
 

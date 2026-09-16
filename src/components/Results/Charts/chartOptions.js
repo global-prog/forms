@@ -13,6 +13,31 @@
  * the resulting SVG inspected, which is the only way to check them without a browser.
  */
 
+/**
+ * Make text safe to place in a tooltip.
+ *
+ * ECharts puts whatever a tooltip formatter returns straight into the page as HTML. Option,
+ * row and column text is typed by the form's author, and an answer that matches no option
+ * is typed by a respondent, so all of it is escaped: otherwise "<5 years" or "R&D" shows up
+ * mangled, and markup in either would run in the browser of whoever opens the results.
+ *
+ * @param {?(string|number)} value the text to show
+ * @return {string} the text with its HTML-significant characters escaped
+ */
+function escapeHtml(value) {
+	return String(value ?? '').replace(
+		/[&<>"']/g,
+		(character) =>
+			({
+				'&': '&amp;',
+				'<': '&lt;',
+				'>': '&gt;',
+				'"': '&quot;',
+				"'": '&#39;',
+			})[character],
+	)
+}
+
 /** How many categorical hues there are. An eighth would not be separable from the others. */
 export const MAX_SERIES = 7
 
@@ -90,6 +115,16 @@ export function chartFormsFor({
 
 /** Row pitch. Comfortable for a pointer, and enough for a wrapped second line. */
 export const ROW_HEIGHT = 38
+
+/** Line height of a wrapped category label. */
+const LABEL_LINE_HEIGHT = 16
+
+/**
+ * Most lines a row is grown to fit. A label longer than this still wraps rather than being
+ * cut, since an option is identified by its words, but one pathological option no longer
+ * stretches every row of the chart without limit.
+ */
+const LABEL_MAX_LINES = 6
 
 /** Breathing room above and below the plot. */
 export const CHART_PADDING = 16
@@ -181,9 +216,9 @@ export function barOption({
 					parts.push(`(${item.percentage}%)`)
 				}
 				if (item.note) {
-					parts.push(item.note)
+					parts.push(escapeHtml(item.note))
 				}
-				return `${params.name}<br>${parts.join(' ')}`
+				return `${escapeHtml(params.name)}<br>${parts.join(' ')}`
 			},
 		},
 		xAxis: {
@@ -292,7 +327,7 @@ export function donutOption({ slices, colours, total, theme }) {
 			trigger: 'item',
 			confine: true,
 			formatter: ({ name, value, percent }) =>
-				`${name}<br><strong>${value}</strong> (${Math.round(percent)}%)`,
+				`${escapeHtml(name)}<br><strong>${value}</strong> (${Math.round(percent)}%)`,
 		},
 		series: [
 			{
@@ -355,6 +390,28 @@ export function fitsAsColumns(width, count) {
 
 /** A generous width per character of a 12px label, for deciding whether one fits. */
 const LABEL_CHAR_WIDTH = 7.5
+
+/**
+ * How tall each row of a horizontal bar chart has to be for its label to fit.
+ *
+ * The categories share the height evenly, so the longest label decides the pitch of every
+ * row. On a phone the label column is narrow, and a sentence-long option wraps to several
+ * lines; a fixed pitch let each one run into the labels above and below it.
+ *
+ * @param {number} width the plot's width in pixels, 0 when not yet measured
+ * @param {?number} labelLength characters in the longest label, when known
+ * @return {number} the row pitch in pixels
+ */
+function rowPitchFor(width, labelLength) {
+	if (!labelLength) {
+		return ROW_HEIGHT
+	}
+	const lines = Math.min(
+		LABEL_MAX_LINES,
+		Math.ceil((labelLength * LABEL_CHAR_WIDTH) / labelWidthFor(width)),
+	)
+	return Math.max(ROW_HEIGHT, lines * LABEL_LINE_HEIGHT + 8)
+}
 
 /**
  * Whether the category labels have to be turned to fit under their columns.
@@ -428,10 +485,15 @@ export function columnOption({
 	const rotate = turnsLabels(width, items.length, longestLabel(items))
 	const band = rotate ? COLUMN_LABEL_BAND_ROTATED : COLUMN_LABEL_BAND
 	// A turned label is aligned by its far end so it points at its own column, which is
-	// the opposite end when the form reads right to left.
+	// the opposite end when the form reads right to left. The angle is mirrored with it:
+	// ECharts turns a positive angle anticlockwise, so a label anchored by its left end
+	// at +35 degrees would run up from its tick into the columns rather than down below
+	// the axis.
 	let turnedAlign = 'center'
+	let turnedAngle = 0
 	if (rotate) {
 		turnedAlign = theme.rtl ? 'left' : 'right'
+		turnedAngle = theme.rtl ? -35 : 35
 	}
 
 	return {
@@ -455,9 +517,9 @@ export function columnOption({
 					parts.push(`(${item.percentage}%)`)
 				}
 				if (item.note) {
-					parts.push(item.note)
+					parts.push(escapeHtml(item.note))
 				}
-				return `${params.name}<br>${parts.join(' ')}`
+				return `${escapeHtml(params.name)}<br>${parts.join(' ')}`
 			},
 		},
 		xAxis: {
@@ -471,7 +533,7 @@ export function columnOption({
 				color: theme.ink,
 				// Every category is named; dropping some would leave unlabelled columns.
 				interval: 0,
-				rotate: rotate ? 35 : 0,
+				rotate: turnedAngle,
 				align: turnedAlign,
 				verticalAlign: rotate ? 'top' : 'middle',
 				width: rotate ? COLUMN_LABEL_BAND_ROTATED : undefined,
@@ -579,7 +641,7 @@ export function lineOption({
 				if (!hidePercentage) {
 					parts.push(`(${item.percentage}%)`)
 				}
-				return `${point.name}<br>${parts.join(' ')}`
+				return `${escapeHtml(point.name)}<br>${parts.join(' ')}`
 			},
 		},
 		xAxis: {
@@ -665,7 +727,7 @@ export function stackedOption({ rows, columns, colours, theme, width = 0 }) {
 			formatter: (params) => {
 				const total = totals[params.dataIndex] || 0
 				const share = total ? Math.round((params.value / total) * 100) : 0
-				return `${params.name}<br>${params.seriesName}: <strong>${params.value}</strong> (${share}%)`
+				return `${escapeHtml(params.name)}<br>${escapeHtml(params.seriesName)}: <strong>${params.value}</strong> (${share}%)`
 			},
 		},
 		xAxis: {
@@ -722,13 +784,14 @@ export const PLOT_HEIGHT = 240
  *
  * @param {string} form one of bars, columns, line
  * @param {number} count how many categories there are
- * @param {number} [width] the plot's width, which decides whether labels are turned
+ * @param {number} [width] the plot's width, which decides whether labels are turned or,
+ *   for bars, how many lines they wrap to
  * @param {?number} [labelLength] characters in the longest label, when known
  * @return {number} the height in pixels
  */
 export function figureHeight(form, count, width = 0, labelLength = null) {
 	if (form === 'bars') {
-		return count * ROW_HEIGHT + CHART_PADDING * 2
+		return count * rowPitchFor(width, labelLength) + CHART_PADDING * 2
 	}
 	if (form === 'line') {
 		return PLOT_HEIGHT + COLUMN_LABEL_BAND

@@ -18,6 +18,7 @@
 	<Question
 		v-bind="questionProps"
 		hideRequired
+		displayOnly
 		:titlePlaceholder="answerType.titlePlaceholder"
 		:warningInvalid="answerType.warningInvalid"
 		v-on="commonListeners">
@@ -36,7 +37,10 @@
 				class="question-media__link"
 				target="_blank"
 				rel="noopener noreferrer external">
-				{{ alt || url }}
+				<bdi>{{ alt || url }}</bdi>
+				<span class="hidden-visually">
+					{{ t('forms', '(opens in a new tab)') }}
+				</span>
 			</a>
 
 			<!-- A prompt for whoever is building the form. Someone filling it in can do
@@ -164,6 +168,16 @@ export default {
 		max-height: 400px;
 		max-width: 100%;
 		object-fit: contain;
+	}
+
+	// Nextcloud's base style draws links as plain text; this one has to look like
+	// something to tap, and a bare address must wrap on a narrow phone.
+	&__link {
+		align-self: flex-start;
+		max-width: 100%;
+		color: var(--color-primary-element);
+		text-decoration: underline;
+		overflow-wrap: anywhere;
 	}
 
 	&__empty {

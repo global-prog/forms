@@ -39,6 +39,7 @@
 				<NcActionInput
 					v-if="extraSettings?.optionsLimitMin"
 					type="number"
+					min="1"
 					:label="t('forms', 'Minimum options to be checked')"
 					:labelOutside="false"
 					:showTrailingButton="false"
@@ -50,13 +51,14 @@
 					:modelValue="!!extraSettings?.optionsLimitMax"
 					@update:modelValue="
 						(checked) =>
-							onLimitOptionsMax(checked ? choices.length || 1 : null)
+							onLimitOptionsMax(checked ? availableOptions || 1 : null)
 					">
 					{{ t('forms', 'Require a maximum of options to be checked') }}
 				</NcActionCheckbox>
 				<NcActionInput
 					v-if="extraSettings?.optionsLimitMax"
 					type="number"
+					min="1"
 					:label="t('forms', 'Maximum options to be checked')"
 					:labelOutside="false"
 					:showTrailingButton="false"
@@ -108,7 +110,7 @@
 					</NcCheckboxRadioSwitch>
 					<NcInputField
 						class="question__input"
-						:label="placeholderOtherAnswer"
+						:label="t('forms', 'Other answer')"
 						:required="otherAnswer !== undefined"
 						:modelValue="cachedOtherAnswerText"
 						@update:modelValue="onOtherAnswerTextChange" />
@@ -124,7 +126,7 @@
 				v-else
 				v-model="choices"
 				class="question__content"
-				:animation="300"
+				:animation="sortAnimation()"
 				direction="vertical"
 				handle=".option__drag-handle"
 				invertSwap
@@ -267,13 +269,6 @@ export default {
 			return this.isUnique ? IconRadioboxBlank : IconCheckboxBlankOutline
 		},
 
-		placeholderOtherAnswer() {
-			if (this.readOnly) {
-				return this.answerType.submitPlaceholder
-			}
-			return this.answerType.createPlaceholder
-		},
-
 		questionValues() {
 			return this.isUnique ? this.values?.[0] : this.values
 		},
@@ -377,7 +372,7 @@ export default {
 					this.errorMessage = n(
 						'forms',
 						'You must choose at most one option',
-						'You must choose at most %n options',
+						'You must choose a maximum of %n options',
 						max,
 					)
 					return false
@@ -453,6 +448,11 @@ export default {
 		 */
 		onLimitOptionsMax(max) {
 			max = max && Number.parseInt(max.toString(), 10)
+			// A limit below one cannot be met by anybody: a negative maximum would make
+			// the question impossible to submit. Ignore it while the editor is typing.
+			if (max !== null && (!Number.isInteger(max) || max < 1)) {
+				return
+			}
 			if (this.isUnique || max === null) {
 				// For unique (radio) options we cannot set limits, also if null is passed then we need to remove the limit
 				this.onExtraSettingsChange({ optionsLimitMax: undefined })
@@ -491,6 +491,9 @@ export default {
 		 */
 		onLimitOptionsMin(min) {
 			min = min && Number.parseInt(min.toString(), 10)
+			if (min !== null && (!Number.isInteger(min) || min < 1)) {
+				return
+			}
 			if (this.isUnique || min === null) {
 				this.onExtraSettingsChange({ optionsLimitMin: undefined })
 			} else if (min) {
@@ -688,6 +691,11 @@ export default {
 .options-list-transition-leave-to {
 	opacity: 0;
 	transform: translateX(var(--default-clickable-area));
+
+	// Items slide in from the end side, which is the left in a right-to-left form.
+	[dir='rtl'] & {
+		transform: translateX(calc(-1 * var(--default-clickable-area)));
+	}
 }
 
 /* ensure leaving items are taken out of layout flow so that moving

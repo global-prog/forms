@@ -11,35 +11,35 @@
 			:displayName="displayName"
 			:isNoUser="isNoUser" />
 		<div class="share-div__desc">
-			<span>{{ displayName }}</span>
-			<span>{{ displayNameAppendix }}</span>
+			<!-- One string, so the type label keeps its space and translators can order it. -->
+			<span>{{ displayNameWithType }}</span>
 		</div>
 		<NcActions class="share-div__actions" :disabled="!isCurrentUserOwner">
 			<NcActionCaption :name="t('forms', 'Permissions')" />
 			<NcActionCheckbox
 				:modelValue="canEditForm"
-				:disabled="locked"
+				:disabled="locked || busy"
 				@update:modelValue="updatePermissionEdit">
 				{{ t('forms', 'Edit form') }}
 			</NcActionCheckbox>
 			<NcActionCheckbox
 				:modelValue="canAccessResults"
-				:disabled="locked"
+				:disabled="locked || busy"
 				@update:modelValue="updatePermissionResults">
 				{{ t('forms', 'View responses') }}
 			</NcActionCheckbox>
 			<NcActionCheckbox
 				:modelValue="canDeleteResults"
-				:disabled="!canAccessResults || locked"
+				:disabled="!canAccessResults || locked || busy"
 				@update:modelValue="updatePermissionDeleteResults">
 				{{ t('forms', 'Delete responses') }}
 			</NcActionCheckbox>
 			<NcActionSeparator />
-			<NcActionButton :disabled="locked" @click="removeShare">
+			<NcActionButton :disabled="locked || busy" @click="removeShare">
 				<template #icon>
 					<NcIconSvgWrapper :svg="IconClose" />
 				</template>
-				{{ t('forms', 'Delete') }}
+				{{ t('forms', 'Remove access') }}
 			</NcActionButton>
 		</NcActions>
 	</li>
@@ -47,6 +47,7 @@
 
 <script>
 import IconClose from '@material-symbols/svg-400/outlined/close.svg?raw'
+import { translate as t } from '@nextcloud/l10n'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionCaption from '@nextcloud/vue/components/NcActionCaption'
 import NcActionCheckbox from '@nextcloud/vue/components/NcActionCheckbox'
@@ -84,6 +85,15 @@ export default {
 		isCurrentUserOwner: {
 			type: Boolean,
 			required: true,
+		},
+
+		/**
+		 * A share request is still running. Each change is built from the share as it
+		 * was last saved, so a second toggle sent before the first returns would undo it.
+		 */
+		busy: {
+			type: Boolean,
+			default: false,
 		},
 	},
 
@@ -124,15 +134,31 @@ export default {
 				: this.share.displayName
 		},
 
-		displayNameAppendix() {
+		typeLabel() {
 			switch (this.share.shareType) {
 				case this.SHARE_TYPES.SHARE_TYPE_GROUP:
-					return `(${t('forms', 'Group')})`
+					return t('forms', 'Group')
 				case this.SHARE_TYPES.SHARE_TYPE_CIRCLE:
-					return `(${t('forms', 'Team')})`
+					return t('forms', 'Team')
 				default:
 					return ''
 			}
+		},
+
+		displayNameWithType() {
+			if (!this.typeLabel) {
+				return this.displayName
+			}
+			// Rendered as text, so a name such as "R&D" must be neither escaped nor
+			// sanitised: sanitising also turns "&" into "&amp;".
+			// TRANSLATORS: A group or team name followed by what kind of recipient it is, e.g. "Staff (Group)"
+			return t(
+				'forms',
+				'{name} ({type})',
+				{ name: this.displayName, type: this.typeLabel },
+				undefined,
+				{ escape: false, sanitize: false },
+			)
 		},
 	},
 
@@ -145,17 +171,16 @@ export default {
 		 * @param {boolean} hasPermission If the results permission should be granted
 		 */
 		updatePermissionResults(hasPermission) {
-			if (hasPermission === false) {
-				// ensure to remove the delete permission if results permission is dropped
-				this.updatePermission(
-					this.PERMISSION_TYPES.PERMISSION_RESULTS_DELETE,
-					false,
-				)
-			}
-			return this.updatePermission(
-				this.PERMISSION_TYPES.PERMISSION_RESULTS,
-				hasPermission,
-			)
+			const results = this.PERMISSION_TYPES.PERMISSION_RESULTS
+			const resultsDelete = this.PERMISSION_TYPES.PERMISSION_RESULTS_DELETE
+			// Dropping results also drops deleting them, in one request: the server refuses
+			// delete without view, and two requests would both start from the old permissions.
+			const permissions = hasPermission
+				? [...new Set([...this.share.permissions, results])]
+				: this.share.permissions.filter(
+						(perm) => perm !== results && perm !== resultsDelete,
+					)
+			this.$emit('update:share', { ...this.share, permissions })
 		},
 
 		/**
@@ -202,12 +227,15 @@ export default {
 <style lang="scss" scoped>
 .share-div {
 	display: flex;
-	height: var(--default-clickable-area);
+	// A minimum, not a fixed height: long group or team names wrap onto a second line.
+	min-height: var(--default-clickable-area);
 	align-items: center;
 
 	&__desc {
 		padding: 8px;
 		flex-grow: 1;
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 }
 </style>

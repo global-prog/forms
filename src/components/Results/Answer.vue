@@ -57,57 +57,62 @@
 			</div>
 		</template>
 		<template v-else-if="questionType === 'grid'">
-			<table class="answer-grid">
-				<thead>
-					<tr>
-						<th class="first-column"></th>
+			<!-- A grid is wider than a phone; it scrolls on its own rather than pushing
+			     the whole page sideways, and the row headings stay pinned while it does. -->
+			<div class="answer-grid-scroll">
+				<table class="answer-grid">
+					<thead>
+						<tr>
+							<th class="first-column"></th>
 
-						<th
-							v-for="column of gridColumns"
-							:key="column.id"
-							scope="col">
-							{{ column.text }}
-						</th>
-					</tr>
-				</thead>
-				<tbody>
-					<tr v-for="row of gridRows" :key="row.id">
-						<th class="first-column" scope="row">{{ row.text }}</th>
-						<td v-for="column of gridColumns" :key="column.id">
-							<template v-if="gridCellType === 'radio'">
-								<NcCheckboxRadioSwitch
-									:aria-label="`${row.text}: ${column.text}`"
-									:modelValue="gridValue[row.id]"
-									:name="`${row.id}-answer`"
-									:value="column.id.toString()"
-									disabled
-									type="radio" />
-							</template>
+							<th
+								v-for="column of gridColumns"
+								:key="column.id"
+								scope="col">
+								{{ column.text }}
+							</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr v-for="row of gridRows" :key="row.id">
+							<th class="first-column" scope="row">{{ row.text }}</th>
+							<td v-for="column of gridColumns" :key="column.id">
+								<template v-if="gridCellType === 'radio'">
+									<NcCheckboxRadioSwitch
+										:aria-label="`${row.text}: ${column.text}`"
+										:modelValue="gridValue?.[row.id] ?? null"
+										:name="`${row.id}-answer`"
+										:value="column.id.toString()"
+										disabled
+										type="radio" />
+								</template>
 
-							<template v-if="gridCellType === 'checkbox'">
-								<NcCheckboxRadioSwitch
-									:aria-label="`${row.text}: ${column.text}`"
-									:modelValue="gridValue[row.id] || []"
-									:name="`${row.id}-answer`"
-									:value="column.id.toString()"
-									disabled
-									type="checkbox" />
-							</template>
+								<template v-if="gridCellType === 'checkbox'">
+									<NcCheckboxRadioSwitch
+										:aria-label="`${row.text}: ${column.text}`"
+										:modelValue="gridValue?.[row.id] || []"
+										:name="`${row.id}-answer`"
+										:value="column.id.toString()"
+										disabled
+										type="checkbox" />
+								</template>
 
-							<template v-if="gridCellType === 'number'">
-								{{ gridValue[row.id][column.id] }}
-							</template>
-						</td>
-					</tr>
-				</tbody>
-			</table>
+								<template v-if="gridCellType === 'number'">
+									<!-- A row added after this response was sent has no stored value. -->
+									{{ gridValue?.[row.id]?.[column.id] ?? '' }}
+								</template>
+							</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
 		</template>
 		<p v-else class="answer__text" dir="auto">
 			<NcHighlight :text="answerText" :search="highlight" />
 		</p>
-		<template v-if="question.conditional && question.answers">
+		<template v-if="question.conditional && question.branchAnswers">
 			<div
-				v-for="(branchAnswers, branchAnswersKey) in question.answers"
+				v-for="(branchAnswers, branchAnswersKey) in question.branchAnswers"
 				:key="branchAnswersKey"
 				class="branch__subquestions">
 				<div class="answer__subquestion">
@@ -117,7 +122,7 @@
 						:question="subquestion"
 						:highlight="highlight"
 						:answerText="subquestion.squashedAnswers"
-						:answers="subquestion.answer"
+						:answers="subquestion.answers"
 						:questionText="subquestion.text"
 						:gridCellType="subquestion.gridCellType"
 						:gridColumns="subquestion.gridColumns"
@@ -287,6 +292,11 @@ export default {
 		gap: calc(var(--clickable-area-small) / 2);
 	}
 
+	.answer-grid-scroll {
+		max-inline-size: 100%;
+		overflow-x: auto;
+	}
+
 	.answer-grid {
 		border-collapse: collapse;
 		width: 100%;
@@ -316,10 +326,14 @@ export default {
 		.first-column {
 			// A heading for the row, so the table can be read out; still plain to look at.
 			font-weight: normal;
-			min-width: 200px;
+			// Never more than a good share of a phone screen, so the answers stay in view.
+			min-width: min(200px, 40vw);
 			text-align: start;
 			position: sticky;
 			inset-inline-start: 0;
+			// Opaque and above the cells, which scroll underneath it.
+			background-color: var(--color-main-background);
+			z-index: 1;
 		}
 	}
 

@@ -56,7 +56,7 @@
 				</NcActionButton>
 			</NcActions>
 			<NcButton
-				:aria-label="t('forms', 'Delete answer')"
+				:aria-label="deleteLabel"
 				variant="tertiary"
 				@click="deleteEntry">
 				<template #icon>
@@ -215,12 +215,30 @@ export default {
 			}
 
 			if (this.optionType === OptionType.Row) {
-				return t('forms', 'The text of row {index}', {})
+				return t('forms', 'The text of row {index}', {
+					index: this.index + 1,
+				})
 			}
 
 			return t('forms', 'The text of option {index}', {
 				index: this.index + 1,
 			})
+		},
+
+		/**
+		 * Name each row's delete button after its own entry, so a screen reader list
+		 * of buttons does not read the same "Delete answer" on every row.
+		 */
+		deleteLabel() {
+			if (this.optionType === OptionType.Column) {
+				return t('forms', 'Delete column {index}', { index: this.index + 1 })
+			}
+
+			if (this.optionType === OptionType.Row) {
+				return t('forms', 'Delete row {index}', { index: this.index + 1 })
+			}
+
+			return t('forms', 'Delete option {index}', { index: this.index + 1 })
 		},
 
 		optionDragMenuId() {
@@ -363,6 +381,11 @@ export default {
 			this.queue.pause()
 			try {
 				const newAnswer = await this.createAnswer(answer)
+				if (!newAnswer) {
+					// Not saved: keep the typed text in the field so it can be retried,
+					// rather than listing an option the server does not have.
+					return
+				}
 
 				// Forward changes, but use current answer.text to avoid erasing
 				// any in-between changes while creating the answer
@@ -426,7 +449,7 @@ export default {
 		 * Create an unsynced answer to the server
 		 *
 		 * @param {object} answer the answer to sync
-		 * @return {object} answer
+		 * @return {?object} the created answer, or null when saving failed
 		 */
 		async createAnswer(answer) {
 			try {
@@ -453,7 +476,7 @@ export default {
 				showError(t('forms', 'Error while saving the answer'))
 			}
 
-			return answer
+			return null
 		},
 
 		/**

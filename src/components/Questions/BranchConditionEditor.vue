@@ -17,6 +17,7 @@
 					:modelValue="selectedOptions"
 					:options="optionsList"
 					:placeholder="t('forms', 'Select an option')"
+					:ariaLabelCombobox="conditionLabel"
 					:multiple="false"
 					label="text"
 					@update:modelValue="onSingleOptionSelect" />
@@ -27,6 +28,7 @@
 					:modelValue="selectedOptions"
 					:options="optionsList"
 					:placeholder="t('forms', 'Select options combination')"
+					:ariaLabelCombobox="conditionLabel"
 					:multiple="true"
 					label="text"
 					@update:modelValue="onMultipleOptionsSelect" />
@@ -40,12 +42,20 @@
 					v-model="conditionType"
 					:options="textConditionTypes"
 					:placeholder="t('forms', 'Condition type')"
+					:ariaLabelCombobox="t('forms', 'Condition type')"
 					label="label"
 					:reduce="(opt) => opt.value"
 					class="condition-type-select" />
 				<NcTextField
 					v-model="conditionValue"
+					:label="conditionValuePlaceholder"
 					:placeholder="conditionValuePlaceholder"
+					:error="isPatternInvalid"
+					:helperText="
+						isPatternInvalid
+							? t('forms', 'This pattern is not valid')
+							: ''
+					"
 					class="condition-value-input" />
 			</div>
 		</template>
@@ -58,6 +68,7 @@
 						v-model="conditionType"
 						:options="valueConditionTypes"
 						:placeholder="t('forms', 'Condition type')"
+						:ariaLabelCombobox="t('forms', 'Condition type')"
 						label="label"
 						:reduce="(opt) => opt.value"
 						class="condition-type-select" />
@@ -69,6 +80,7 @@
 						<NcTextField
 							v-model.number="conditionValue"
 							type="number"
+							:label="t('forms', 'Value')"
 							:placeholder="t('forms', 'Value')"
 							class="condition-value-input" />
 					</template>
@@ -76,12 +88,14 @@
 						<NcTextField
 							v-model.number="conditionMin"
 							type="number"
+							:label="t('forms', 'Min')"
 							:placeholder="t('forms', 'Min')"
 							class="condition-range-input" />
 						<span class="condition-range-separator">-</span>
 						<NcTextField
 							v-model.number="conditionMax"
 							type="number"
+							:label="t('forms', 'Max')"
 							:placeholder="t('forms', 'Max')"
 							class="condition-range-input" />
 					</template>
@@ -89,6 +103,7 @@
 						<NcTextField
 							v-model.number="conditionMin"
 							type="number"
+							:label="t('forms', 'Min')"
 							:placeholder="t('forms', 'Min')"
 							class="condition-value-input" />
 					</template>
@@ -96,6 +111,7 @@
 						<NcTextField
 							v-model.number="conditionMax"
 							type="number"
+							:label="t('forms', 'Max')"
 							:placeholder="t('forms', 'Max')"
 							class="condition-value-input" />
 					</template>
@@ -121,15 +137,17 @@
 		<template v-else-if="isDateBasedTrigger">
 			<div class="condition-row">
 				<NcDateTimePicker
-					v-model="conditionMin"
+					v-model="conditionDateMin"
 					:type="datePickerType"
 					:placeholder="t('forms', 'From')"
+					:ariaLabel="t('forms', 'From')"
 					class="condition-date-input" />
 				<span class="condition-range-separator">-</span>
 				<NcDateTimePicker
-					v-model="conditionMax"
+					v-model="conditionDateMax"
 					:type="datePickerType"
 					:placeholder="t('forms', 'To')"
+					:ariaLabel="t('forms', 'To')"
 					class="condition-date-input" />
 			</div>
 		</template>
@@ -148,12 +166,17 @@
 </template>
 
 <script>
+import moment from '@nextcloud/moment'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcColorPicker from '@nextcloud/vue/components/NcColorPicker'
 import NcDateTimePicker from '@nextcloud/vue/components/NcDateTimePicker'
 import NcSelect from '@nextcloud/vue/components/NcSelect'
 import NcTextField from '@nextcloud/vue/components/NcTextField'
+import {
+	compilePattern,
+	DATE_STORAGE_FORMATS,
+} from '../../utils/DisplayConditions.js'
 
 export default {
 	name: 'BranchConditionEditor',
@@ -281,9 +304,9 @@ export default {
 		 */
 		textConditionTypes() {
 			const types = [
-				{ value: 'string_equals', label: t('forms', 'Equals') },
+				{ value: 'string_equals', label: t('forms', 'Is') },
 				{ value: 'string_contains', label: t('forms', 'Contains') },
-				{ value: 'regex', label: t('forms', 'Matches regex') },
+				{ value: 'regex', label: t('forms', 'Matches pattern') },
 			]
 			// Long text doesn't support string_equals
 			if (this.triggerType === 'long') {
@@ -293,15 +316,16 @@ export default {
 		},
 
 		/**
-		 * Value condition type options (for linear scale)
+		 * Value condition type options (for linear scale). Both engines compare
+		 * inclusively, so the labels say "at least" / "at most".
 		 */
 		valueConditionTypes() {
 			return [
-				{ value: 'value_equals', label: t('forms', 'Equals') },
-				{ value: 'value_not_equals', label: t('forms', 'Not Equals') },
-				{ value: 'value_range', label: t('forms', 'In range') },
-				{ value: 'value_min', label: t('forms', 'Higher than') },
-				{ value: 'value_max', label: t('forms', 'Lower than') },
+				{ value: 'value_equals', label: t('forms', 'Is') },
+				{ value: 'value_not_equals', label: t('forms', 'Is not') },
+				{ value: 'value_range', label: t('forms', 'Between') },
+				{ value: 'value_min', label: t('forms', 'At least') },
+				{ value: 'value_max', label: t('forms', 'At most') },
 			]
 		},
 
@@ -333,7 +357,7 @@ export default {
 		 */
 		conditionValue: {
 			get() {
-				return this.branch.conditions?.[0]?.value || ''
+				return this.branch.conditions?.[0]?.value ?? ''
 			},
 
 			set(value) {
@@ -346,7 +370,7 @@ export default {
 		 */
 		conditionMin: {
 			get() {
-				return this.branch.conditions?.[0]?.min || ''
+				return this.branch.conditions?.[0]?.min ?? ''
 			},
 
 			set(value) {
@@ -359,7 +383,7 @@ export default {
 		 */
 		conditionMax: {
 			get() {
-				return this.branch.conditions?.[0]?.max || ''
+				return this.branch.conditions?.[0]?.max ?? ''
 			},
 
 			set(value) {
@@ -368,10 +392,59 @@ export default {
 		},
 
 		/**
-		 * File uploaded condition
+		 * Lower date/time bound, stored as a local string in the answer's own format so
+		 * that both engines can compare it with the answer directly
+		 */
+		conditionDateMin: {
+			get() {
+				return this.parseDateBound(this.branch.conditions?.[0]?.min)
+			},
+
+			set(value) {
+				this.updateCondition({ min: this.formatDateBound(value) })
+			},
+		},
+
+		/**
+		 * Upper date/time bound, stored like the lower one
+		 */
+		conditionDateMax: {
+			get() {
+				return this.parseDateBound(this.branch.conditions?.[0]?.max)
+			},
+
+			set(value) {
+				this.updateCondition({ max: this.formatDateBound(value) })
+			},
+		},
+
+		/**
+		 * Storage format of the trigger's answers
+		 */
+		dateStorageFormat() {
+			return (
+				DATE_STORAGE_FORMATS[this.triggerType] ?? DATE_STORAGE_FORMATS.date
+			)
+		},
+
+		/**
+		 * File uploaded condition. Shows what is stored: a branch without a condition
+		 * matches nothing, so the switch must not look on.
 		 */
 		fileUploadedCondition() {
-			return this.branch.conditions?.[0]?.fileUploaded ?? true
+			return this.branch.conditions?.[0]?.fileUploaded ?? false
+		},
+
+		/**
+		 * Whether a pattern condition holds a pattern that cannot be used. Such a
+		 * condition never matches, which would otherwise hide the branch without a word.
+		 */
+		isPatternInvalid() {
+			return (
+				this.conditionType === 'regex'
+				&& this.conditionValue !== ''
+				&& compilePattern(String(this.conditionValue)) === null
+			)
 		},
 
 		/**
@@ -427,6 +500,32 @@ export default {
 		onFileConditionChange(checked) {
 			const conditions = [{ fileUploaded: checked }]
 			this.emitUpdate({ conditions })
+		},
+
+		/**
+		 * @param {string|undefined} bound A stored bound
+		 * @return {Date|null} The bound for the picker, or null when none is usable
+		 */
+		parseDateBound(bound) {
+			// Bounds in any other format are ignored by both engines, so showing them
+			// would suggest a limit that is not applied.
+			if (
+				typeof bound !== 'string'
+				|| !this.dateStorageFormat.pattern.test(bound)
+			) {
+				return null
+			}
+			return moment(bound, this.dateStorageFormat.moment).toDate()
+		},
+
+		/**
+		 * @param {Date|null} value The date the picker emitted
+		 * @return {string|undefined} The bound to store, or undefined to remove it
+		 */
+		formatDateBound(value) {
+			return value
+				? moment(value).format(this.dateStorageFormat.moment)
+				: undefined
 		},
 
 		/**

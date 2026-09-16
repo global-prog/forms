@@ -30,7 +30,7 @@
 		<div
 			v-if="readOnly"
 			class="question__content"
-			role="list"
+			role="group"
 			:aria-labelledby="titleId"
 			:aria-describedby="description ? descriptionId : undefined"
 			:aria-errormessage="hasError ? errorId : undefined"
@@ -41,7 +41,7 @@
 					v-if="unrankedOptions.length > 0"
 					v-model="unrankedOptions"
 					class="ranking-unranked__pool"
-					:animation="300"
+					:animation="sortAnimation()"
 					:group="'ranking_' + id"
 					target=".sort-target"
 					direction="horizontal"
@@ -50,11 +50,13 @@
 					<TransitionGroup
 						tag="ul"
 						:name="isRanking ? undefined : 'options-list-transition'"
-						class="sort-target">
+						class="sort-target"
+						:aria-label="t('forms', 'Options to rank')">
 						<li v-for="option in unrankedOptions" :key="option.id">
 							<button
 								type="button"
 								class="ranking-unranked__item"
+								:data-option-id="option.id"
 								@click="rankOption(option)">
 								{{ option.text }}
 							</button>
@@ -68,13 +70,13 @@
 
 			<!-- Ranked list -->
 			<div class="ranking-ranked">
-				<p class="ranking-section__label">
+				<p :id="rankingLabelId" class="ranking-section__label">
 					{{ t('forms', 'Your ranking') }}
 				</p>
 				<Draggable
 					v-model="rankedOptions"
 					class="ranking-ranked__list"
-					:animation="300"
+					:animation="sortAnimation()"
 					:group="'ranking_' + id"
 					target=".sort-target"
 					direction="vertical"
@@ -84,12 +86,13 @@
 					<TransitionGroup
 						tag="ul"
 						:name="isRanking ? undefined : 'options-list-transition'"
-						class="sort-target">
+						class="sort-target"
+						:aria-labelledby="rankingLabelId">
 						<li
 							v-for="(option, index) in rankedOptions"
 							:key="option.id"
 							class="ranking-item"
-							role="listitem">
+							:data-option-id="option.id">
 							<NcActions
 								:id="`ranking-${option.id}-drag`"
 								:container="`#ranking-${option.id}-drag`"
@@ -100,7 +103,6 @@
 									<NcIconSvgWrapper :svg="IconDragIndicator" />
 								</template>
 								<NcActionButton
-									ref="buttonOptionUp"
 									:disabled="index === 0"
 									@click="onMoveUp(index)">
 									<template #icon>
@@ -109,7 +111,6 @@
 									{{ t('forms', 'Move option up') }}
 								</NcActionButton>
 								<NcActionButton
-									ref="buttonOptionDown"
 									:disabled="index === rankedOptions.length - 1"
 									@click="onMoveDown(index)">
 									<template #icon>
@@ -123,6 +124,7 @@
 							>
 							<span class="ranking-item__text">{{ option.text }}</span>
 							<NcButton
+								class="ranking-item__remove"
 								variant="tertiary"
 								:ariaLabel="t('forms', 'Remove from ranking')"
 								@click="unrankOption(option)">
@@ -137,6 +139,11 @@
 					{{ t('forms', 'Tap options above to rank them') }}
 				</p>
 			</div>
+			<!-- Ranking or moving an option takes the pressed button away from under the
+			     keyboard focus; this tells screen-reader users where the option went. -->
+			<p class="hidden-visually" aria-live="polite">
+				{{ liveMessage }}
+			</p>
 		</div>
 
 		<!-- Edit mode: manage options -->
@@ -148,7 +155,7 @@
 				v-else
 				v-model="choices"
 				class="question__content"
-				:animation="300"
+				:animation="sortAnimation()"
 				direction="vertical"
 				handle=".option__drag-handle"
 				invertSwap
@@ -250,13 +257,21 @@ export default {
 			isRanking: false,
 			isLoading: false,
 			isOptionDialogShown: false,
+			liveMessage: '',
 			rankedOptions: [],
+			// The shuffled order of the choices, kept for as long as the set of choices
+			// stays the same (see choicesInOrder)
+			shuffledChoiceIds: [],
 			unrankedOptions: [],
 			OptionType,
 		}
 	},
 
 	computed: {
+		rankingLabelId() {
+			return `${this.titleId}-ranking`
+		},
+
 		shiftDragHandle() {
 			return !this.readOnly && this.options.length !== 0 && !this.isLastEmpty
 		},
@@ -322,7 +337,7 @@ export default {
 		 * Initialize ranked/unranked options from existing values or default order
 		 */
 		initRankedOptions() {
-			const sorted = this.sortOptionsOfType(this.options, OptionType.Choice)
+			const sorted = this.choicesInOrder()
 
 			if (this.values && this.values.length > 0) {
 				// Restore order from saved values (array of option IDs)
@@ -345,16 +360,60 @@ export default {
 		},
 
 		/**
+		 * The choices in the order the respondent sees them.
+		 *
+		 * Every rank or unrank writes the answer back through the values watcher, which
+		 * rebuilds both lists. With shuffling on, a fresh shuffle each time would make
+		 * the options not yet ranked jump around after every tap, so the first shuffle is
+		 * kept until the choices themselves change.
+		 *
+		 * @return {Array} the choices
+		 */
+		choicesInOrder() {
+			const sorted = this.sortOptionsOfType(this.options, OptionType.Choice)
+			if (!this.readOnly || !this.extraSettings?.shuffleOptions) {
+				return sorted
+			}
+
+			const byId = new Map(sorted.map((option) => [option.id, option]))
+			const kept = this.shuffledChoiceIds
+			if (
+				kept.length !== byId.size
+				|| kept.some((optionId) => !byId.has(optionId))
+			) {
+				this.shuffledChoiceIds = sorted.map((option) => option.id)
+				return sorted
+			}
+			return kept.map((optionId) => byId.get(optionId))
+		},
+
+		/**
 		 * Move an option from the unranked pool to the ranked list
 		 *
 		 * @param {object} option The option to rank
 		 */
 		rankOption(option) {
+			const poolIndex = this.unrankedOptions.findIndex(
+				(o) => o.id === option.id,
+			)
 			this.unrankedOptions = this.unrankedOptions.filter(
 				(o) => o.id !== option.id,
 			)
 			this.rankedOptions.push(option)
 			this.emitValues()
+			this.announceMove(option, this.rankedOptions.length)
+
+			// The pressed button is gone: stay in the pool on its neighbour, or move to
+			// the option just ranked once the pool is empty.
+			this.$nextTick(() => {
+				const pool = this.unrankedOptions
+				if (pool.length > 0) {
+					const next = pool[Math.min(poolIndex, pool.length - 1)]
+					this.focusOption(next.id, '.ranking-unranked__item')
+				} else {
+					this.focusOption(option.id, '.ranking-item__remove')
+				}
+			})
 		},
 
 		/**
@@ -363,9 +422,29 @@ export default {
 		 * @param {object} option The option to unrank
 		 */
 		unrankOption(option) {
+			const rankIndex = this.rankedOptions.findIndex((o) => o.id === option.id)
 			this.rankedOptions = this.rankedOptions.filter((o) => o.id !== option.id)
 			this.unrankedOptions.push(option)
 			this.emitValues()
+			this.liveMessage = t(
+				'forms',
+				'{option} removed from ranking',
+				{ option: option.text },
+				undefined,
+				{ escape: false },
+			)
+
+			// As above: move to the neighbouring ranked option, or back to the pool
+			// once nothing is ranked any more.
+			this.$nextTick(() => {
+				const ranked = this.rankedOptions
+				if (ranked.length > 0) {
+					const next = ranked[Math.min(rankIndex, ranked.length - 1)]
+					this.focusOption(next.id, '.ranking-item__remove')
+				} else {
+					this.focusOption(option.id, '.ranking-unranked__item')
+				}
+			})
 		},
 
 		/**
@@ -379,11 +458,7 @@ export default {
 			;[items[index - 1], items[index]] = [items[index], items[index - 1]]
 			this.rankedOptions = items
 			this.emitValues()
-			const newIndex = index - 1
-			this.focusButton(
-				newIndex > 0 ? 'buttonOptionUp' : 'buttonOptionDown',
-				newIndex,
-			)
+			this.afterMove(items[index - 1], index - 1, 'up')
 		},
 
 		/**
@@ -397,28 +472,73 @@ export default {
 			;[items[index], items[index + 1]] = [items[index + 1], items[index]]
 			this.rankedOptions = items
 			this.emitValues()
-			const newIndex = index + 1
-			this.focusButton(
-				newIndex < this.rankedOptions.length - 1
-					? 'buttonOptionDown'
-					: 'buttonOptionUp',
-				newIndex,
+			this.afterMove(items[index + 1], index + 1, 'down')
+		},
+
+		/**
+		 * Keep the keyboard on a moved option: its row is moved in the page, which
+		 * drops the focus, so put it back and say where the option went.
+		 *
+		 * The move menu stays open after a move, so the respondent can press the same
+		 * entry again; focus returns to that entry, or to the other one once the option
+		 * has reached the top or bottom and the entry is disabled. With the menu closed,
+		 * focus goes to the menu's trigger.
+		 *
+		 * @param {object} option The option that moved
+		 * @param {number} newIndex Its new index in the ranking
+		 * @param {string} direction 'up' or 'down'
+		 */
+		afterMove(option, newIndex, direction) {
+			this.announceMove(option, newIndex + 1)
+			this.$nextTick(() => {
+				const menu = document.getElementById(`ranking-${option.id}-drag`)
+				const [up, down] = menu?.querySelectorAll('.action-button') ?? []
+				const preferred = direction === 'up' ? [up, down] : [down, up]
+				const entry = preferred.find((button) => button && !button.disabled)
+				entry?.focus()
+				if (!entry || document.activeElement !== entry) {
+					this.focusOption(option.id, '.action-item__menutoggle')
+				}
+			})
+		},
+
+		/**
+		 * Tell screen-reader users the position an option now has
+		 *
+		 * @param {object} option The option
+		 * @param {number} position Its position in the ranking, starting at 1
+		 */
+		announceMove(option, position) {
+			this.liveMessage = t(
+				'forms',
+				'{option} moved to position {position}',
+				{ option: option.text, position },
+				undefined,
+				{ escape: false },
 			)
 		},
 
 		/**
-		 * Re-focus a button ref inside a v-for after reorder
+		 * Focus a control that belongs to an option. The option lists are rebuilt on
+		 * every change, so the element is looked up by option rather than kept.
 		 *
-		 * @param {string} refName The ref name ('buttonOptionUp' or 'buttonOptionDown')
-		 * @param {number} index The index of the item in the v-for
+		 * @param {number} optionId The option's id
+		 * @param {string} selector The control to focus, on or inside the option's element
 		 */
-		focusButton(refName, index) {
-			this.$nextTick(() => {
-				const refs = this.$refs[refName]
-				if (Array.isArray(refs) && refs[index]) {
-					refs[index].$el?.focus()
+		focusOption(optionId, selector) {
+			// An element that is still sliding out carries the same option id, so take
+			// the first one that actually holds the control.
+			const elements =
+				this.$el?.querySelectorAll?.(`[data-option-id="${optionId}"]`) ?? []
+			for (const element of elements) {
+				const target = element.matches(selector)
+					? element
+					: element.querySelector(selector)
+				if (target) {
+					target.focus()
+					return
 				}
-			})
+			}
 		},
 
 		onRankingStart() {
@@ -578,6 +698,11 @@ export default {
 .options-list-transition-leave-to {
 	opacity: 0;
 	transform: translateX(var(--default-clickable-area));
+
+	// Items slide in from the end side, which is the left in a right-to-left form.
+	[dir='rtl'] & {
+		transform: translateX(calc(-1 * var(--default-clickable-area)));
+	}
 }
 
 .options-list-transition-leave-active {

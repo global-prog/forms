@@ -88,20 +88,19 @@
 			role="group"
 			:aria-labelledby="titleId"
 			:aria-describedby="description ? descriptionId : undefined">
-			<NcDateTimePicker
-				:modelValue="time"
-				:disabled="!readOnly"
-				:format="stringify"
-				:placeholder="datetimePickerPlaceholder"
-				:showSecond="false"
-				:type="dateTimePickerType"
-				:disabledDate="disabledDates"
-				:disabledTime="disabledTimes"
-				:aria-required="isRequired"
-				:aria-errormessage="hasError ? errorId : undefined"
-				:aria-invalid="hasError ? 'true' : undefined"
-				clearable
-				@update:modelValue="onValueChange" />
+			<!-- The picker has no disabled state, so the editor's preview is made inert. -->
+			<div ref="picker" :inert="!readOnly || undefined">
+				<NcDateTimePicker
+					:modelValue="time"
+					:format="stringify"
+					:placeholder="datetimePickerPlaceholder"
+					:ariaLabel="text || datetimePickerPlaceholder"
+					:type="dateTimePickerType"
+					:min="pickerMin"
+					:max="pickerMax"
+					clearable
+					@update:modelValue="onValueChange" />
+			</div>
 		</div>
 		<template #insert>
 			<slot name="insert" />
@@ -232,6 +231,39 @@ export default {
 		timeRange() {
 			return this.extraSettings?.timeRange ?? false
 		},
+
+		/**
+		 * Earliest value the respondent may pick. Only limits the editor actually set are
+		 * passed: the timeMin/timeMax fallbacks span a whole day, and a midnight upper
+		 * bound would forbid every time.
+		 */
+		pickerMin() {
+			if (this.answerType.pickerType === 'time') {
+				return this.extraSettings?.timeMin ? this.timeMin : undefined
+			}
+			return this.dateMin ?? undefined
+		},
+
+		/**
+		 * Latest value the respondent may pick
+		 */
+		pickerMax() {
+			if (this.answerType.pickerType === 'time') {
+				return this.extraSettings?.timeMax ? this.timeMax : undefined
+			}
+			return this.dateMax ?? undefined
+		},
+	},
+
+	// After the DOM update: switching to a range picker renders a new input.
+	watch: {
+		isRequired: { handler: 'syncInputState', flush: 'post' },
+		hasError: { handler: 'syncInputState', flush: 'post' },
+		dateTimePickerType: { handler: 'syncInputState', flush: 'post' },
+	},
+
+	mounted() {
+		this.syncInputState()
 	},
 
 	methods: {
@@ -380,29 +412,26 @@ export default {
 		},
 
 		/**
-		 * Determines if a given date should be disabled.
-		 *
-		 * @param {Date} date - The date to check.
-		 * @return {boolean} - Returns true if the date should be disabled, otherwise false.
+		 * The picker does not pass ARIA attributes on to its text input, so the required
+		 * and invalid states are set on that input directly.
 		 */
-		disabledDates(date) {
-			return (
-				(this.dateMin && date < this.dateMin)
-				|| (this.dateMax && date > this.dateMax)
-			)
-		},
-
-		/**
-		 * Determines if a given time should be disabled.
-		 *
-		 * @param {Date} time - The time to check.
-		 * @return {boolean} - Returns true if the time should be disabled, otherwise false.
-		 */
-		disabledTimes(time) {
-			return (
-				(this.timeMin && time < this.timeMin)
-				|| (this.timeMax && time > this.timeMax)
-			)
+		syncInputState() {
+			const input = this.$refs.picker?.querySelector('input')
+			if (!input) {
+				return
+			}
+			const attributes = {
+				'aria-required': this.isRequired ? 'true' : null,
+				'aria-invalid': this.hasError ? 'true' : null,
+				'aria-errormessage': this.hasError ? this.errorId : null,
+			}
+			for (const [name, value] of Object.entries(attributes)) {
+				if (value === null) {
+					input.removeAttribute(name)
+				} else {
+					input.setAttribute(name, value)
+				}
+			}
 		},
 
 		/**
@@ -429,16 +458,8 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-.mx-datepicker {
+.question__content :deep(.vue-date-time-picker__wrapper) {
 	width: 100%;
 	max-width: 300px;
-
-	&.disabled {
-		inset-inline-start: -12px;
-	}
-
-	:deep(.mx-input) {
-		height: var(--default-clickable-area) !important;
-	}
 }
 </style>

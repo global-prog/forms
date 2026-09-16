@@ -12,6 +12,23 @@ import { INPUT_DEBOUNCE_MS, OptionType } from '../models/Constants.ts'
 import logger from '../utils/Logger.js'
 import OcsResponse2Data from '../utils/OcsResponse2Data.js'
 
+/**
+ * Debounce a handler so it can be called both as `this.handler()` and as a bare
+ * event listener. The debounce library remembers the `this` of the first call and
+ * throws when a later call in the same wait brings a different one, which a mix
+ * of method calls and listener calls would do.
+ *
+ * @param {(...args: unknown[]) => void} handler the function to debounce, not relying on `this`
+ * @return {(...args: unknown[]) => void} the debounced function, with `clear` and `flush`
+ */
+function debounceUnbound(handler) {
+	const debounced = debounce(handler, INPUT_DEBOUNCE_MS)
+	const unbound = (...args) => debounced(...args)
+	unbound.clear = debounced.clear
+	unbound.flush = debounced.flush
+	return unbound
+}
+
 export default {
 	inheritAttrs: false,
 
@@ -84,6 +101,24 @@ export default {
 		index: {
 			type: Number,
 			required: true,
+		},
+
+		/**
+		 * The number announced for the question, when it differs from `index`
+		 * (for example when display-only blocks are not counted). Forwarded to
+		 * Question through questionProps.
+		 */
+		displayNumber: {
+			type: Number,
+			default: null,
+		},
+
+		/**
+		 * Heading level of the respondent's title, forwarded to Question
+		 */
+		headingLevel: {
+			type: Number,
+			default: 3,
 		},
 
 		/**
@@ -206,7 +241,57 @@ export default {
 			 * The shown error message
 			 */
 			errorMessage: null,
+
+			// The debounced save handlers below are built per instance in created().
+			// Defined once in `methods`, a debounced function is shared by every
+			// question: one timer and one remembered `this`, and the debounce library
+			// throws when a second question calls it before the first one's timer ran,
+			// so that question's change was never saved.
+
+			/** Forward the title change to the parent and store to db */
+			onTitleChange: null,
+			/** Forward the description change to the parent and store to db */
+			onDescriptionChange: null,
+			/** Forward the required change to the parent and store to db */
+			onRequiredChange: null,
+			/**
+			 * Forward changed extra settings to the parent and store to db; takes an
+			 * object containing only the *changed* settings.
+			 */
+			onExtraSettingsChange: null,
+			/** Forward the technical-name change to the parent and store to db */
+			onNameChange: null,
 		}
+	},
+
+	created() {
+		this.onTitleChange = debounceUnbound((text) => {
+			this.$emit('update:text', text)
+			this.saveQuestionProperty('text', text)
+		})
+
+		this.onDescriptionChange = debounceUnbound((description) => {
+			this.$emit('update:description', description)
+			this.saveQuestionProperty('description', description)
+		})
+
+		this.onRequiredChange = debounceUnbound((isRequiredValue) => {
+			this.$emit('update:isRequired', isRequiredValue)
+			this.saveQuestionProperty('isRequired', isRequiredValue)
+		})
+
+		this.onExtraSettingsChange = debounceUnbound((newSettings) => {
+			const newExtraSettings = { ...this.extraSettings, ...newSettings }
+			this.$emit('update:extraSettings', newExtraSettings)
+			if (!this.isTriggerQuestion) {
+				this.saveQuestionProperty('extraSettings', newExtraSettings)
+			}
+		})
+
+		this.onNameChange = debounceUnbound((name) => {
+			this.$emit('update:name', name)
+			this.saveQuestionProperty('name', name)
+		})
 	},
 
 	computed: {
@@ -272,61 +357,6 @@ export default {
 		async validate() {
 			return true
 		},
-
-		/**
-		 * Forward the title change to the parent and store to db
-		 *
-		 * @param {string} text the title
-		 */
-		onTitleChange: debounce(function (text) {
-			this.$emit('update:text', text)
-			this.saveQuestionProperty('text', text)
-		}, INPUT_DEBOUNCE_MS),
-
-		/**
-		 * Forward the description change to the parent and store to db
-		 *
-		 * @param {string} description the description
-		 */
-		onDescriptionChange: debounce(function (description) {
-			this.$emit('update:description', description)
-			this.saveQuestionProperty('description', description)
-		}, INPUT_DEBOUNCE_MS),
-
-		/**
-		 * Forward the required change to the parent and store to db
-		 *
-		 * @param {boolean} isRequiredValue new isRequired Value
-		 */
-		onRequiredChange: debounce(function (isRequiredValue) {
-			this.$emit('update:isRequired', isRequiredValue)
-			this.saveQuestionProperty('isRequired', isRequiredValue)
-		}, INPUT_DEBOUNCE_MS),
-
-		/**
-		 * Create mapper to forward the required change to the parent and store to db
-		 *
-		 * Either an object containing the *changed* settings.
-		 *
-		 * @param {object} newSettings changed settings
-		 */
-		onExtraSettingsChange: debounce(function (newSettings) {
-			const newExtraSettings = { ...this.extraSettings, ...newSettings }
-			this.$emit('update:extraSettings', newExtraSettings)
-			if (!this.isTriggerQuestion) {
-				this.saveQuestionProperty('extraSettings', newExtraSettings)
-			}
-		}, INPUT_DEBOUNCE_MS),
-
-		/**
-		 * Forward the technical-name change to the parent and store to db
-		 *
-		 * @param {string} name The new technical name of the input
-		 */
-		onNameChange: debounce(function (name) {
-			this.$emit('update:name', name)
-			this.saveQuestionProperty('name', name)
-		}, INPUT_DEBOUNCE_MS),
 
 		/**
 		 * Forward the required change to the parent and store to db

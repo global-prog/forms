@@ -280,8 +280,9 @@ import IconTextShort from '@material-symbols/svg-400/outlined/short_text.svg?raw
 import IconTextLong from '@material-symbols/svg-400/outlined/subject.svg?raw'
 import IconSwapVertical from '@material-symbols/svg-400/outlined/swap_vert.svg?raw'
 import axios from '@nextcloud/axios'
-import { showError } from '@nextcloud/dialogs'
+import { showConfirmation, showError } from '@nextcloud/dialogs'
 import { emit } from '@nextcloud/event-bus'
+import { translatePlural as n, translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl } from '@nextcloud/router'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActions from '@nextcloud/vue/components/NcActions'
@@ -301,6 +302,10 @@ import QuestionMultiple from './QuestionMultiple.vue'
 import QuestionRanking from './QuestionRanking.vue'
 import QuestionShort from './QuestionShort.vue'
 import QuestionMixin from '../../mixins/QuestionMixin.js'
+import {
+	DATE_STORAGE_FORMATS,
+	evaluateConditions,
+} from '../../utils/DisplayConditions.js'
 import logger from '../../utils/Logger.js'
 import OcsResponse2Data from '../../utils/OcsResponse2Data.js'
 
@@ -554,9 +559,9 @@ export default {
 		},
 
 		activeBranches() {
-			if (!this.triggerValues || this.triggerValues.length === 0) {
-				return null
-			}
+			// An unanswered trigger is evaluated too, as the server does: a "no file was
+			// uploaded" branch is active from the start, and its required subquestions are
+			// checked, so they have to be on screen.
 			return this.branches.filter((branch) =>
 				this.evaluateBranchCondition(branch),
 			)
@@ -743,13 +748,119 @@ export default {
 			return this.buildAnswerTypeConfig(type)
 		},
 
-		setTriggerType(type) {
-			const newExtraSettings = {
-				...this.extraSettings,
-				triggerType: type,
-				branches: this.branches.length > 0 ? this.branches : [],
+		/**
+		 * Switch the trigger to another question type. Branch conditions written for the
+		 * old type can never match the new one, yet would still read as configured, so
+		 * they are carried over where the meaning survives and cleared otherwise.
+		 *
+		 * @param {string} type The new trigger type
+		 */
+		async setTriggerType(type) {
+			const branches = this.branches.map((branch) =>
+				this.fitBranchToType(branch, type),
+			)
+			const clearedCount = branches.filter(
+				(branch, index) =>
+					branch.conditions.length
+					< (this.branches[index].conditions?.length ?? 0),
+			).length
+
+			if (clearedCount > 0) {
+				const confirmed = await showConfirmation({
+					name: t('forms', 'Change trigger type'),
+					text: n(
+						'forms',
+						'The conditions of %n branch do not fit the new trigger type and will be cleared.',
+						'The conditions of %n branches do not fit the new trigger type and will be cleared.',
+						clearedCount,
+					),
+					labelConfirm: t('forms', 'Change trigger type'),
+					labelReject: t('forms', 'Cancel'),
+				})
+				if (!confirmed) {
+					return
+				}
 			}
-			this.onExtraSettingsChange(newExtraSettings)
+
+			this.onExtraSettingsChange({ triggerType: type, branches })
+		},
+
+		/**
+		 * @param {object} branch The branch to adapt
+		 * @param {string} type The new trigger type
+		 * @return {object} The branch with only the conditions the type can evaluate
+		 */
+		fitBranchToType(branch, type) {
+			const conditions = branch.conditions ?? []
+			const [only] = conditions
+
+			// A single chosen option means the same thing for radio buttons, dropdowns
+			// and checkboxes, so it is converted rather than dropped.
+			if (
+				conditions.length === 1
+				&& only.optionId !== undefined
+				&& only.optionId !== null
+				&& type === 'multiple'
+			) {
+				return { ...branch, conditions: [{ optionIds: [only.optionId] }] }
+			}
+			if (
+				conditions.length === 1
+				&& only.optionIds?.length === 1
+				&& ['multiple_unique', 'dropdown'].includes(type)
+			) {
+				return { ...branch, conditions: [{ optionId: only.optionIds[0] }] }
+			}
+
+			return {
+				...branch,
+				conditions: conditions.filter((condition) =>
+					this.conditionFitsType(condition, type),
+				),
+			}
+		},
+
+		/**
+		 * @param {object} condition A stored branch condition
+		 * @param {string} type A trigger type
+		 * @return {boolean} Whether the condition has the shape that type is evaluated with
+		 */
+		conditionFitsType(condition, type) {
+			switch (type) {
+				case 'multiple_unique':
+				case 'dropdown':
+					return (
+						condition.optionId !== undefined
+						&& condition.optionId !== null
+					)
+				case 'multiple':
+					return Array.isArray(condition.optionIds)
+				case 'short':
+					return ['string_equals', 'string_contains', 'regex'].includes(
+						condition.type,
+					)
+				case 'long':
+					return ['string_contains', 'regex'].includes(condition.type)
+				case 'linearscale':
+					return String(condition.type).startsWith('value_')
+				case 'color':
+					return !condition.type && typeof condition.value === 'string'
+				case 'date':
+				case 'datetime':
+				case 'time':
+					return (
+						condition.type === 'date_range'
+						&& [condition.min, condition.max].every(
+							(bound) =>
+								!bound
+								|| DATE_STORAGE_FORMATS[type].pattern.test(bound),
+						)
+					)
+				case 'file':
+					return typeof condition.fileUploaded === 'boolean'
+				default:
+					return false
+			}
 		},
 
 		clearTriggerType() {
@@ -772,16 +883,89 @@ export default {
 		addBranch() {
 			const newBranch = {
 				id: `branch-${Date.now()}`,
-				conditions: [],
+				// A file trigger has a single yes/no condition, shown switched on, so the
+				// branch starts with it stored rather than looking set while matching nothing.
+				conditions:
+					this.triggerType === 'file' ? [{ fileUploaded: true }] : [],
+
 				subQuestions: [],
 			}
 			const newBranches = [...this.branches, newBranch]
 			this.onExtraSettingsChange({ branches: newBranches })
 		},
 
-		deleteBranch(branchId) {
-			const newBranches = this.branches.filter((b) => b.id !== branchId)
-			this.onExtraSettingsChange({ branches: newBranches })
+		/**
+		 * Delete a branch together with the subquestions built inside it. Those are real
+		 * question rows, so they are deleted on the server too rather than left orphaned.
+		 *
+		 * @param {string} branchId The branch to delete
+		 */
+		async deleteBranch(branchId) {
+			const branch = this.branches.find((b) => b.id === branchId)
+			if (!branch) {
+				return
+			}
+			const subQuestions = branch.subQuestions ?? []
+
+			// One click on a bare icon would otherwise throw away all of that work.
+			if (subQuestions.length > 0 || branch.conditions?.length > 0) {
+				const confirmed = await showConfirmation({
+					name: t('forms', 'Delete branch'),
+					text:
+						subQuestions.length > 0
+							? n(
+									'forms',
+									'This branch and its %n subquestion will be deleted.',
+									'This branch and its %n subquestions will be deleted.',
+									subQuestions.length,
+								)
+							: t(
+									'forms',
+									'This branch and its conditions will be deleted.',
+								),
+					labelConfirm: t('forms', 'Delete'),
+					labelReject: t('forms', 'Cancel'),
+				})
+				if (!confirmed) {
+					return
+				}
+			}
+
+			const results = await Promise.allSettled(
+				subQuestions.map((question) =>
+					axios.delete(
+						generateOcsUrl(
+							'apps/forms/api/v3/forms/{id}/questions/{questionId}',
+							{
+								id: this.formId,
+								questionId: question.id,
+							},
+						),
+					),
+				),
+			)
+			const failed = subQuestions.filter(
+				(_, index) => results[index].status === 'rejected',
+			)
+
+			if (failed.length > 0) {
+				// Keep the branch with whatever could not be deleted, so nothing that still
+				// exists on the server loses its place in the form.
+				logger.error('Error deleting branch subquestions', {
+					errors: results.filter((result) => result.status === 'rejected'),
+				})
+				showError(t('forms', 'Error deleting subquestion'))
+				this.onExtraSettingsChange({
+					branches: this.branches.map((b) =>
+						b.id === branchId ? { ...b, subQuestions: failed } : b,
+					),
+				})
+				return
+			}
+
+			this.onExtraSettingsChange({
+				branches: this.branches.filter((b) => b.id !== branchId),
+			})
 		},
 
 		onBranchUpdate(index, branch) {
@@ -802,7 +986,12 @@ export default {
 					this.triggerType,
 				)
 			) {
-				const optionIds = branch.conditions.map((c) => c.optionId)
+				// Checkboxes keep their chosen options in one optionIds list.
+				const optionIds = branch.conditions.flatMap((c) =>
+					this.triggerType === 'multiple'
+						? (c.optionIds ?? [])
+						: [c.optionId],
+				)
 				const optionTexts = optionIds
 					.map((id) => this.options.find((o) => o.id === id)?.text)
 					.filter(Boolean)
@@ -985,128 +1174,20 @@ export default {
 			})
 		},
 
-		evaluateBranchCondition(branch) {
-			if (!branch.conditions || branch.conditions.length === 0) {
-				return false
-			}
-
-			// Convert triggerValues to strings for consistent comparison
-			const triggerValuesAsStrings = this.triggerValues.map((v) => String(v))
-
-			if (['multiple_unique', 'dropdown'].includes(this.triggerType)) {
-				return branch.conditions.some((c) =>
-					triggerValuesAsStrings.includes(String(c.optionId)),
-				)
-			}
-
-			if (this.triggerType === 'multiple') {
-				// Multi-select: all condition option IDs must be selected
-				for (const c of branch.conditions) {
-					const optionIds = c.optionIds
-					if (!Array.isArray(optionIds) || optionIds.length === 0) {
-						continue
-					}
-					const allSelected = optionIds.every((id) =>
-						triggerValuesAsStrings.includes(String(id)),
-					)
-					if (allSelected) {
-						return true
-					}
-				}
-				return false
-			}
-
-			if (['short', 'long'].includes(this.triggerType)) {
-				const text = this.triggerValues[0] || ''
-				return branch.conditions.some((c) => {
-					if (c.type === 'regex') {
-						return this.safeRegexMatch(c.value, text)
-					}
-					if (c.type === 'string_contains') {
-						return text.includes(c.value || '')
-					}
-					if (c.type === 'string_equals') {
-						return text === c.value
-					}
-					return false
-				})
-			}
-
-			if (this.triggerType === 'linearscale') {
-				const numValue = parseFloat(this.triggerValues[0]) || 0
-				return branch.conditions.some((c) => {
-					if (c.type === 'value_equals') {
-						return numValue === parseFloat(c.value)
-					} else if (c.type === 'value_not_equals') {
-						return numValue !== parseFloat(c.value)
-					} else if (c.type === 'value_min') {
-						const min = c.min ?? Number.MIN_SAFE_INTEGER
-						return numValue >= min
-					} else if (c.type === 'value_max') {
-						const max = c.max ?? Number.MAX_SAFE_INTEGER
-						return numValue <= max
-					} else if (c.type === 'value_range') {
-						const min = c.min ?? Number.MIN_SAFE_INTEGER
-						const max = c.max ?? Number.MAX_SAFE_INTEGER
-						return numValue >= min && numValue <= max
-					}
-					return false
-				})
-			}
-
-			if (this.triggerType === 'color') {
-				const colorValue = (this.triggerValues[0] || '').toLowerCase()
-				return branch.conditions.some(
-					(c) => colorValue === (c.value || '').toLowerCase(),
-				)
-			}
-
-			if (this.triggerType === 'file') {
-				const hasFile =
-					this.triggerValues.length > 0 && this.triggerValues[0] !== ''
-				return branch.conditions.some(
-					(c) => (c.fileUploaded ?? true) === hasFile,
-				)
-			}
-
-			if (['date', 'time'].includes(this.triggerType)) {
-				const dateValue = this.triggerValues[0] || ''
-				if (!dateValue) {
-					return false
-				}
-				return branch.conditions.some((c) => {
-					const min = c.min
-					const max = c.max
-					if (min && dateValue < min) {
-						return false
-					}
-					if (max && dateValue > max) {
-						return false
-					}
-					return true
-				})
-			}
-
-			return false
-		},
-
 		/**
-		 * Safely execute a regex match to prevent ReDoS attacks
+		 * Whether the trigger answer activates a branch. Uses the same engine as display
+		 * conditions, which mirrors the server, so a branch the respondent sees is exactly
+		 * a branch the server validates.
 		 *
-		 * @param {string} pattern The regex pattern
-		 * @param {string} subject The string to match against
-		 * @return {boolean} True if pattern matches
+		 * @param {object} branch The branch to test
+		 * @return {boolean} True when the branch is active
 		 */
-		safeRegexMatch(pattern, subject) {
-			if (!pattern || subject.length > 10000) {
-				return false
-			}
-			try {
-				const regex = new RegExp(pattern)
-				return regex.test(subject)
-			} catch {
-				return false
-			}
+		evaluateBranchCondition(branch) {
+			return evaluateConditions(
+				this.triggerType,
+				this.triggerValues,
+				branch.conditions,
+			)
 		},
 
 		async validate() {
@@ -1250,9 +1331,23 @@ export default {
 .branch-list-leave-to {
 	opacity: 0;
 	transform: translateX(var(--clickable-area-large));
+
+	// Enter from, and leave toward, the same side in either reading direction.
+	&:dir(rtl) {
+		transform: translateX(calc(-1 * var(--clickable-area-large)));
+	}
 }
 
 .branch-list-leave-active {
 	position: absolute;
+}
+
+// Subquestions appear as the trigger answer changes; without motion they simply appear.
+@media (prefers-reduced-motion: reduce) {
+	.branch-list-move,
+	.branch-list-enter-active,
+	.branch-list-leave-active {
+		transition: none;
+	}
 }
 </style>

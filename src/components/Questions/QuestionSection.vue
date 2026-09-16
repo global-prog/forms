@@ -17,6 +17,7 @@
 	<Question
 		v-bind="questionProps"
 		hideRequired
+		displayOnly
 		:titlePlaceholder="answerType.titlePlaceholder"
 		:warningInvalid="answerType.warningInvalid"
 		v-on="commonListeners">

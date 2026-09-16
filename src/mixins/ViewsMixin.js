@@ -7,6 +7,7 @@ import { getCurrentUser } from '@nextcloud/auth'
 import axios, { isCancel } from '@nextcloud/axios'
 import { showError } from '@nextcloud/dialogs'
 import { emit } from '@nextcloud/event-bus'
+import { translate as t } from '@nextcloud/l10n'
 import moment from '@nextcloud/moment'
 import { generateOcsUrl } from '@nextcloud/router'
 import MarkdownIt from 'markdown-it'
@@ -52,6 +53,13 @@ export default {
 
 			// storage for axios cancel function
 			cancelFetchFullForm: () => {},
+
+			// Autosave of the form's own properties: how many saves are still running,
+			// whether the last one failed, and whether any has finished at all, so a view
+			// can say "saving" or "saved" rather than only ever reporting failures.
+			formSavingCount: 0,
+			formSaveFailed: false,
+			formSavedOnce: false,
 
 			// markdown renderer for descriptions
 			markdownit: new MarkdownIt({ breaks: true }),
@@ -177,9 +185,15 @@ export default {
 		 * Fetch the full form data and update parent
 		 *
 		 * @param {number} id the unique form hash
+		 * @param {object} [options] request options
+		 * @param {boolean} [options.silent] refresh in place, without swapping the view for
+		 *   the loading screen; for reloads after the page has already been shown, where
+		 *   unmounting it would drop what is on it (a confirmation, focus, a live region)
 		 */
-		async fetchFullForm(id) {
-			this.isLoadingForm = true
+		async fetchFullForm(id, { silent = false } = {}) {
+			if (!silent) {
+				this.isLoadingForm = true
+			}
 
 			// Cancel previous request
 			this.cancelFetchFullForm('New request pending.')
@@ -219,8 +233,8 @@ export default {
 		},
 
 		async saveFormProperty(key) {
+			this.formSavingCount++
 			try {
-				// TODO: add loading status feedback ?
 				await axios.patch(
 					generateOcsUrl('apps/forms/api/v3/forms/{id}', {
 						id: this.form.id,
@@ -232,9 +246,14 @@ export default {
 					},
 				)
 				emit('forms:last-updated:set', this.form.id)
+				this.formSaveFailed = false
+				this.formSavedOnce = true
 			} catch (error) {
 				logger.error('Error saving form property', { error })
+				this.formSaveFailed = true
 				showError(t('forms', 'Error while saving form'))
+			} finally {
+				this.formSavingCount--
 			}
 		},
 	},

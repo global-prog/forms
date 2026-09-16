@@ -7,7 +7,14 @@
 	<NcAppContent
 		:class="{ 'app-content--public': publicView }"
 		:style="accentColor ? { '--form-accent': accentColor } : undefined"
-		:pageHeading="t('forms', 'Submit form')">
+		:pageHeading="formTitle || t('forms', 'Submit form')">
+		<!-- Screen-reader-only live region for submission success announcement. Kept
+		     outside every loading state: a region that is unmounted while its text
+		     changes comes back already filled, and is then usually not read at all. -->
+		<div class="hidden-visually" aria-live="polite">
+			{{ successAnnouncement }}
+		</div>
+
 		<TopBar
 			v-if="!publicView"
 			:archived="isArchived"
@@ -52,9 +59,12 @@
 					class="form-accent"
 					:style="{ backgroundColor: accentColor }" />
 				<!-- eslint-disable vue/no-unused-refs -- the ref is read by ViewsMixin -->
+				<!-- tabindex -1 so focus can be placed here after loading or submitting,
+				     without adding a stop to the tab order. -->
 				<h2
 					ref="title"
 					class="form-title"
+					tabindex="-1"
 					dir="auto"
 					:style="{ textAlign: authorTextAlign }">
 					{{ formTitle }}
@@ -97,21 +107,12 @@
 				</p>
 			</header>
 
-			<!-- Screen-reader-only live region for submission success announcement -->
-			<div class="hidden-visually" aria-live="polite">
-				{{ successAnnouncement }}
-			</div>
-
+			<!-- While a response is being sent the form stays on the page, and the Submit
+			     button shows the progress. Swapping the form for a spinner removed the
+			     button that had focus, and a refused response then came back as a new
+			     form with focus lost and every question's error cleared. -->
 			<NcEmptyContent
-				v-if="loading"
-				class="forms-emptycontent"
-				:name="t('forms', 'Submitting form …')">
-				<template #icon>
-					<NcLoadingIcon :size="64" />
-				</template>
-			</NcEmptyContent>
-			<NcEmptyContent
-				v-else-if="
+				v-if="
 					success
 					|| (!form.canSubmit && !isMaxSubmissionsReached && !submissionId)
 				"
@@ -237,8 +238,12 @@
 					<NcIconSvgWrapper :svg="IconClosedSvg" :size="64" />
 				</template>
 			</NcEmptyContent>
+			<!-- Once someone has started answering, a form that expires meanwhile stays
+			     on screen: replacing it would throw their answers away without a word.
+			     The expiry line above says what happened, and the server refuses the
+			     response with its own message. -->
 			<NcEmptyContent
-				v-else-if="isExpired"
+				v-else-if="isExpired && !hasChangesSinceOpen"
 				class="forms-emptycontent"
 				:name="t('forms', 'Form expired')"
 				:description="
@@ -286,11 +291,16 @@
 			</NcEmptyContent>
 
 			<!-- Questions list -->
+			<!-- novalidate: every question checks itself in validate(), and only the ones
+			     the respondent can see are asked to. The browser's own check also looked
+			     at hidden required questions and silently refused to submit. -->
 			<form
 				v-else
 				ref="form"
 				:dir="formDirection"
 				:lang="formLanguage || undefined"
+				:aria-busy="loading ? 'true' : undefined"
+				novalidate
 				@submit.prevent="onSubmit">
 				<ul>
 					<component
@@ -306,9 +316,10 @@
 						readOnly
 						:answerType="answerTypes[question.type]"
 						:index="index + 1"
+						:displayNumber="answerableNumbers[question.id]"
 						:maxStringLengths="maxStringLengths"
 						:values="answers[question.id]"
-						@keydown.enter="onKeydownEnter"
+						@keydown.enter.exact="onKeydownEnter"
 						@keydown.ctrl.enter="onKeydownCtrlEnter"
 						@update:values="(values) => onUpdate(question, values)" />
 				</ul>
@@ -340,37 +351,28 @@
 				<p
 					v-if="canKeepDraft"
 					class="draft-note"
+					:class="{ 'draft-note--failed': draftSaveFailed }"
 					role="status"
 					aria-live="polite">
 					<NcIconSvgWrapper
-						v-if="draftEverSaved"
+						v-if="draftSaveFailed || draftEverSaved"
 						class="draft-note__mark"
-						:svg="IconCheckSvg"
+						:svg="draftSaveFailed ? IconWarningSvg : IconCheckSvg"
 						:size="18"
 						inline />
 					{{ draftMessage }}
 				</p>
+				<!-- Next or Submit always comes last, where the forward action is expected.
+				     Clear form used to sit after Next, so on every page but the last the
+				     destructive button took that place. -->
 				<div class="form-buttons">
 					<NcButton
-						v-if="pageCount > 1 && currentPage > 0"
 						alignment="center-reverse"
 						class="submit-button"
-						variant="secondary"
-						@click.prevent="goToPreviousPage">
-						{{ t('forms', 'Back') }}
-					</NcButton>
-					<NcButton
-						v-if="pageCount > 1 && currentPage < pageCount - 1"
-						alignment="center-reverse"
-						class="submit-button"
-						variant="primary"
-						@click.prevent="goToNextPage">
-						{{ t('forms', 'Next') }}
-					</NcButton>
-					<NcButton
-						alignment="center-reverse"
-						class="submit-button"
-						:disabled="!hasAnswers"
+						:class="{
+							'submit-button--last-tertiary': !canCopyPrefilledLink,
+						}"
+						:disabled="!hasAnswers || loading"
 						type="reset"
 						variant="tertiary-no-background"
 						@click.prevent="showClearFormDialog = true">
@@ -384,7 +386,7 @@
 					<NcButton
 						v-if="canCopyPrefilledLink"
 						alignment="center-reverse"
-						class="submit-button"
+						class="submit-button submit-button--last-tertiary"
 						variant="tertiary-no-background"
 						@click.prevent="copyPrefilledLink">
 						<template #icon>
@@ -393,16 +395,44 @@
 						{{ t('forms', 'Copy pre-filled link') }}
 					</NcButton>
 					<NcButton
-						v-if="currentPage >= pageCount - 1"
+						v-if="pageCount > 1 && currentPage > 0"
 						alignment="center-reverse"
 						class="submit-button"
 						:disabled="loading"
+						variant="secondary"
+						@click.prevent="goToPreviousPage">
+						{{ t('forms', 'Back') }}
+					</NcButton>
+					<NcButton
+						v-if="pageCount > 1 && currentPage < pageCount - 1"
+						alignment="center-reverse"
+						class="submit-button"
+						variant="primary"
+						@click.prevent="goToNextPage">
+						{{ t('forms', 'Next') }}
+					</NcButton>
+					<!-- aria-disabled rather than disabled while sending: a disabled button
+					     drops keyboard focus, which is the thing this keeps in place. -->
+					<NcButton
+						v-if="currentPage >= pageCount - 1"
+						alignment="center-reverse"
+						class="submit-button"
+						:aria-busy="loading ? 'true' : undefined"
+						:aria-disabled="loading ? 'true' : undefined"
 						type="submit"
 						variant="primary">
 						<template #icon>
-							<NcIconSvgWrapper :svg="IconSendSvg" />
+							<NcLoadingIcon v-if="loading" :size="20" />
+							<NcIconSvgWrapper
+								v-else
+								:svg="IconSendSvg"
+								directional />
 						</template>
-						{{ t('forms', 'Submit') }}
+						{{
+							loading
+								? t('forms', 'Submitting form …')
+								: t('forms', 'Submit')
+						}}
 					</NcButton>
 				</div>
 			</form>
@@ -462,6 +492,7 @@ import IconLink from '@material-symbols/svg-400/outlined/link.svg?raw'
 import IconRefresh from '@material-symbols/svg-400/outlined/refresh.svg?raw'
 import IconSchedule from '@material-symbols/svg-400/outlined/schedule.svg?raw'
 import IconSend from '@material-symbols/svg-400/outlined/send.svg?raw'
+import IconWarning from '@material-symbols/svg-400/outlined/warning.svg?raw'
 import axios from '@nextcloud/axios'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { emit } from '@nextcloud/event-bus'
@@ -570,6 +601,7 @@ export default {
 			IconRefreshSvg: IconRefresh,
 			IconScheduleSvg: IconSchedule,
 			IconSendSvg: IconSend,
+			IconWarningSvg: IconWarning,
 
 			maxStringLengths: loadState('forms', 'maxStringLengths'),
 		}
@@ -597,6 +629,19 @@ export default {
 			 * the second and a half between a keystroke and the save that follows it.
 			 */
 			draftEverSaved: false,
+
+			/**
+			 * Whether the latest attempt to keep the answers failed. The note above the
+			 * buttons must not keep saying "saved" once that stops being true.
+			 */
+			draftSaveFailed: false,
+
+			/**
+			 * The current time in seconds, refreshed on a timer. Opening and expiry times
+			 * are compared against this rather than the clock itself, which Vue cannot
+			 * watch, so a page left open still notices when either passes.
+			 */
+			now: Math.floor(Date.now() / 1000),
 
 			/** the answers as the page opened with them, from a saved draft or a link */
 			answersAtOpen: null,
@@ -658,6 +703,27 @@ export default {
 			return Object.fromEntries(
 				Object.entries(this.answers).filter(([id]) => shown.has(Number(id))),
 			)
+		},
+
+		/**
+		 * The number each question is announced with. Sections, images and videos are not
+		 * questions, and neither is anything the respondent cannot see, so counting them
+		 * made the numbers read out skip.
+		 *
+		 * @return {Record<number, number>} number keyed by question id
+		 */
+		answerableNumbers() {
+			const numbers = {}
+			let count = 0
+			for (const question of this.orderedQuestions) {
+				if (
+					!this.answerTypes[question.type]?.displayOnly
+					&& this.visibleQuestions[question.id]
+				) {
+					numbers[question.id] = ++count
+				}
+			}
+			return numbers
 		},
 
 		/**
@@ -879,7 +945,7 @@ export default {
 		 * Check if form is expired
 		 */
 		isExpired() {
-			return this.form.expires && moment().unix() > this.form.expires
+			return this.form.expires && this.now > this.form.expires
 		},
 
 		isArchived() {
@@ -894,7 +960,7 @@ export default {
 
 		/** @return {boolean} whether the form has an opening time still to come */
 		isWaitingToOpen() {
-			return this.opensAt > moment().unix()
+			return this.opensAt > this.now
 		},
 
 		/** @return {string} the opening time, written out in the reader's locale */
@@ -916,6 +982,12 @@ export default {
 		 * @return {string} the reassurance, before and after there is anything to report
 		 */
 		draftMessage() {
+			if (this.draftSaveFailed) {
+				return t(
+					'forms',
+					'Your latest answers could not be saved. Keep this page open and try again.',
+				)
+			}
 			return this.draftEverSaved
 				? t(
 						'forms',
@@ -991,9 +1063,11 @@ export default {
 		},
 
 		expirationMessage() {
+			// Measured from the ticking clock rather than fromNow(), so the text keeps
+			// up while the page stays open.
 			const relativeDate = moment(this.form.expires, 'X')
 				.locale(window.OC.getLanguage())
-				.fromNow()
+				.from(moment(this.now, 'X'))
 			if (this.isExpired) {
 				return t('forms', 'Expired {relativeDate}.', { relativeDate })
 			}
@@ -1162,27 +1236,58 @@ export default {
 			}
 		},
 
-		hash() {
+		async hash() {
 			// If public view, abort. Should normally not occur.
 			if (this.publicView) {
 				logger.error('Hash changed on public view. Aborting.')
 				return
 			}
+			// The same view is reused for the next form, so nothing about the previous
+			// one may carry over: a save still waiting would write its answers into the
+			// new form's draft, and a "saved" note would claim something never happened.
+			this.cancelDraftSave()
 			this.resetData()
-			// Fetch full form on change
-			this.fetchFullForm(this.form.id)
+			this.quizResult = null
+			this.draftEverSaved = false
+			this.draftIsCurrent = true
+			this.draftSaveFailed = false
+			// Fetch full form on change, and wait for it: the draft belongs to the new
+			// form, and reading it before the form is known would read the old one.
+			// Opening yet another form meanwhile cancels this fetch, and the rest is
+			// then left to that newer change.
+			const hash = this.hash
+			await this.fetchFullForm(this.form.id)
+			if (hash !== this.hash) {
+				return
+			}
 			this.initFromLocalStorage()
 			this.applyPrefilledAnswers()
+			// Without this the saved answers never appeared, and the first keystroke
+			// replaced them on the server with only what was on screen.
+			await this.loadDraft()
+			if (hash !== this.hash) {
+				return
+			}
 			SetWindowTitle(this.formTitle)
 		},
 	},
 
 	beforeUnmount() {
 		window.removeEventListener('beforeunload', this.beforeWindowUnload)
+		window.removeEventListener('online', this.onBackOnline)
+		document.removeEventListener('visibilitychange', this.tickClock)
+		clearInterval(this.clockTimer)
 	},
 
 	created() {
 		window.addEventListener('beforeunload', this.beforeWindowUnload)
+		// A save that failed for want of a connection is retried once it returns.
+		window.addEventListener('online', this.onBackOnline)
+		// Keep the clock current, so a form that opens or expires while the page is
+		// open says so without a reload. A phone suspends timers in the background,
+		// hence the refresh when the page is shown again.
+		this.clockTimer = setInterval(this.tickClock, 30000)
+		document.addEventListener('visibilitychange', this.tickClock)
 	},
 
 	async beforeMount() {
@@ -1215,17 +1320,70 @@ export default {
 		 * through everything to reach the new content.
 		 */
 		focusPageStart() {
-			window.scrollTo({ top: 0, behavior: 'smooth' })
+			const gently = !window.matchMedia?.('(prefers-reduced-motion: reduce)')
+				?.matches
+			window.scrollTo({ top: 0, behavior: gently ? 'smooth' : 'auto' })
 			this.$nextTick(() => {
 				const first = (this.$refs.questions ?? []).find(
 					(component) =>
 						this.questionPages[component.id] === this.currentPage
 						&& this.visibleQuestions[component.id],
 				)
-				first?.$el
-					?.querySelector?.('h2, h3, input, textarea, select, button')
-					?.focus?.()
+				this.focusHeadingOf(first)
 			})
+		},
+
+		/**
+		 * Put focus on a question's heading, so a screen reader starts reading there.
+		 *
+		 * A heading takes no focus by default, so focus() on it silently did nothing and
+		 * left the cursor on a button that had been removed or at the bottom of the page.
+		 * tabindex -1 lets it take focus without becoming a tab stop. The page is
+		 * already being scrolled to the top, so the focus itself must not scroll.
+		 *
+		 * @param {object} [question] the question component
+		 * @return {boolean} whether focus was placed
+		 */
+		focusHeadingOf(question) {
+			const heading = question?.$el?.querySelector?.('h2, h3')
+			if (heading) {
+				heading.setAttribute('tabindex', '-1')
+				heading.focus({ preventScroll: true })
+				return true
+			}
+			const control = question?.$el?.querySelector?.(
+				'input, textarea, select, button',
+			)
+			control?.focus({ preventScroll: true })
+			return !!control
+		},
+
+		/**
+		 * Whether the respondent can currently see and answer a question: it is shown
+		 * by its display condition and sits on a page they have actually reached. Only
+		 * such questions are checked; a hidden required one cannot be answered, and the
+		 * server ignores it anyway.
+		 *
+		 * @param {object} component the question component
+		 * @return {boolean} true when it should be validated
+		 */
+		isAnswerable(component) {
+			return (
+				!!this.visibleQuestions[component.id]
+				&& this.reachablePages.has(this.questionPages[component.id])
+			)
+		},
+
+		/** Bring the clock up to date. */
+		tickClock() {
+			this.now = Math.floor(Date.now() / 1000)
+		},
+
+		/** Retry a save that failed, now that the connection is back. */
+		onBackOnline() {
+			if (this.draftSaveFailed) {
+				this.writeDraft()
+			}
 		},
 
 		/**
@@ -1239,7 +1397,9 @@ export default {
 		 */
 		async validateCurrentPage() {
 			const onThisPage = (this.$refs.questions ?? []).filter(
-				(component) => this.questionPages[component.id] === this.currentPage,
+				(component) =>
+					this.questionPages[component.id] === this.currentPage
+					&& this.visibleQuestions[component.id],
 			)
 			const results = await Promise.all(
 				onThisPage.map(async (component) =>
@@ -1660,6 +1820,15 @@ export default {
 		}, 1500),
 
 		/**
+		 * Drop a save still waiting on the debounce. Vue binds every method to the
+		 * component, and the bound copy does not carry the debounce's clear(), so it has
+		 * to be called on the original function.
+		 */
+		cancelDraftSave() {
+			this.$options.methods?.saveDraft?.clear?.()
+		},
+
+		/**
 		 * Write the answers to the server now.
 		 *
 		 * @return {Promise<boolean>} whether the server has them
@@ -1682,9 +1851,12 @@ export default {
 					this.draftIsCurrent = true
 				}
 				this.draftEverSaved = true
+				this.draftSaveFailed = false
 				return true
 			} catch (error) {
+				// 403 means the form keeps no drafts, which is not a failure to report.
 				if (error.response?.status !== 403) {
+					this.draftSaveFailed = true
 					logger.debug('Could not keep the draft', { error })
 				}
 				return false
@@ -1703,7 +1875,7 @@ export default {
 			if (this.draftIsCurrent) {
 				return true
 			}
-			this.saveDraft.clear?.()
+			this.cancelDraftSave()
 			return await this.writeDraft()
 		},
 
@@ -1712,10 +1884,11 @@ export default {
 			if (!this.canKeepDraft) {
 				return
 			}
-			this.saveDraft.clear?.()
+			this.cancelDraftSave()
 			// Nothing on either side now, so the two agree again.
 			this.draftIsCurrent = true
 			this.draftEverSaved = false
+			this.draftSaveFailed = false
 			try {
 				await axios.delete(
 					generateOcsUrl('apps/forms/api/v3/forms/{id}/draft', {
@@ -1736,13 +1909,27 @@ export default {
 		 * @param {object} event The fired event.
 		 */
 		onKeydownEnter(event) {
-			const formInputs = Array.from(this.$refs.form)
-			const sourceInputIndex = formInputs.findIndex(
-				(input) => input === event.originalTarget,
-			)
+			const formInputs = Array.from(this.$refs.form?.elements ?? [])
+			// event.target, not originalTarget: the latter exists only in Firefox, so
+			// every other browser sent focus back to the first question.
+			const sourceInputIndex = formInputs.indexOf(event?.target)
+			if (sourceInputIndex === -1) {
+				return
+			}
 
-			// Focus next form element
-			formInputs[sourceInputIndex + 1].focus()
+			// Focus the next control the respondent can actually reach: skip hidden
+			// questions, other pages and disabled controls. Fieldsets are listed among a
+			// form's elements too, but take no focus.
+			const next = formInputs
+				.slice(sourceInputIndex + 1)
+				.find(
+					(input) =>
+						!input.disabled
+						&& input.type !== 'hidden'
+						&& input.tagName !== 'FIELDSET'
+						&& input.offsetParent !== null,
+				)
+			next?.focus()
 		},
 
 		/**
@@ -1808,7 +1995,12 @@ export default {
 		 * Submit the form after the browser validated it 🚀 or show confirmation modal if empty
 		 */
 		async onSubmit() {
-			const components = this.$refs.questions ?? []
+			// Already sending: the button stays focusable while busy, so a second press
+			// must not send the response twice.
+			if (this.loading) {
+				return
+			}
+			const components = (this.$refs.questions ?? []).filter(this.isAnswerable)
 			const validation = components.map(
 				async (question) => await question.validate(),
 			)
@@ -1910,7 +2102,7 @@ export default {
 				this.deleteFormFieldFromLocalStorage()
 				// The server forgot the draft as it stored the response; cancel any save
 				// still waiting, or it would write the draft straight back.
-				this.saveDraft.clear?.()
+				this.cancelDraftSave()
 				emit('forms:last-updated:set', this.form.id)
 			} catch (error) {
 				const errorMessage = error.response?.data?.ocs?.meta?.message
@@ -1930,10 +2122,28 @@ export default {
 				}
 			} finally {
 				this.loading = false
-				if (!this.publicView) {
-					this.fetchFullForm(this.form.id)
-				}
 			}
+
+			if (!this.publicView) {
+				// Quietly: the full reload swapped the whole view for a loading screen,
+				// which hid the thank-you screen for a moment and took the announcement
+				// of it along. Picks up what the submission changed, such as the
+				// response count or a limit now reached.
+				await this.fetchFullForm(this.form.id, { silent: true })
+			}
+
+			this.$nextTick(() => {
+				// After success the form has gone, so focus goes to the title above the
+				// thank-you screen. After a refusal it goes back to the button pressed.
+				const submitButton = this.success
+					? null
+					: this.$refs.form?.querySelector?.('button[type="submit"]')
+				if (submitButton) {
+					submitButton.focus()
+				} else {
+					this.$refs.title?.focus?.()
+				}
+			})
 		},
 
 		onResetSubmission() {
@@ -1952,6 +2162,15 @@ export default {
 			this.applyPrefilledAnswers()
 			this.$nextTick(() => {
 				this.$el?.scrollIntoView?.({ block: 'start' })
+				// The button just pressed has gone; without this focus was left nowhere.
+				const first = (this.$refs.questions ?? []).find(
+					(component) =>
+						this.questionPages[component.id] === 0
+						&& this.visibleQuestions[component.id],
+				)
+				if (!this.focusHeadingOf(first)) {
+					this.$refs.title?.focus?.()
+				}
 			})
 		},
 
@@ -2137,6 +2356,10 @@ export default {
 			gap: 4px;
 			justify-content: flex-end;
 
+			// Room to scroll past the buttons on a phone, without a screenful of nothing.
+			// On the row rather than on each button, so wrapped rows stay close together.
+			margin-block-end: 64px;
+
 			// Fourteen pixels separated "clear everything I typed" from "send it", which
 			// on a touch screen is one slip. The gap belongs before the button that ends
 			// the form, not between every pair, so the navigation buttons stay grouped.
@@ -2157,13 +2380,25 @@ export default {
 				color: var(--color-element-success);
 				flex-shrink: 0;
 			}
+
+			&--failed {
+				color: var(--color-main-text);
+			}
+
+			// Spelled out: a second & would repeat the whole nested path.
+			&--failed .draft-note__mark {
+				color: var(--color-element-warning);
+			}
 		}
 
 		.submit-button {
 			margin: 5px;
-			// Room to scroll past the button on a phone, without a screenful of nothing.
-			margin-block-end: 64px;
-			padding-inline-start: 20px;
+
+			// The tertiary actions gather at the start edge, away from Back, Next and
+			// Submit at the end: the last of them pushes the rest along.
+			&--last-tertiary {
+				margin-inline-end: auto;
+			}
 		}
 	}
 }

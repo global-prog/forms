@@ -11,21 +11,22 @@
 			<NcAppNavigationNew
 				v-if="canCreateForms"
 				:text="t('forms', 'New form')"
+				:disabled="creatingForm"
 				@click="onNewForm">
 				<template #icon>
 					<NcIconSvgWrapper :svg="IconPlus" />
 				</template>
 			</NcAppNavigationNew>
-			<NcButton
-				v-if="canCreateForms"
-				class="forms-navigation__template"
-				variant="tertiary"
-				@click="showTemplates = true">
-				<template #icon>
-					<NcIconSvgWrapper :svg="IconTemplate" />
-				</template>
-				{{ t('forms', 'Start from a template') }}
-			</NcButton>
+			<!-- Wrapped and padded the way NcAppNavigationNew pads its own button, so the
+			     two stack as a matching pair instead of this one running edge to edge. -->
+			<div v-if="canCreateForms" class="forms-navigation__template">
+				<NcButton variant="tertiary" wide @click="showTemplates = true">
+					<template #icon>
+						<NcIconSvgWrapper :svg="IconTemplate" />
+					</template>
+					{{ t('forms', 'Start from a template') }}
+				</NcButton>
+			</div>
 
 			<!-- Form-Owner-->
 			<template v-if="ownedForms.length > 0">
@@ -39,6 +40,7 @@
 						v-for="form in ownedForms"
 						:key="form.id"
 						:form="form"
+						:forceDisplayActions="isMobile"
 						@openSharing="openSharing"
 						@mobileCloseNavigation="mobileCloseNavigation"
 						@clone="onCloneForm"
@@ -58,6 +60,7 @@
 						v-for="form in sharedForms"
 						:key="form.id"
 						:form="form"
+						:forceDisplayActions="isMobile"
 						readOnly
 						@openSharing="openSharing"
 						@clone="onCloneForm"
@@ -93,15 +96,39 @@
 				</template>
 			</NcEmptyContent>
 
+			<!-- A failed load leaves both lists empty, which is not the same as having no
+			     forms: say so and offer a retry rather than inviting a first form. -->
+			<NcEmptyContent
+				v-else-if="loadError && !hasForms"
+				class="forms-emptycontent"
+				:name="t('forms', 'Could not load your forms')"
+				:description="t('forms', 'Check your connection and try again.')">
+				<template #icon>
+					<NcIconSvgWrapper :svg="FormsIcon" :size="64" />
+				</template>
+				<template #action>
+					<NcButton variant="primary" @click="loadForms">
+						{{ t('forms', 'Try again') }}
+					</NcButton>
+				</template>
+			</NcEmptyContent>
+
 			<NcEmptyContent
 				v-else-if="!hasForms"
 				class="forms-emptycontent"
-				:name="t('forms', 'No forms created yet')">
+				:name="
+					canCreateForms
+						? t('forms', 'No forms created yet')
+						: t('forms', 'No forms have been shared with you yet')
+				">
 				<template #icon>
 					<NcIconSvgWrapper :svg="FormsIcon" :size="64" />
 				</template>
 				<template v-if="canCreateForms" #action>
-					<NcButton variant="primary" @click="onNewForm">
+					<NcButton
+						variant="primary"
+						:disabled="creatingForm"
+						@click="onNewForm">
 						{{ t('forms', 'Create a form') }}
 					</NcButton>
 					<NcButton variant="secondary" @click="showTemplates = true">
@@ -122,7 +149,10 @@
 					<NcIconSvgWrapper :svg="FormsIcon" :size="64" />
 				</template>
 				<template v-if="canCreateForms" #action>
-					<NcButton variant="primary" @click="onNewForm">
+					<NcButton
+						variant="primary"
+						:disabled="creatingForm"
+						@click="onNewForm">
 						{{ t('forms', 'Create new form') }}
 					</NcButton>
 					<NcButton variant="secondary" @click="showTemplates = true">
@@ -157,7 +187,9 @@
 		<ArchivedFormsModal
 			v-model:open="showArchivedForms"
 			:forms="archivedForms"
-			@clone="onCloneForm" />
+			:ownedIds="ownedFormIds"
+			@clone="onCloneForm"
+			@delete="onDeleteForm" />
 		<TemplatePicker
 			v-if="canCreateForms"
 			v-model:open="showTemplates"
@@ -173,6 +205,7 @@ import axios from '@nextcloud/axios'
 import { showError } from '@nextcloud/dialogs'
 import { emit, subscribe, unsubscribe } from '@nextcloud/event-bus'
 import { loadState } from '@nextcloud/initial-state'
+import { translate as t } from '@nextcloud/l10n'
 import moment from '@nextcloud/moment'
 import { generateOcsUrl } from '@nextcloud/router'
 import { useIsMobile } from '@nextcloud/vue'
@@ -196,6 +229,7 @@ import PermissionTypes from './mixins/PermissionTypes.js'
 import { FormState } from './models/Constants.ts'
 import logger from './utils/Logger.js'
 import OcsResponse2Data from './utils/OcsResponse2Data.js'
+import SetWindowTitle from './utils/SetWindowTitle.js'
 
 const appName = 'forms'
 
@@ -233,13 +267,18 @@ export default {
 		const canCreateForms = ref(loadState(appName, 'appConfig').canCreateForms)
 		const allowComments = ref(loadState(appName, 'appConfig').allowComments)
 		const deletedFormHash = ref(null)
+		const loadError = ref(false)
+		const creatingForm = ref(false)
+		// Hashes already looked up on the server, so a failed lookup is not retried on
+		// every re-render.
+		const triedHashes = new Set()
 
 		const PERMISSION_TYPES = PermissionTypes.data().PERMISSION_TYPES
 
 		const routeHash = computed(() => route.params.hash)
 
 		const routeAllowed = computed(() => {
-			if (loading.value && loadState(appName, 'formId') === 'invalid') {
+			if (loading.value && loadState(appName, 'formId', null) === 'invalid') {
 				return false
 			}
 
@@ -256,8 +295,10 @@ export default {
 				(form) => form.hash === routeHash.value,
 			)
 
+			// A form in neither list is looked up by the watcher further down. A computed
+			// must not start requests: this one re-evaluates whenever loading flips, so a
+			// failed lookup used to start the next one straight away, without end.
 			if (form === undefined) {
-				fetchPartialForm(routeHash.value)
 				return false
 			}
 
@@ -320,6 +361,11 @@ export default {
 			)
 		})
 
+		// Archived forms mix owned and shared ones; only the owner may unarchive or delete.
+		const ownedFormIds = computed(
+			() => new Set(forms.value.map((form) => form.id)),
+		)
+
 		const archivedForms = computed(() => {
 			return [...forms.value, ...allSharedForms.value].filter(
 				(form) => form.state === FormState.FormArchived,
@@ -343,6 +389,9 @@ export default {
 
 		const loadForms = async () => {
 			loading.value = true
+			loadError.value = false
+			// A retry is a fresh start for a form that could not be looked up either.
+			triedHashes.clear()
 
 			try {
 				const response = await axios.get(
@@ -351,6 +400,7 @@ export default {
 				forms.value = OcsResponse2Data(response)
 			} catch (error) {
 				logger.error('Error while loading owned forms list', { error })
+				loadError.value = true
 				showError(
 					t('forms', 'An error occurred while loading the forms list'),
 				)
@@ -366,6 +416,7 @@ export default {
 				logger.error('Error while loading shared forms list', {
 					error,
 				})
+				loadError.value = true
 				showError(
 					t('forms', 'An error occurred while loading the forms list'),
 				)
@@ -391,39 +442,91 @@ export default {
 				wait()
 			})
 
+			const notFound = () => {
+				showError(t('forms', 'Form not found'))
+				if (route.name !== 'root') {
+					router.push({ name: 'root' })
+				}
+			}
+
+			// The page only knows the id of the form it was opened on. With no id, or one
+			// the server could not match, there is nothing to ask for.
+			const formId = loadState(appName, 'formId', 'invalid')
+
 			loading.value = true
 			if (
 				[...forms.value, ...allSharedForms.value].find(
 					(form) => form.hash === hash,
 				) === undefined
 			) {
+				if (formId === 'invalid') {
+					notFound()
+					loading.value = false
+					return
+				}
 				try {
 					const response = await axios.get(
 						generateOcsUrl('apps/forms/api/v3/forms/{id}', {
-							id: loadState(appName, 'formId'),
+							id: formId,
 						}),
 					)
 					const form = OcsResponse2Data(response)
 
+					// The id belongs to the page's first form; after moving to another
+					// unknown hash it names a different form, which must not be listed.
 					if (
-						form.permissions.includes(PERMISSION_TYPES.PERMISSION_SUBMIT)
+						form.hash === hash
+						&& form.permissions.includes(
+							PERMISSION_TYPES.PERMISSION_SUBMIT,
+						)
 					) {
 						allSharedForms.value.push(form)
+					} else {
+						notFound()
 					}
 				} catch (error) {
 					logger.error(`Form ${hash} not found`, { error })
-					showError(t('forms', 'Form not found'))
 
-					if ([403, 404].includes(error.response?.status)) {
-						if (route.name !== 'root') {
-							router.push({ name: 'root' })
-						}
+					if ([400, 403, 404].includes(error.response?.status)) {
+						notFound()
+					} else {
+						// The form may well exist; it is the request that failed.
+						showError(
+							t(
+								'forms',
+								'Could not load the form. Check your connection and try again.',
+							),
+						)
 					}
 				}
 			}
 
 			loading.value = false
 		}
+
+		// Look up a form that is in neither list once loading is done, and only once per
+		// hash, so a failed lookup settles instead of repeating.
+		watch(
+			[routeHash, loading],
+			([hash, isLoading]) => {
+				if (
+					isLoading
+					|| !hash
+					|| deletedFormHash.value === hash
+					|| triedHashes.has(hash)
+				) {
+					return
+				}
+				const known = [...forms.value, ...allSharedForms.value].some(
+					(form) => form.hash === hash,
+				)
+				if (!known) {
+					triedHashes.add(hash)
+					fetchPartialForm(hash)
+				}
+			},
+			{ immediate: true },
+		)
 
 		// Whether the template picker is open.
 		const showTemplates = ref(false)
@@ -440,6 +543,11 @@ export default {
 		}
 
 		const onNewForm = async () => {
+			// A second tap on a slow connection would create a second empty form.
+			if (creatingForm.value) {
+				return
+			}
+			creatingForm.value = true
 			try {
 				const response = await axios.post(
 					generateOcsUrl('apps/forms/api/v3/forms'),
@@ -454,6 +562,8 @@ export default {
 			} catch (error) {
 				logger.error('Unable to create new form', { error })
 				showError(t('forms', 'Unable to create a new form'))
+			} finally {
+				creatingForm.value = false
 			}
 		}
 
@@ -479,6 +589,9 @@ export default {
 
 		const onDeleteForm = async (id) => {
 			const formIndex = forms.value.findIndex((form) => form.id === id)
+			if (formIndex === -1) {
+				return
+			}
 			const deletedHash = forms.value[formIndex].hash
 
 			forms.value.splice(formIndex, 1)
@@ -496,6 +609,8 @@ export default {
 			(newRouteName) => {
 				if (newRouteName === 'root') {
 					deletedFormHash.value = null
+					// Only the form views set the tab title, so leaving them has to reset it.
+					SetWindowTitle('')
 				}
 			},
 		)
@@ -535,6 +650,8 @@ export default {
 			canCreateForms,
 			allowComments,
 			isMobile,
+			loadError,
+			creatingForm,
 			selectedForm,
 			updateSelectedForm,
 			canEdit,
@@ -542,6 +659,7 @@ export default {
 			ownedForms,
 			sharedForms,
 			archivedForms,
+			ownedFormIds,
 			routeHash,
 			routeAllowed,
 			mobileCloseNavigation,
@@ -578,6 +696,13 @@ export default {
 		// Make the list more condensed
 		margin-block: 0;
 	}
+}
+
+// Matches the padding NcAppNavigationNew gives the button above it; the top is
+// already covered by that component's own bottom padding.
+.forms-navigation__template {
+	padding-inline: calc(var(--default-grid-baseline) * 2);
+	padding-block-end: calc(var(--default-grid-baseline) * 2);
 }
 
 .forms-emptycontent {

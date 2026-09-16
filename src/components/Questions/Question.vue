@@ -9,7 +9,11 @@
 		:class="{
 			'question--editable': !readOnly,
 		}"
-		:aria-label="t('forms', 'Question number {index}', { index })">
+		:aria-label="
+			displayOnly
+				? undefined
+				: t('forms', 'Question number {index}', { index: questionNumber })
+		">
 		<!-- Drag handle -->
 		<!-- TODO: implement arrow key mapping to reorder question -->
 		<div
@@ -54,6 +58,7 @@
 							index,
 						})
 					"
+					:aria-describedby="questionValid ? undefined : warningId"
 					:value="text"
 					class="question__header__title__text question__header__title__text__input"
 					type="text"
@@ -63,11 +68,15 @@
 					:maxlength="maxStringLengths.questionText"
 					required
 					@input="onTitleChange" />
-				<h3
+				<!-- tabindex -1: moving to another page focuses the first heading, and a
+				     heading only takes focus from script when it has one. -->
+				<component
+					:is="headingTag"
 					v-else-if="readOnly"
 					:id="titleId"
 					class="question__header__title__text"
 					dir="auto"
+					tabindex="-1"
 					:style="{ textAlign: formTextAlign }">
 					{{ text
 					}}<span
@@ -76,22 +85,30 @@
 						aria-hidden="true"
 						>&nbsp;*</span
 					>
-				</h3>
+				</component>
 				<span
 					v-if="quizPoints !== null"
 					class="question__header__title__points">
 					{{ n('forms', '%n point', '%n points', quizPoints) }}
 				</span>
+				<!-- Decorative: the reason is written out below the title, where touch
+				     users can read it too and the title field refers to it. -->
 				<div
 					v-if="!readOnly && !questionValid"
 					:title="warningInvalid"
 					class="question__header__title__warning"
-					tabindex="0">
+					aria-hidden="true">
 					<NcIconSvgWrapper :svg="IconAlertCircleOutline" />
 				</div>
+				<!-- The asterisk on the menu icon is drawn only; say it in the name too. -->
 				<NcActions
 					v-if="!readOnly"
 					:id="actionsId"
+					:ariaLabel="
+						isRequired
+							? t('forms', 'Question actions (required question)')
+							: t('forms', 'Question actions')
+					"
 					forceMenu
 					placement="bottom-end"
 					class="question__header__title__menu">
@@ -151,6 +168,12 @@
 					</NcActionButton>
 				</NcActions>
 			</div>
+			<p
+				v-if="!readOnly && !questionValid"
+				:id="warningId"
+				class="question__header__warning-text">
+				<bdi>{{ warningInvalid }}</bdi>
+			</p>
 			<div
 				v-if="!isTriggerQuestion && (hasDescription || !readOnly)"
 				class="question__header__description">
@@ -263,6 +286,30 @@ export default {
 		index: {
 			type: Number,
 			required: true,
+		},
+
+		// The number a respondent hears for this question. Defaults to `index`, which
+		// also builds the element ids and so has to stay unique; a parent that skips
+		// display-only blocks when counting passes its own number here.
+		displayNumber: {
+			type: Number,
+			default: null,
+		},
+
+		// Section breaks, images and videos are not questions, so they are not named
+		// "Question number N".
+		displayOnly: {
+			type: Boolean,
+			default: false,
+		},
+
+		// Heading level of the respondent's title: a parent puts questions that
+		// follow a section one level below the section's own title.
+		headingLevel: {
+			type: Number,
+			default: 3,
+			validator: (value) =>
+				Number.isInteger(value) && value >= 2 && value <= 6,
 		},
 
 		text: {
@@ -437,6 +484,18 @@ export default {
 			return this.text && this.contentValid
 		},
 
+		questionNumber() {
+			return this.displayNumber ?? this.index
+		},
+
+		headingTag() {
+			return 'h' + this.headingLevel
+		},
+
+		warningId() {
+			return 'q' + this.index + '_warning'
+		},
+
 		actionsId() {
 			return 'q' + this.index + '_actions'
 		},
@@ -506,16 +565,22 @@ export default {
 		},
 
 		/**
-		 * Reorder question but keep focus on the button
+		 * Reorder question but keep focus on a move button. At the first or last
+		 * position the pressed button becomes disabled and cannot hold focus, so
+		 * focus moves to the other one.
 		 */
 		onMoveDown() {
 			this.$emit('moveDown')
-			this.$nextTick(() => this.$refs.buttonDown.$el.focus())
+			this.$nextTick(() => {
+				this.$refs[this.canMoveDown ? 'buttonDown' : 'buttonUp']?.$el.focus()
+			})
 		},
 
 		onMoveUp() {
 			this.$emit('moveUp')
-			this.$nextTick(() => this.$refs.buttonUp.$el.focus())
+			this.$nextTick(() => {
+				this.$refs[this.canMoveUp ? 'buttonUp' : 'buttonDown']?.$el.focus()
+			})
 		},
 
 		/**
@@ -546,11 +611,13 @@ export default {
 	justify-content: stretch;
 	margin-block-end: 64px;
 	padding-inline-start: var(--default-clickable-area);
-	user-select: none;
 	background-color: var(--color-main-background);
 
 	&--editable {
 		padding-inline-start: 56px; // add 12px for the title input box
+		// Only while editing, where the card is dragged around; a respondent should
+		// be able to select and copy the question text.
+		user-select: none;
 
 		// The same card as the form itself, so what is being written looks like what will
 		// be answered. The border is always drawn and only changes colour, so nothing
@@ -569,10 +636,10 @@ export default {
 		&:focus-within {
 			border-color: var(--color-primary-element);
 		}
-	}
 
-	> * {
-		cursor: pointer;
+		> * {
+			cursor: pointer;
+		}
 	}
 
 	&__drag-handle {
@@ -681,6 +748,12 @@ export default {
 				margin-block: auto;
 				margin-inline-end: 12px;
 			}
+		}
+
+		&__warning-text {
+			margin-block: 0 4px;
+			color: var(--color-error-text, var(--color-error));
+			font-size: var(--font-size-small, 13px);
 		}
 
 		&__description {

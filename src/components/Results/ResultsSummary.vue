@@ -297,6 +297,8 @@
 <script>
 import IconDownload from '@material-symbols/svg-400/outlined/download.svg?raw'
 import IconFile from '@material-symbols/svg-400/outlined/draft.svg?raw'
+import { showError } from '@nextcloud/dialogs'
+import { translate as t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
@@ -315,6 +317,7 @@ import {
 	isChoiceQuestion,
 	groupingQuestions as questionsThatGroup,
 } from '../../utils/CompareAnswers.js'
+import logger from '../../utils/Logger.js'
 import { groupTextAnswers } from '../../utils/TextAnswers.js'
 import { resolveDirection } from '../../utils/TextDirection.js'
 import { bucketsFor, chartFormsFor } from './Charts/chartOptions.js'
@@ -613,21 +616,22 @@ export default {
 			const label = this.answerTypes[this.question.type].label
 
 			if (this.question.type === 'grid') {
-				if (
-					this.question.extraSettings.questionType
-					=== GridCellType.Checkbox
-				) {
-					return label + ' (' + t('forms', 'Checkbox') + ')'
+				const cellTypes = {
+					[GridCellType.Checkbox]: t('forms', 'Checkbox'),
+					[GridCellType.Number]: t('forms', 'Number'),
+					[GridCellType.Radio]: t('forms', 'Radio'),
 				}
-				if (
-					this.question.extraSettings.questionType === GridCellType.Number
-				) {
-					return label + ' (' + t('forms', 'Number') + ')'
-				}
-				if (
-					this.question.extraSettings.questionType === GridCellType.Radio
-				) {
-					return label + ' (' + t('forms', 'Radio') + ')'
+				const cellType = cellTypes[this.question.extraSettings.questionType]
+				if (cellType) {
+					// Shown as text, so not escaped: a translated type name with an
+					// apostrophe in it would otherwise read "&#39;".
+					return t(
+						'forms',
+						'{type} ({cellType})',
+						{ type: label, cellType },
+						undefined,
+						{ escape: false, sanitize: false },
+					)
 				}
 			}
 
@@ -650,8 +654,19 @@ export default {
 				if (labelHighest !== '') {
 					descriptionParts.push(`${optionsHighest}: ${labelHighest}`)
 				}
-				const description = ` (${descriptionParts.join(', ')})`
-				return label + description
+				if (!descriptionParts.length) {
+					return label
+				}
+				// The ends of the scale are the author's words. This is shown as text,
+				// never as HTML, so it is neither escaped nor sanitised: either would
+				// turn an "&" in them into a literal "&amp;".
+				return t(
+					'forms',
+					'{type} ({description})',
+					{ type: label, description: descriptionParts.join(', ') },
+					undefined,
+					{ escape: false, sanitize: false },
+				)
 			}
 
 			return label
@@ -827,7 +842,12 @@ export default {
 					const cell = this.gridValue[row.id]?.[column.id] ?? {}
 					if (isNumber) {
 						const average = cell.averageValue ?? 0
-						return { value: average, display: average }
+						// Rounded for reading, as every other average in the summary
+						// is; the tint keeps the exact value.
+						return {
+							value: average,
+							display: Math.round(average * 100) / 100,
+						}
 					}
 					const count = cell.answersCount ?? 0
 					return {
@@ -1285,12 +1305,12 @@ export default {
 			)
 			answersModels.unshift({
 				id: 0,
-				text:
-					noResponseCount
-					+ ' ('
-					+ noResponsePercentage
-					+ '%): '
-					+ t('forms', 'No response'),
+				// One sentence, so a translation can put the words and the figures in
+				// whatever order its language reads them.
+				text: t('forms', 'No response: {count} ({percent}%)', {
+					count: noResponseCount,
+					percent: noResponsePercentage,
+				}),
 			})
 
 			return answersModels
@@ -1355,12 +1375,21 @@ export default {
 			this.groupBy = option?.id ?? null
 		},
 
-		/** Save this question's chart as a picture, named and titled after the question. */
-		downloadChart() {
-			this.$refs.figure?.downloadImage(
-				this.question.text,
-				this.questionDirection,
-			)
+		/**
+		 * Save this question's chart as a picture, named and titled after the question.
+		 * Anything that stops the picture being made is said, not swallowed: the button
+		 * otherwise just appears not to work.
+		 */
+		async downloadChart() {
+			try {
+				await this.$refs.figure?.downloadImage(
+					this.question.text,
+					this.questionDirection,
+				)
+			} catch (error) {
+				logger.error('Could not create the chart image', { error })
+				showError(t('forms', 'Could not create the chart image'))
+			}
 		},
 
 		onChartFormChosen(form) {

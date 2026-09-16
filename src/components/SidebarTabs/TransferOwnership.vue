@@ -46,16 +46,13 @@
 					:placeholder="t('forms', 'Search for a user')"
 					@search="
 						(query) => asyncSearch(query, [SHARE_TYPES.SHARE_TYPE_USER])
-					">
-					<template #no-options>
-						{{ noResultText }}
-					</template>
-				</NcSelectUsers>
+					" />
 
 				<br />
 
 				<!-- eslint-disable vue/no-v-html -->
 				<p
+					:id="confirmationHintId"
 					v-html="
 						t(
 							'forms',
@@ -71,7 +68,8 @@
 				<NcTextField
 					v-model="confirmationInput"
 					:label="t('forms', 'Confirmation text')"
-					:success="confirmationInput === confirmationString" />
+					:aria-describedby="confirmationHintId"
+					:success="confirmationMatches" />
 
 				<br />
 
@@ -95,6 +93,7 @@
 import axios from '@nextcloud/axios'
 import { showError, showSuccess } from '@nextcloud/dialogs'
 import { emit } from '@nextcloud/event-bus'
+import { translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
@@ -141,40 +140,61 @@ export default {
 
 	computed: {
 		canTransfer() {
+			return this.confirmationMatches && !!this.selected
+		},
+
+		/**
+		 * The prompt is shown as HTML, which collapses runs of whitespace, so both sides
+		 * are compared with runs collapsed - otherwise a title with a double space could
+		 * never be typed to match what is on screen.
+		 */
+		confirmationString() {
+			return `${this.form.ownerId}/${this.form.title.replace(/\s+/g, ' ').trim()}`
+		},
+
+		confirmationMatches() {
 			return (
-				this.confirmationInput === this.confirmationString && !!this.selected
+				this.confirmationInput.replace(/\s+/g, ' ').trim()
+				=== this.confirmationString
 			)
 		},
 
-		confirmationString() {
-			return `${this.form.ownerId}/${this.form.title.replace(/\s/g, ' ').trim()}`
+		/** Lets a screen reader announce what to type when the field is focused */
+		confirmationHintId() {
+			return `transfer-ownership-hint-${this.form.id}`
 		},
 
 		options() {
 			if (this.isValidQuery) {
-				// Suggestions without existing shares
 				return this.suggestions
 			}
-			// Recommendations without existing shares
-			return this.recommendations
+			// Recommendations can include groups and teams; a form can only go to an account.
+			return this.recommendations.filter(
+				(item) => item.shareType === this.SHARE_TYPES.SHARE_TYPE_USER,
+			)
 		},
 	},
 
 	methods: {
-		clearText() {
-			this.confirmationInput = ''
-		},
-
 		closeModal() {
 			this.showModal = false
 		},
 
 		escapedString(textToEscape) {
-			return '' + textToEscape.replace('<', '&lt;').replace('>', '&gt;')
+			return String(textToEscape)
+				.replaceAll('&', '&amp;')
+				.replaceAll('<', '&lt;')
+				.replaceAll('>', '&gt;')
 		},
 
 		openModal() {
+			// Start clean each time, so a reopened dialog never arrives already confirmed.
+			this.selected = null
+			this.confirmationInput = ''
 			this.showModal = true
+			if (this.recommendations.length === 0) {
+				this.getRecommendations()
+			}
 		},
 
 		async onOwnershipTransfer() {
@@ -193,7 +213,14 @@ export default {
 						},
 					)
 					showSuccess(
-						`${t('forms', 'This form is now owned by')} ${this.selected.displayName}`,
+						t(
+							'forms',
+							'This form is now owned by {user}',
+							{ user: this.selected.displayName },
+							undefined,
+							// Toasts show plain text, so neither escape nor sanitise ("&" would become "&amp;")
+							{ escape: false, sanitize: false },
+						),
 					)
 					emit('forms:ownership-transfered', this.form.id)
 				} catch (error) {

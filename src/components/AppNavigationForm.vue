@@ -11,6 +11,7 @@
 		compact
 		forceMenu
 		:forceDisplayActions="forceDisplayActions"
+		:linkAriaLabel="accessibleName"
 		:name="formTitle"
 		:to="{
 			name: routerTarget,
@@ -114,7 +115,8 @@ import IconShareVariant from '@material-symbols/svg-400/outlined/share.svg?raw'
 import IconArchiveOff from '@material-symbols/svg-400/outlined/unarchive.svg?raw'
 import { getCurrentUser } from '@nextcloud/auth'
 import axios from '@nextcloud/axios'
-import { showConfirmation, showError } from '@nextcloud/dialogs'
+import { showConfirmation, showError, showSuccess } from '@nextcloud/dialogs'
+import { translatePlural as n, translate as t } from '@nextcloud/l10n'
 import moment from '@nextcloud/moment'
 import { generateOcsUrl } from '@nextcloud/router'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
@@ -271,6 +273,32 @@ export default {
 		},
 
 		/**
+		 * Name for the row link. The response count bubble on its own is a bare number to
+		 * a screen reader, so the count is spelled out; the subtitle is repeated because an
+		 * aria-label replaces the link's own text.
+		 *
+		 * @return {string}
+		 */
+		accessibleName() {
+			// The server leaves the count out when there is nothing the user may see, and
+			// the bubble is hidden then too, so the name does not claim "0 responses".
+			const count = this.form.submissionCount ?? 0
+			// Left raw: the result is an attribute value, which Vue escapes itself.
+			const name =
+				count > 0
+					? n(
+							'forms',
+							'{title}, %n response',
+							'{title}, %n responses',
+							count,
+							{ title: this.formTitle },
+							{ escape: false, sanitize: false },
+						)
+					: this.formTitle
+			return [name, this.formSubtitle].filter(Boolean).join(', ')
+		},
+
+		/**
 		 * Return, if form has Subtitle
 		 */
 		hasSubtitle() {
@@ -323,8 +351,9 @@ export default {
 		},
 
 		async onToggleArchive() {
+			const wasArchived = this.isArchived
+			this.loading = true
 			try {
-				// TODO: add loading status feedback ?
 				await axios.patch(
 					generateOcsUrl('apps/forms/api/v3/forms/{id}', {
 						id: this.form.id,
@@ -341,11 +370,22 @@ export default {
 				this.form.state = this.isArchived
 					? FormState.FormClosed
 					: FormState.FormArchived
+				// The row leaves its list at once, so say where the form went.
+				showSuccess(
+					wasArchived
+						? t('forms', 'Form restored')
+						: t(
+								'forms',
+								'Form archived. You can find it under Archived forms.',
+							),
+				)
 			} catch (error) {
 				logger.error('Error changing archived state of form', {
 					error,
 				})
 				showError(t('forms', 'Error changing archived state of form'))
+			} finally {
+				this.loading = false
 			}
 		},
 

@@ -41,7 +41,7 @@
 				:options="choices"
 				:searchable="false"
 				label="text"
-				:aria-label-combobox="selectOptionPlaceholder"
+				:aria-label-combobox="text || selectOptionPlaceholder"
 				:aria-errormessage="hasError ? errorId : undefined"
 				:aria-invalid="hasError ? 'true' : undefined"
 				@invalid.prevent="validate"
@@ -55,7 +55,7 @@
 				v-else
 				v-model="choices"
 				class="question__content"
-				:animation="300"
+				:animation="sortAnimation()"
 				direction="vertical"
 				handle=".option__drag-handle"
 				invertSwap
@@ -102,6 +102,7 @@
 
 <script>
 import IconContentPaste from '@material-symbols/svg-400/outlined/content_paste.svg?raw'
+import { translate as t } from '@nextcloud/l10n'
 import { VueDraggable as Draggable } from 'vue-draggable-plus'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionCheckbox from '@nextcloud/vue/components/NcActionCheckbox'
@@ -261,6 +262,11 @@ export default {
 .options-list-transition-leave-to {
 	opacity: 0;
 	transform: translateX(var(--default-clickable-area));
+
+	// Items slide in from the end side, which is the left in a right-to-left form.
+	[dir='rtl'] & {
+		transform: translateX(calc(-1 * var(--default-clickable-area)));
+	}
 }
 
 /* ensure leaving items are taken out of layout flow so that moving

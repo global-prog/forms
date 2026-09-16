@@ -77,7 +77,7 @@
 				<NcButton
 					v-if="readOnly && currentValue"
 					variant="tertiary"
-					@click="onPick(0)">
+					@click="onPick(0, true)">
 					{{ t('forms', 'Clear') }}
 				</NcButton>
 			</fieldset>
@@ -95,6 +95,7 @@ import IconStarFilled from '@material-symbols/svg-400/outlined/star-fill.svg?raw
 import IconStar from '@material-symbols/svg-400/outlined/star.svg?raw'
 import IconThumbFilled from '@material-symbols/svg-400/outlined/thumb_up-fill.svg?raw'
 import IconThumb from '@material-symbols/svg-400/outlined/thumb_up.svg?raw'
+import { translate as t } from '@nextcloud/l10n'
 import NcActionInput from '@nextcloud/vue/components/NcActionInput'
 import NcActionRadio from '@nextcloud/vue/components/NcActionRadio'
 import NcButton from '@nextcloud/vue/components/NcButton'
@@ -174,10 +175,20 @@ export default {
 	methods: {
 		/**
 		 * @param {number} star the chosen star count, or 0 to clear
+		 * @param {boolean} refocus whether to move focus back onto the stars
 		 */
-		onPick(star) {
+		onPick(star, refocus = false) {
 			this.$emit('update:values', star ? [String(star)] : [])
 			this.errorMessage = null
+			// Clearing removes the Clear button itself, and with it the keyboard focus;
+			// put the focus back on the first star so the respondent stays where they were.
+			if (refocus) {
+				this.$nextTick(() => {
+					this.$el
+						?.querySelector?.(`input[name="rating_${this.id}"]`)
+						?.focus()
+				})
+			}
 		},
 
 		/**

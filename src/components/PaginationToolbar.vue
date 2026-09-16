@@ -28,6 +28,7 @@
 				<NcSelect
 					v-model="pageNumber"
 					:options="allPageNumbersArray"
+					:clearable="false"
 					:aria-label-combobox="t('forms', 'Page number')">
 					<template #selected-option-container="{ option }">
 						<span class="selected-page">
@@ -128,6 +129,15 @@ export default {
 			},
 
 			set(pageNumber) {
+				// Backspace in an empty picker still sends null even with the clear
+				// button hidden, and (null - 1) * limit is a negative offset.
+				if (
+					!Number.isInteger(pageNumber)
+					|| pageNumber < 1
+					|| pageNumber > this.totalPages
+				) {
+					return
+				}
 				this.$emit('update:offset', (pageNumber - 1) * this.limit)
 			},
 		},

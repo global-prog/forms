@@ -14,6 +14,10 @@
 		:name="t('forms', 'Start from a template')"
 		size="normal"
 		@update:open="$emit('update:open', $event)">
+		<!-- Building takes a few requests; this is what a screen reader hears meanwhile. -->
+		<p class="hidden-visually" aria-live="polite">
+			{{ building !== null ? t('forms', 'Creating form …') : '' }}
+		</p>
 		<ul class="template-picker">
 			<li v-for="template in templates" :key="template.id">
 				<button
@@ -21,12 +25,14 @@
 					:class="{
 						'template-picker__item--building': building === template.id,
 					}"
-					:disabled="building !== null"
+					:aria-disabled="building !== null ? 'true' : undefined"
+					:aria-busy="building === template.id ? 'true' : undefined"
 					@click="choose(template)">
 					<span class="template-picker__name">
 						{{ template.name }}
 						<NcLoadingIcon
 							v-if="building === template.id"
+							:name="t('forms', 'Creating form …')"
 							:size="20"
 							class="template-picker__spinner" />
 					</span>
@@ -142,20 +148,21 @@ export default {
 		padding: 12px 16px;
 		text-align: start;
 
-		&:hover:not(:disabled),
+		&:hover:not([aria-disabled='true']),
 		&:focus-visible {
 			background-color: var(--color-background-hover);
 			border-color: var(--color-primary-element);
 		}
 
 		// While one is being built the rest step back, and the chosen one keeps its
-		// highlight so it is plain which was picked.
-		&:disabled {
+		// highlight so it is plain which was picked. aria-disabled rather than disabled:
+		// disabling the button that has focus would drop keyboard focus to the page.
+		&[aria-disabled='true'] {
 			cursor: progress;
 			opacity: 0.5;
 		}
 
-		&--building:disabled {
+		&--building[aria-disabled='true'] {
 			border-color: var(--color-primary-element);
 			opacity: 1;
 		}

@@ -6,7 +6,7 @@
 <template>
 	<Draggable
 		v-model="localQuestions"
-		:animation="animation"
+		:animation="sortAnimation"
 		target=".sort-target"
 		direction="vertical"
 		invertSwap
@@ -197,6 +197,19 @@ export default {
 	},
 
 	computed: {
+		/**
+		 * The drag-and-drop library animates a moved question with an inline
+		 * transition, which a stylesheet cannot switch off for people who asked the
+		 * system for less motion.
+		 *
+		 * @return {number}
+		 */
+		sortAnimation() {
+			return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+				? 0
+				: this.animation
+		},
+
 		localQuestions: {
 			get() {
 				return this.modelValue
@@ -284,6 +297,11 @@ export default {
 .question-list-leave-to {
 	opacity: 0;
 	transform: translateX(var(--clickable-area-large));
+
+	// Questions slide in from the end side, which is the left in a right-to-left form.
+	[dir='rtl'] & {
+		transform: translateX(calc(-1 * var(--clickable-area-large)));
+	}
 }
 
 .question-list-leave-active {

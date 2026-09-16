@@ -16,14 +16,17 @@
 			role="group"
 			:aria-labelledby="titleId"
 			:aria-describedby="description ? descriptionId : undefined">
+			<!-- The state goes on the trigger button: attributes bound on the picker
+			     itself end up on its popover wrapper, where nothing announces them. -->
 			<NcColorPicker
 				:modelValue="pickedColor"
 				advancedFields
-				:aria-required="isRequired"
-				:aria-errormessage="hasError ? errorId : undefined"
-				:aria-invalid="hasError ? 'true' : undefined"
 				@update:modelValue="onUpdatePickedColor">
-				<NcButton :disabled="!readOnly">
+				<NcButton
+					:disabled="!readOnly"
+					:aria-invalid="hasError ? 'true' : undefined"
+					:aria-errormessage="hasError ? errorId : undefined"
+					:aria-describedby="buttonDescribedBy">
 					{{ colorPickerPlaceholder }}
 				</NcButton>
 			</NcColorPicker>
@@ -39,6 +42,11 @@
 					</template>
 				</NcButton>
 			</div>
+			<!-- The chosen value in words as well, so the answer is not given by colour
+			     alone and a pick close to the background stays readable. -->
+			<bdi v-if="pickedColor" :id="valueId" dir="ltr" class="color__value">
+				{{ pickedColor }}
+			</bdi>
 		</div>
 		<template #insert>
 			<slot name="insert" />
@@ -89,6 +97,21 @@ export default {
 		pickedColor() {
 			return this.values[0] ?? ''
 		},
+
+		valueId() {
+			return `q${this.index}_color_value`
+		},
+
+		buttonDescribedBy() {
+			const ids = []
+			if (this.pickedColor) {
+				ids.push(this.valueId)
+			}
+			if (this.hasError) {
+				ids.push(this.errorId)
+			}
+			return ids.length > 0 ? ids.join(' ') : undefined
+		},
 	},
 
 	methods: {
@@ -104,6 +127,11 @@ export default {
 
 		onUpdatePickedColor(color) {
 			this.$emit('update:values', [color])
+			// Clear an error left by a failed submit once a colour is picked. validate()
+			// reads the `values` prop, which changes only after the parent has re-rendered.
+			if (this.errorMessage) {
+				this.$nextTick(() => this.validate())
+			}
 		},
 	},
 }
@@ -112,17 +140,25 @@ export default {
 <style lang="scss" scoped>
 .question__content {
 	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
 	gap: var(--clickable-area-small);
 }
 
 .color__field {
 	width: 100px;
 	height: var(--default-clickable-area);
+	border: 1px solid var(--color-border-maxcontrast);
 	border-radius: var(--border-radius-element);
 
 	&__button {
 		position: relative;
 		margin-inline-start: calc(100% - var(--default-clickable-area));
 	}
+}
+
+.color__value {
+	font-family: var(--font-face-monospace, monospace);
+	text-transform: uppercase;
 }
 </style>

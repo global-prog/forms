@@ -23,6 +23,22 @@
 -->
 <template>
 	<div class="chart-stacked">
+		<!-- Held in the space the chart will take, so a slow connection shows that
+		     something is coming rather than an empty box. -->
+		<div
+			v-if="!ready && !failed"
+			class="chart-stacked__loading"
+			:style="{ blockSize: `${height}px` }">
+			<NcLoadingIcon :size="32" />
+		</div>
+		<p v-if="failed" class="chart-stacked__note">
+			{{
+				t(
+					'forms',
+					'The chart could not be loaded. The figures are listed below.',
+				)
+			}}
+		</p>
 		<!-- eslint-disable vue/no-unused-refs -- the ref is read by EchartMixin -->
 		<div
 			v-show="!failed"
@@ -74,11 +90,16 @@
 </template>
 
 <script>
-import { CHART_PADDING, ROW_HEIGHT, stackedOption } from './chartOptions.js'
+import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
+import { figureHeight, longestLabel, stackedOption } from './chartOptions.js'
 import EchartMixin from './EchartMixin.js'
 
 export default {
 	name: 'ChartStacked',
+
+	components: {
+		NcLoadingIcon,
+	},
 
 	mixins: [EchartMixin],
 
@@ -91,9 +112,19 @@ export default {
 	},
 
 	computed: {
-		/** @return {number} height enough to give every grid row a row of its own */
+		/**
+		 * Height enough to give every grid row a row of its own, tall enough for its
+		 * label once wrapped. The rows are laid out exactly as horizontal bars are.
+		 *
+		 * @return {number} the height in pixels
+		 */
 		height() {
-			return this.items.length * ROW_HEIGHT + CHART_PADDING * 2
+			return figureHeight(
+				'bars',
+				this.items.length,
+				this.plotWidth,
+				longestLabel(this.items),
+			)
 		},
 	},
 
@@ -179,6 +210,23 @@ export default {
 
 <style lang="scss" scoped>
 .chart-stacked {
+	position: relative;
+
+	&__loading {
+		align-items: center;
+		display: flex;
+		inset-block-start: 0;
+		inset-inline: 0;
+		justify-content: center;
+		pointer-events: none;
+		position: absolute;
+	}
+
+	&__note {
+		color: var(--color-text-maxcontrast);
+		margin-block-end: 8px;
+	}
+
 	&__canvas {
 		inline-size: 100%;
 
@@ -224,6 +272,12 @@ export default {
 		td {
 			font-variant-numeric: tabular-nums;
 		}
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.chart-stacked__loading :deep(.loading-icon svg) {
+		animation: none;
 	}
 }
 

@@ -20,38 +20,73 @@
 	<div class="chart-donut">
 		<!-- The legend beside it names every segment with its share, so the ring itself
 		     carries nothing a screen reader needs. -->
+		<p v-if="failed" class="chart-donut__note">
+			{{
+				t(
+					'forms',
+					'The chart could not be loaded. The figures are listed below.',
+				)
+			}}
+		</p>
 		<!-- eslint-disable vue/no-unused-refs -- the ref is read by EchartMixin -->
 		<div
 			v-show="!failed"
 			ref="chart"
 			class="chart-donut__ring"
-			aria-hidden="true" />
+			aria-hidden="true">
+			<!-- Shown until the library arrives. ECharts adds its drawing alongside
+			     whatever the box holds, and this is gone by the time it does. -->
+			<NcLoadingIcon
+				v-if="!ready && !failed"
+				class="chart-donut__loading"
+				:size="32" />
+		</div>
 		<!-- eslint-enable vue/no-unused-refs -->
 
 		<ol class="chart-donut__legend">
-			<li
-				v-for="segment in segments"
-				:key="segment.key"
-				class="chart-donut__legend-item">
-				<span
-					class="chart-donut__swatch"
-					:style="{ backgroundColor: segment.colour }"
-					aria-hidden="true" />
-				<span class="chart-donut__legend-label" dir="auto">
-					{{ segment.label }}
-				</span>
-				<span class="chart-donut__legend-value">
-					{{ segment.value }}
-					<span class="chart-donut__legend-percentage">
-						({{ segment.percentage }}%)
+			<!-- The options folded into one grey slice are still named, each under
+			     the folded row, so no answer disappears from this view. They are rows
+			     of the same list rather than a nested one, so they keep the legend's
+			     columns, and the downloaded key picks them up as well. -->
+			<template v-for="segment in segments" :key="segment.key">
+				<li class="chart-donut__legend-item">
+					<span
+						class="chart-donut__swatch"
+						:style="{ backgroundColor: segment.colour }"
+						aria-hidden="true" />
+					<span class="chart-donut__legend-label" dir="auto">
+						{{ segment.label }}
 					</span>
-				</span>
-			</li>
+					<span class="chart-donut__legend-value">
+						{{ segment.value }}
+						<span class="chart-donut__legend-percentage">
+							({{ segment.percentage }}%)
+						</span>
+					</span>
+				</li>
+				<li
+					v-for="child in segment.children"
+					:key="`${segment.key}-${child.key}`"
+					class="chart-donut__legend-item chart-donut__legend-item--sub">
+					<span class="chart-donut__swatch" aria-hidden="true" />
+					<span class="chart-donut__legend-label" dir="auto">
+						{{ child.label }}
+					</span>
+					<span class="chart-donut__legend-value">
+						{{ child.value }}
+						<span class="chart-donut__legend-percentage">
+							({{ child.percentage }}%)
+						</span>
+					</span>
+				</li>
+			</template>
 		</ol>
 	</div>
 </template>
 
 <script>
+import { translatePlural as n } from '@nextcloud/l10n'
+import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import { donutOption } from './chartOptions.js'
 import EchartMixin from './EchartMixin.js'
 
@@ -60,6 +95,10 @@ const MAX_SLICES = 7
 
 export default {
 	name: 'ChartDonut',
+
+	components: {
+		NcLoadingIcon,
+	},
 
 	mixins: [EchartMixin],
 
@@ -89,9 +128,14 @@ export default {
 				...head,
 				{
 					key: '__other__',
-					label: t('forms', 'Other ({count} options)', {
-						count: tail.length,
-					}),
+					// Not called "Other": a question that takes free answers already
+					// has a row by that name, and it means something else.
+					label: n(
+						'forms',
+						'%n more option',
+						'%n more options',
+						tail.length,
+					),
 
 					value: tail.reduce(
 						(sum, item) => sum + (Number(item.value) || 0),
@@ -99,6 +143,7 @@ export default {
 					),
 
 					muted: true,
+					children: tail,
 				},
 			]
 		},
@@ -125,17 +170,25 @@ export default {
 		 * they follow the theme by themselves and are correct on first paint instead of
 		 * waiting for the chart to report back.
 		 *
-		 * @return {object[]} label, count, share and swatch colour per slice
+		 * @return {object[]} label, count, share and swatch colour per slice, with the
+		 *   options a folded slice stands for
 		 */
 		segments() {
 			const total = this.total || 1
+			const share = (value) => Math.round((100 * (Number(value) || 0)) / total)
 			return this.slices.map((slice, index) => {
 				const slot = this.slotAssignment[index]
 				return {
 					key: slice.key ?? index,
 					label: slice.label,
 					value: slice.value,
-					percentage: Math.round((100 * slice.value) / total),
+					percentage: share(slice.value),
+					children: (slice.children ?? []).map((child, childIndex) => ({
+						key: child.key ?? childIndex,
+						label: child.label,
+						value: child.value,
+						percentage: share(child.value),
+					})),
 					colour:
 						slot === null
 							? 'var(--chart-muted)'
@@ -157,6 +210,8 @@ export default {
 		legendRows() {
 			return [...this.$el.querySelectorAll('.chart-donut__legend-item')].map(
 				(item) => ({
+					// A folded option's row has an empty swatch, which reads back as
+					// transparent and so draws nothing: the row is set in under its fold.
 					colour: getComputedStyle(
 						item.querySelector('.chart-donut__swatch'),
 					).backgroundColor,
@@ -204,6 +259,12 @@ export default {
 	flex-wrap: wrap;
 	gap: 24px;
 
+	&__note {
+		color: var(--color-text-maxcontrast);
+		flex: 1 0 100%;
+		margin: 0;
+	}
+
 	&__ring {
 		block-size: 190px;
 		flex: 0 0 auto;
@@ -244,6 +305,18 @@ export default {
 		grid-template-columns: subgrid;
 	}
 
+	&__loading {
+		block-size: 100%;
+		inline-size: 100%;
+	}
+
+	// A folded option, listed under its fold: quieter, so the fold still reads as
+	// the one slice the ring draws.
+	&__legend-item--sub {
+		color: var(--color-text-maxcontrast);
+		font-size: var(--font-size-small, 13px);
+	}
+
 	&__swatch {
 		block-size: 10px;
 		border-radius: 2px;
@@ -267,6 +340,12 @@ export default {
 	&__legend-percentage {
 		color: var(--color-text-maxcontrast);
 		font-weight: normal;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.chart-donut__loading.loading-icon :deep(svg) {
+		animation: none;
 	}
 }
 

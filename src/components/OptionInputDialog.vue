@@ -5,31 +5,33 @@
 
 <template>
 	<NcDialog
-		contentClasses="options-modal"
 		:name="t('forms', 'Add multiple options')"
 		:open="open"
 		:buttons="buttons"
 		size="normal"
 		@update:open="$emit('update:open', $event)">
-		<div class="options-text-area">
-			<NcTextArea
-				v-model="enteredOptions"
-				:label="t('forms', 'Add multiple options (one per line)')"
-				:placeholder="t('forms', 'Add multiple options (one per line)')"
-				resize="vertical"
-				rows="10" />
+		<!-- NcDialog teleports its content, so this wrapper is the nearest element that
+		     carries this component's scope id; the styles below hang off it. -->
+		<div class="options-body">
+			<div class="options-text-area">
+				<NcTextArea
+					v-model="enteredOptions"
+					:label="t('forms', 'Add multiple options (one per line)')"
+					:placeholder="t('forms', 'Add multiple options (one per line)')"
+					resize="vertical"
+					rows="10" />
+			</div>
+			<NcSelect
+				:inputLabel="t('forms', 'Options')"
+				multiple
+				disabled
+				:modelValue="multipleOptions" />
 		</div>
-		<NcSelect
-			:inputLabel="t('forms', 'Options')"
-			multiple
-			disabled
-			:modelValue="multipleOptions" />
 	</NcDialog>
 </template>
 
 <script>
 import IconCheck from '@material-symbols/svg-400/outlined/check.svg?raw'
-import { showError } from '@nextcloud/dialogs'
 import { translate as t } from '@nextcloud/l10n'
 import { defineComponent } from 'vue'
 import NcDialog from '@nextcloud/vue/components/NcDialog'
@@ -71,11 +73,11 @@ export default defineComponent({
 				},
 				{
 					label: t('forms', 'Add options'),
-					type: 'primary',
+					// `type` is the HTML button type; the look comes from `variant`.
+					variant: 'primary',
 					icon: IconCheck,
-					callback: () => {
-						this.onMultipleOptions()
-					},
+					disabled: this.multipleOptions.length === 0,
+					callback: () => this.onMultipleOptions(),
 				},
 			]
 		},
@@ -92,29 +94,28 @@ export default defineComponent({
 		t,
 
 		onMultipleOptions() {
-			this.$emit('update:open', false)
-			if (this.multipleOptions.length > 1) {
-				// extract all options entries to parent
-				this.$emit('multipleAnswers', this.multipleOptions)
-				this.enteredOptions = ''
-				return
+			// The button is disabled while there is nothing to add. A single line is
+			// simply one option: rejecting it only closed the dialog on an error.
+			if (this.multipleOptions.length === 0) {
+				return false
 			}
-			// in case of only one option, just show an error message because it is probably missuse of the feature
-			showError(t('forms', 'Options should be separated by new line!'))
+			this.$emit('multipleAnswers', this.multipleOptions)
+			this.enteredOptions = ''
+			this.$emit('update:open', false)
 		},
 	},
 })
 </script>
 
 <style scoped>
-:deep(.options-modal) {
-	padding-block: 0px 12px;
+.options-body {
+	padding-block: 0 12px;
 	padding-inline: 8px 20px;
 }
 
-:deep(.v-select) {
+.options-body :deep(.v-select) {
 	width: 100%;
-	margin-top: 10px !important;
+	margin-block-start: 10px;
 	display: flex;
 	flex-direction: column;
 	gap: 2px 0;

@@ -18,6 +18,8 @@
 				v-model="appConfig.creationAllowedGroups"
 				:disabled="!appConfig.restrictCreation"
 				multiple
+				:inputLabel="t('forms', 'Groups allowed to create forms')"
+				:loading="loading.creationAllowedGroups"
 				:options="availableGroups"
 				:placeholder="t('forms', 'Select groups')"
 				class="forms-settings__creation__multiselect"
@@ -61,7 +63,10 @@
 				type="number"
 				:min="1"
 				:max="100"
+				:readonly="loading.confirmationEmailRateLimit"
+				:success="rateLimitSaved"
 				class="forms-settings__rate-limit"
+				@update:modelValue="rateLimitSaved = false"
 				@change="onConfirmationEmailRateLimitChange" />
 		</NcSettingsSection>
 		<NcSettingsSection :name="t('forms', 'Form sharing')">
@@ -108,6 +113,7 @@
 import axios from '@nextcloud/axios'
 import { showError } from '@nextcloud/dialogs'
 import { loadState } from '@nextcloud/initial-state'
+import { translate as t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
 import NcInputField from '@nextcloud/vue/components/NcInputField'
@@ -136,7 +142,19 @@ export default {
 				loadState(appName, 'appConfig').confirmationEmailRateLimit ?? 3,
 			),
 
-			loading: {},
+			loading: {
+				restrictCreation: false,
+				creationAllowedGroups: false,
+				allowPublicLink: false,
+				allowPermitAll: false,
+				allowShowToAll: false,
+				allowConfirmationEmail: false,
+				confirmationEmailRateLimit: false,
+				allowComments: false,
+			},
+
+			/** Shows a check mark on the rate limit once the value is stored */
+			rateLimitSaved: false,
 		}
 	},
 
@@ -190,15 +208,32 @@ export default {
 		},
 
 		async onConfirmationEmailRateLimitChange() {
-			const value = Math.max(
-				1,
-				Math.min(
-					100,
-					parseInt(this.confirmationEmailRateLimitInput, 10) || 3,
-				),
-			)
+			const stored = this.appConfig.confirmationEmailRateLimit ?? 3
+			const parsed = parseInt(this.confirmationEmailRateLimitInput, 10)
+			// Out of range is clamped; only an unreadable entry falls back, and then to the
+			// stored value - a typed 0 used to become 3 because 0 is falsy.
+			const value = Number.isNaN(parsed)
+				? stored
+				: Math.max(1, Math.min(100, parsed))
 			this.confirmationEmailRateLimitInput = String(value)
-			await this.saveAppConfig('confirmationEmailRateLimit', value)
+
+			// Read-only rather than disabled while saving: disabling the field would throw
+			// focus out of it when the value was confirmed with Enter.
+			this.loading.confirmationEmailRateLimit = true
+			this.rateLimitSaved = false
+			const ok = await this.saveAppConfig('confirmationEmailRateLimit', value)
+			this.loading.confirmationEmailRateLimit = false
+
+			if (ok) {
+				this.appConfig.confirmationEmailRateLimit = value
+				this.rateLimitSaved = true
+			} else {
+				// The input is separate from appConfig, so the reload alone would leave the
+				// rejected number on screen.
+				this.confirmationEmailRateLimitInput = String(
+					this.appConfig.confirmationEmailRateLimit ?? 3,
+				)
+			}
 		},
 
 		async onAllowCommentsChange(newVal) {
@@ -211,7 +246,8 @@ export default {
 		 * Save a key-value pair to the appConfig.
 		 *
 		 * @param {string} configKey The key to store. Must be one of the used configKeys (See php-constants).
-		 * @param {boolean|Array} configValue The value to store.
+		 * @param {boolean|Array|number} configValue The value to store.
+		 * @return {Promise<boolean>} whether the value was stored
 		 */
 		async saveAppConfig(configKey, configValue) {
 			try {
@@ -219,10 +255,12 @@ export default {
 					configKey,
 					configValue,
 				})
+				return true
 			} catch (error) {
 				logger.error('Error while saving configuration', { error })
 				showError(t('forms', 'Error while saving configuration'))
 				await this.reloadAppConfig()
+				return false
 			}
 		},
 

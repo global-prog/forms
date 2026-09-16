@@ -3,6 +3,7 @@ import { showError, showSuccess } from '@nextcloud/dialogs'
  * SPDX-FileCopyrightText: 2021 Nextcloud GmbH and Nextcloud contributors
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
+import { translate as t } from '@nextcloud/l10n'
 import { generateUrl } from '@nextcloud/router'
 import logger from '../utils/Logger.js'
 
@@ -60,6 +61,8 @@ export default {
 		 * @param {string} link Link to copy
 		 */
 		async copyLink(event, link) {
+			// currentTarget is only set while the event is dispatched, so keep it before awaiting
+			const target = event?.currentTarget
 			// Copy link, boolean return indicates success or fail.
 			try {
 				await navigator.clipboard.writeText(link)
@@ -69,15 +72,17 @@ export default {
 				logger.error('Copy link failed', { error })
 			}
 			// Set back focus as clipboard removes focus
-			event.target.focus()
+			target?.focus?.()
 		},
 
 		/**
 		 * Copy code to embed public share inside external websites
 		 *
+		 * @param {object} event Origin event of function call.
 		 * @param {object} share Public link-share
 		 */
-		async copyEmbeddingCode(share) {
+		async copyEmbeddingCode(event, share) {
+			const target = event?.currentTarget
 			const code = `<iframe src="${this.getPublicShareLink(share)}" width="750" height="900"></iframe>`
 			try {
 				await navigator.clipboard.writeText(code)
@@ -87,7 +92,7 @@ export default {
 				logger.error('Copy embedding code failed', { error })
 			}
 			// Set back focus as clipboard removes focus
-			event.target.focus()
+			target?.focus?.()
 		},
 	},
 }

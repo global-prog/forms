@@ -8,3 +8,13 @@ body {
 	background-color: var(--color-main-background) !important;
 	background-image: none !important;
 }
+
+/*
+ * Status screens (thank-you, closed, expired, full) take the height of their content.
+ * Stretched to fill the frame, they made the frame's size report its own height back,
+ * so a frame that had grown for a long form could never shrink again.
+ */
+.app-forms-embedded main .forms-emptycontent {
+	flex-grow: 0;
+	height: auto;
+}

@@ -19,8 +19,27 @@
 		:name="t('forms', 'Import questions')"
 		size="normal"
 		@update:open="$emit('update:open', $event)">
-		<div class="import">
-			<NcLoadingIcon v-if="loadingForms" :size="32" />
+		<!-- aria-busy while a list loads; the spinners carry names of their own. Not a live
+		     region: that would read out every question of a long form once it arrived. -->
+		<div
+			class="import"
+			:aria-busy="loadingForms || loadingQuestions ? 'true' : 'false'">
+			<NcLoadingIcon
+				v-if="loadingForms"
+				:size="32"
+				:name="t('forms', 'Loading forms …')" />
+
+			<!-- A failed request is not the same as having no other forms: say so, and
+			     offer to try again without closing the dialog. -->
+			<NcEmptyContent
+				v-else-if="loadError"
+				:name="t('forms', 'Could not load your forms')">
+				<template #action>
+					<NcButton @click="loadForms">
+						{{ t('forms', 'Retry') }}
+					</NcButton>
+				</template>
+			</NcEmptyContent>
 
 			<template v-else-if="otherForms.length === 0">
 				<NcEmptyContent :name="t('forms', 'No other forms to import from')">
@@ -38,9 +57,12 @@
 			<template v-else>
 				<label class="import__row">
 					<span>{{ t('forms', 'Copy from') }}</span>
+					<!-- Locked while copying: a new choice clears the selection the
+					     running import is still working through. -->
 					<select
 						:value="selectedFormId ?? ''"
 						:aria-label="t('forms', 'Form to copy questions from')"
+						:disabled="importing"
 						@change="onSelectForm">
 						<option disabled value="">
 							{{ t('forms', 'Choose a form') }}
@@ -54,7 +76,10 @@
 					</select>
 				</label>
 
-				<NcLoadingIcon v-if="loadingQuestions" :size="32" />
+				<NcLoadingIcon
+					v-if="loadingQuestions"
+					:size="32"
+					:name="t('forms', 'Loading questions …')" />
 
 				<template v-else-if="selectedFormId">
 					<p v-if="importable.length === 0" class="import__empty">
@@ -120,6 +145,7 @@
 <script>
 import axios from '@nextcloud/axios'
 import { showError } from '@nextcloud/dialogs'
+import { translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl } from '@nextcloud/router'
 import NcButton from '@nextcloud/vue/components/NcButton'
 import NcCheckboxRadioSwitch from '@nextcloud/vue/components/NcCheckboxRadioSwitch'
@@ -165,6 +191,7 @@ export default {
 			chosen: [],
 			selectedFormId: null,
 			loadingForms: false,
+			loadError: false,
 			loadingQuestions: false,
 			importing: false,
 		}
@@ -220,39 +247,79 @@ export default {
 			return answerTypes[type]?.label ?? type
 		},
 
+		/**
+		 * The forms questions can come from: the user's own, plus forms shared with them
+		 * that they may edit, which the server also accepts as a copy source. The list
+		 * endpoint returns only one of the two per request.
+		 */
 		async loadForms() {
 			this.loadingForms = true
-			try {
-				const response = await axios.get(
-					generateOcsUrl('apps/forms/api/v3/forms'),
-				)
-				this.forms = OcsResponse2Data(response) ?? []
-			} catch (error) {
-				logger.error('Could not load forms to import from', { error })
+			this.loadError = false
+			const url = generateOcsUrl('apps/forms/api/v3/forms')
+			const [owned, shared] = await Promise.allSettled([
+				axios.get(url),
+				axios.get(url, { params: { type: 'shared' } }),
+			])
+
+			if (owned.status === 'rejected') {
+				logger.error('Could not load forms to import from', {
+					error: owned.reason,
+				})
 				showError(t('forms', 'Could not load your forms'))
-			} finally {
+				this.forms = []
+				this.loadError = true
 				this.loadingForms = false
+				return
 			}
+
+			const forms = OcsResponse2Data(owned.value) ?? []
+			if (shared.status === 'fulfilled') {
+				const known = new Set(forms.map((form) => form.id))
+				for (const form of OcsResponse2Data(shared.value) ?? []) {
+					if (!known.has(form.id) && form.permissions?.includes('edit')) {
+						known.add(form.id)
+						forms.push(form)
+					}
+				}
+			} else {
+				// The user's own forms are still worth offering on their own.
+				logger.error('Could not load shared forms to import from', {
+					error: shared.reason,
+				})
+			}
+			this.forms = forms
+			this.loadingForms = false
 		},
 
 		/** @param {Event} event the select change */
 		async onSelectForm(event) {
-			this.selectedFormId = Number(event.target.value)
+			const requestedId = Number(event.target.value)
+			this.selectedFormId = requestedId
 			this.chosen = []
 			this.loadingQuestions = true
+			// Answers can arrive out of order when the choice changes quickly; only the one
+			// for the form still selected may fill the list.
 			try {
 				const response = await axios.get(
 					generateOcsUrl('apps/forms/api/v3/forms/{id}', {
-						id: this.selectedFormId,
+						id: requestedId,
 					}),
 				)
+				if (requestedId !== this.selectedFormId) {
+					return
+				}
 				this.questions = OcsResponse2Data(response)?.questions ?? []
 			} catch (error) {
+				if (requestedId !== this.selectedFormId) {
+					return
+				}
 				logger.error('Could not load questions to import', { error })
 				showError(t('forms', 'Could not load that form’s questions'))
 				this.questions = []
 			} finally {
-				this.loadingQuestions = false
+				if (requestedId === this.selectedFormId) {
+					this.loadingQuestions = false
+				}
 			}
 		},
 
@@ -274,13 +341,15 @@ export default {
 		async onImport() {
 			this.importing = true
 			const created = []
+			// Fixed up front, so nothing that changes the selection mid-way can cut the
+			// import short while it still reports success.
+			const toCopy = this.importable.filter((question) =>
+				this.chosen.includes(question.id),
+			)
 			try {
 				// Sequential rather than parallel: each copy is appended at the end of the
 				// form, so firing them at once would give an unpredictable resulting order.
-				for (const question of this.importable) {
-					if (!this.chosen.includes(question.id)) {
-						continue
-					}
+				for (const question of toCopy) {
 					const response = await axios.post(
 						generateOcsUrl('apps/forms/api/v3/forms/{id}/questions', {
 							id: this.formId,

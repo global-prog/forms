@@ -62,18 +62,12 @@
 				class="question-linear-scale__label question-linear-scale__label-lowest">
 				{{ optionsLabelLowest }}
 			</div>
+			<!-- The group is named by the question title. Each end label describes the
+			     radio at its own end instead of a legend, which the title would override. -->
 			<fieldset
 				class="question-linear-scale__options"
 				:aria-labelledby="titleId"
 				:aria-describedby="description ? descriptionId : undefined">
-				<legend class="hidden-visually">
-					{{
-						t('forms', 'From {firstOption} to {lastOption}', {
-							firstOption: optionsLabelLowest,
-							lastOption: optionsLabelHighest,
-						})
-					}}
-				</legend>
 				<div
 					v-for="(option, index) in scaleOptions"
 					:key="option"
@@ -81,7 +75,7 @@
 					<label :for="`linear-scale-${id}-${option}`">{{ option }}</label>
 					<NcCheckboxRadioSwitch
 						:id="`linear-scale-${id}-${option}`"
-						:aria-describedby="index === 0 ? labelId : undefined"
+						:aria-describedby="optionDescribedBy(index)"
 						:aria-errormessage="hasError ? errorId : undefined"
 						:aria-invalid="hasError ? 'true' : undefined"
 						:disabled="!readOnly"
@@ -100,14 +94,15 @@
 				ref="highest"
 				:modelValue="optionsLabelHighest"
 				class="question-linear-scale__label-input"
-				:label="t('forms', 'Label (optional)')"
-				:aria-label="t('forms', 'Label for highest value')"
+				:label="t('forms', 'Label for highest value')"
+				:placeholder="t('forms', 'Label (optional)')"
 				resize="none"
 				@input="resizeLabel('highest')"
 				@blur="onBlur('highest')"
 				@update:modelValue="onOptionsLabelHighestChange" />
 			<div
 				v-else-if="optionsLabelHighest !== ''"
+				:id="labelIdHighest"
 				class="question-linear-scale__label question-linear-scale__label-highest">
 				{{ optionsLabelHighest }}
 			</div>
@@ -177,6 +172,13 @@ export default {
 			return 'q' + this.index + '__label_lowest'
 		},
 
+		/**
+		 * ID for the label for the highest option
+		 */
+		labelIdHighest() {
+			return 'q' + this.index + '__label_highest'
+		},
+
 		optionsLowest() {
 			return this.extraSettings?.optionsLowest ?? 1
 		},
@@ -220,6 +222,27 @@ export default {
 
 		onChange(option) {
 			this.$emit('update:values', [option])
+		},
+
+		/**
+		 * @param {number} index position of the option on the scale
+		 * @return {string|undefined} id of the end label that describes this option
+		 */
+		optionDescribedBy(index) {
+			// The labels are only rendered for respondents, and only when not empty.
+			if (!this.readOnly) {
+				return undefined
+			}
+			if (index === 0 && this.optionsLabelLowest !== '') {
+				return this.labelId
+			}
+			if (
+				index === this.scaleOptions.length - 1
+				&& this.optionsLabelHighest !== ''
+			) {
+				return this.labelIdHighest
+			}
+			return undefined
 		},
 
 		onOptionsLowestChange(value) {
@@ -276,14 +299,22 @@ export default {
 		 *                         which label input (lowest value or highest value) triggered the blur event.
 		 */
 		onBlur(label) {
+			// The labels are computed from extraSettings, so the tidied text is saved
+			// through the same handlers as typing, and only when it actually changed.
 			if (label === 'lowest') {
-				this.optionsLabelLowest = this.optionsLabelLowest
-					.replace(/[\r\n]+/gm, ' ')
+				const cleaned = this.optionsLabelLowest
+					.replace(/[\r\n]+/g, ' ')
 					.trim()
+				if (cleaned !== this.optionsLabelLowest) {
+					this.onOptionsLabelLowestChange(cleaned)
+				}
 			} else if (label === 'highest') {
-				this.optionsLabelHighest = this.optionsLabelHighest
-					.replace(/[\r\n]+/gm, ' ')
+				const cleaned = this.optionsLabelHighest
+					.replace(/[\r\n]+/g, ' ')
 					.trim()
+				if (cleaned !== this.optionsLabelHighest) {
+					this.onOptionsLabelHighestChange(cleaned)
+				}
 			}
 			this.resizeLabel(label)
 		},

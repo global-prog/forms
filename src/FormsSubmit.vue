@@ -39,6 +39,8 @@ export default {
 
 	unmounted() {
 		unsubscribe('forms:last-updated:set', this.emitSubmitMessage)
+		this.resizeObserver?.disconnect()
+		this.mutationObserver?.disconnect()
 	},
 
 	mounted() {
@@ -46,14 +48,7 @@ export default {
 			subscribe('forms:last-updated:set', this.emitSubmitMessage)
 
 			// Communicate window size to parent window in iframes
-			const resizeObserver = new ResizeObserver((entries) => {
-				this.emitResizeMessage(entries[0].target)
-			})
-			this.$nextTick(() =>
-				resizeObserver.observe(
-					document.querySelector('.app-forms-embedded form'),
-				),
-			)
+			this.$nextTick(() => this.observeSize())
 		}
 	},
 
@@ -71,32 +66,58 @@ export default {
 		},
 
 		/**
-		 * @param {HTMLElement} target Target of which the size should be communicated
+		 * Report the content's size whenever it changes.
+		 *
+		 * The page's main element always exists, whatever the form shows: the questions,
+		 * a thank-you screen, or a closed, expired or full notice. It is sized to the
+		 * frame, though, so it is its children that grow and shrink. They are replaced
+		 * as the view changes state, so the set being watched is renewed each time.
+		 * Watching the form alone failed when there was no form, and lost track of it
+		 * once it was rebuilt.
 		 */
-		emitResizeMessage(target) {
-			const rect = target.getBoundingClientRect()
-			let height = rect.top + target.scrollHeight
-			let width = target.scrollWidth
+		observeSize() {
+			const main = document.querySelector('.app-forms-embedded main')
+			if (!main) {
+				return
+			}
+			this.resizeObserver = new ResizeObserver(() => {
+				this.emitResizeMessage(main)
+			})
+			const watchChildren = () => {
+				this.resizeObserver.disconnect()
+				for (const child of main.children) {
+					this.resizeObserver.observe(child)
+				}
+				this.emitResizeMessage(main)
+			}
+			watchChildren()
+			this.mutationObserver = new MutationObserver(watchChildren)
+			this.mutationObserver.observe(main, { childList: true })
+		},
 
-			// When submitted the height and width is 0
-			if (height === 0) {
-				target = document.querySelector(
-					'.app-forms-embedded main .empty-content',
-				)
-				height = target.getBoundingClientRect().top + target.scrollHeight
-				width = Math.max(
-					target.scrollWidth,
-					document.querySelector('.app-forms-embedded main header')
-						.scrollWidth,
-				)
+		/**
+		 * @param {HTMLElement} main Element whose content size should be communicated
+		 */
+		emitResizeMessage(main) {
+			// The bottom edge of the lowest child, measured from the top of the document,
+			// so the frame can shrink again as well as grow.
+			const offset = window.scrollY + main.scrollTop
+			let height = 0
+			let width = 0
+			for (const child of main.children) {
+				const rect = child.getBoundingClientRect()
+				const marginEnd =
+					parseFloat(getComputedStyle(child).marginBlockEnd) || 0
+				height = Math.max(height, rect.bottom + offset + marginEnd)
+				width = Math.max(width, child.scrollWidth)
 			}
 
 			window.parent?.postMessage(
 				{
 					type: 'resize-iframe',
 					payload: {
-						width,
-						height,
+						width: Math.ceil(width),
+						height: Math.ceil(height),
 					},
 				},
 				'*',

@@ -24,6 +24,22 @@
 -->
 <template>
 	<div class="chart-figure">
+		<!-- Held in the space the chart will take, so a slow connection shows that
+		     something is coming rather than an empty box. -->
+		<div
+			v-if="!ready && !failed"
+			class="chart-figure__loading"
+			:style="{ blockSize: `${height}px` }">
+			<NcLoadingIcon :size="32" />
+		</div>
+		<p v-if="failed" class="chart-figure__note">
+			{{
+				t(
+					'forms',
+					'The chart could not be loaded. The figures are listed below.',
+				)
+			}}
+		</p>
 		<!-- eslint-disable vue/no-unused-refs -- the ref is read by EchartMixin -->
 		<div
 			v-show="!failed"
@@ -53,6 +69,7 @@
 </template>
 
 <script>
+import NcLoadingIcon from '@nextcloud/vue/components/NcLoadingIcon'
 import {
 	barOption,
 	columnOption,
@@ -68,6 +85,10 @@ const FORMS = ['bars', 'columns', 'line']
 
 export default {
 	name: 'ChartFigure',
+
+	components: {
+		NcLoadingIcon,
+	},
 
 	mixins: [EchartMixin],
 
@@ -195,6 +216,23 @@ export default {
 
 <style lang="scss" scoped>
 .chart-figure {
+	position: relative;
+
+	&__loading {
+		align-items: center;
+		display: flex;
+		inset-block-start: 0;
+		inset-inline: 0;
+		justify-content: center;
+		pointer-events: none;
+		position: absolute;
+	}
+
+	&__note {
+		color: var(--color-text-maxcontrast);
+		margin-block-end: 8px;
+	}
+
 	&__canvas {
 		inline-size: 100%;
 
@@ -231,6 +269,12 @@ export default {
 				font-weight: normal;
 			}
 		}
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.chart-figure__loading :deep(.loading-icon svg) {
+		animation: none;
 	}
 }
 

@@ -37,7 +37,9 @@
 				:required="isRequired"
 				:value="values[0]"
 				@invalid.prevent="validate"
-				@input="onInput" />
+				@input="onInput"
+				@change="validate"
+				@keydown.enter.exact.prevent="onKeydownEnter" />
 			<NcActions
 				v-if="!readOnly"
 				:aria-label="t('forms', 'Number settings')"
@@ -82,12 +84,14 @@
 
 <script>
 import IconNumeric from '@material-symbols/svg-400/outlined/123.svg?raw'
+import debounce from 'debounce'
 import NcActionCheckbox from '@nextcloud/vue/components/NcActionCheckbox'
 import NcActionInput from '@nextcloud/vue/components/NcActionInput'
 import NcActions from '@nextcloud/vue/components/NcActions'
 import NcIconSvgWrapper from '@nextcloud/vue/components/NcIconSvgWrapper'
 import Question from './Question.vue'
 import QuestionMixin from '../../mixins/QuestionMixin.js'
+import { INPUT_DEBOUNCE_MS } from '../../models/Constants.ts'
 
 export default {
 	name: 'QuestionNumber',
@@ -105,6 +109,13 @@ export default {
 
 	setup() {
 		return { IconNumeric }
+	},
+
+	data() {
+		return {
+			/** per-instance debounced validate, created in created() */
+			debounceValidate: null,
+		}
 	},
 
 	computed: {
@@ -134,25 +145,61 @@ export default {
 		 * @return {string} the message shown when the value is out of range
 		 */
 		constraintMessage() {
-			const min = this.numberMin
-			const max = this.numberMax
-			let message
+			// Bounds are isolated as left-to-right runs, so a negative bound keeps its
+			// minus sign in front of the digits inside a right-to-left sentence.
+			const isolate = (value) => '\u2066' + value + '\u2069'
+			const min =
+				this.numberMin === undefined ? undefined : isolate(this.numberMin)
+			const max =
+				this.numberMax === undefined ? undefined : isolate(this.numberMax)
+			// Whole sentences per case rather than two joined ones: a translation of the
+			// first half need not end in a way the second half can follow.
+			if (this.numberInteger) {
+				if (min !== undefined && max !== undefined) {
+					return t(
+						'forms',
+						'Enter a whole number between {min} and {max}',
+						{ min, max },
+					)
+				}
+				if (min !== undefined) {
+					return t('forms', 'Enter a whole number of at least {min}', {
+						min,
+					})
+				}
+				if (max !== undefined) {
+					return t('forms', 'Enter a whole number of at most {max}', {
+						max,
+					})
+				}
+				return t('forms', 'Enter a whole number')
+			}
 			if (min !== undefined && max !== undefined) {
-				message = t('forms', 'Enter a number between {min} and {max}', {
+				return t('forms', 'Enter a number between {min} and {max}', {
 					min,
 					max,
 				})
-			} else if (min !== undefined) {
-				message = t('forms', 'Enter a number of at least {min}', { min })
-			} else if (max !== undefined) {
-				message = t('forms', 'Enter a number of at most {max}', { max })
-			} else {
-				message = t('forms', 'Enter a number')
 			}
-			return this.numberInteger
-				? message + ' ' + t('forms', 'Whole numbers only.')
-				: message
+			if (min !== undefined) {
+				return t('forms', 'Enter a number of at least {min}', { min })
+			}
+			if (max !== undefined) {
+				return t('forms', 'Enter a number of at most {max}', { max })
+			}
+			return t('forms', 'Enter a number')
 		},
+	},
+
+	created() {
+		// Built per instance: a debounced function shared through `methods` keeps one
+		// timer and one `this` for every question on the page.
+		this.debounceValidate = debounce(() => this.validate(), INPUT_DEBOUNCE_MS)
+	},
+
+	beforeUnmount() {
+		// validate() reads the input element, which is gone once the question has left
+		// the page (a page change or a deleted question) before the timer ran.
+		this.debounceValidate.clear()
 	},
 
 	methods: {
@@ -179,7 +226,14 @@ export default {
 
 		onInput() {
 			this.$emit('update:values', [this.$refs.input.value])
-			this.validate()
+			// A partly typed number is often out of range ("1" on the way to "15"), so
+			// wait for a pause before complaining. An error already shown is re-checked
+			// at once, so it disappears as soon as the value is fixed.
+			if (this.errorMessage) {
+				this.validate()
+			} else {
+				this.debounceValidate()
+			}
 		},
 
 		/**
@@ -210,5 +264,13 @@ export default {
 	// Comfortable pointer target, and stops a number field rendering tiny on mobile Safari.
 	min-height: 44px;
 	width: 100%;
+
+	// The editor shows a preview of the field; keep it looking like the long-answer
+	// preview instead of the browser's greyed-out disabled style.
+	&:disabled {
+		background-color: var(--color-main-background);
+		color: var(--color-main-text);
+		opacity: 1;
+	}
 }
 </style>
