@@ -126,6 +126,7 @@
 				)
 			"
 			:text="qrDialogText"
+			:fileName="form.title"
 			@closed="qrDialogText = ''" />
 
 		<!-- Removing a link is not an edit, it is a withdrawal: every copy of it that has

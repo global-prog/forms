@@ -110,13 +110,27 @@
 				<li v-else-if="values.length < maxAllowedFilesCount">
 					<div
 						class="question__input-wrapper"
+						:class="{ 'question__input-wrapper--dragging': dragging }"
 						role="group"
 						:aria-labelledby="titleId"
 						:aria-describedby="description ? descriptionId : undefined"
 						:aria-errormessage="hasError ? errorId : undefined"
-						:aria-invalid="hasError ? 'true' : undefined">
+						:aria-invalid="hasError ? 'true' : undefined"
+						@dragenter.prevent="onDragEnter"
+						@dragover.prevent="onDragOver"
+						@dragleave="onDragLeave"
+						@drop.prevent="onDrop">
 						<label>
-							{{ t('forms', 'Add new file as answer') }}
+							{{
+								readOnly
+									? n(
+											'forms',
+											'Choose a file or drop it here',
+											'Choose files or drop them here',
+											maxAllowedFilesCount,
+										)
+									: t('forms', 'Add new file as answer')
+							}}
 							<input
 								ref="fileInput"
 								class="hidden-visually"
@@ -125,7 +139,11 @@
 								:disabled="!readOnly"
 								:multiple="maxAllowedFilesCount > 1"
 								:name="name || undefined"
-								:accept="accept.length ? accept.join(',') : null"
+								:accept="
+									acceptTokens.length
+										? acceptTokens.join(',')
+										: null
+								"
 								@invalid.prevent="validate"
 								@input="onFileInput" />
 						</label>
@@ -145,6 +163,9 @@
 					</div>
 				</li>
 			</ul>
+			<p v-if="limitsHint" class="question__file-hint">
+				{{ limitsHint }}
+			</p>
 		</div>
 		<template #insert>
 			<slot name="insert" />
@@ -162,6 +183,7 @@ import axios from '@nextcloud/axios'
 import { showError } from '@nextcloud/dialogs'
 import { formatFileSize } from '@nextcloud/files'
 import { loadState } from '@nextcloud/initial-state'
+import { translatePlural as n, translate as t } from '@nextcloud/l10n'
 import { generateOcsUrl } from '@nextcloud/router'
 import NcActionButton from '@nextcloud/vue/components/NcActionButton'
 import NcActionCheckbox from '@nextcloud/vue/components/NcActionCheckbox'
@@ -192,6 +214,66 @@ const FILE_SIZE_UNITS = {
 	kb: 1024,
 	mb: 1024 ** 2,
 	gb: 1024 ** 3,
+}
+
+/**
+ * The office groups are stored under Nextcloud's own alias names, which a browser does
+ * not know: `x-office/document` in an `accept` list is ignored, and a picker offered
+ * `image/*, x-office/document` shows images only. These are the files each alias covers,
+ * by extension and by type, so the picker can offer them.
+ */
+const OFFICE_ACCEPT = {
+	'x-office/document': [
+		'.doc',
+		'.docx',
+		'.docm',
+		'.dot',
+		'.dotx',
+		'.dotm',
+		'.odt',
+		'.ott',
+		'.odm',
+		'.oth',
+		'.fodt',
+		'.rtf',
+		'application/msword',
+		'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+		'application/vnd.oasis.opendocument.text',
+	],
+	'x-office/presentation': [
+		'.ppt',
+		'.pptx',
+		'.pptm',
+		'.pps',
+		'.ppsx',
+		'.ppsm',
+		'.pot',
+		'.potx',
+		'.potm',
+		'.odp',
+		'.otp',
+		'.fodp',
+		'application/vnd.ms-powerpoint',
+		'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+		'application/vnd.oasis.opendocument.presentation',
+	],
+	'x-office/spreadsheet': [
+		'.xls',
+		'.xlsx',
+		'.xlsm',
+		'.xlsb',
+		'.xlt',
+		'.xltx',
+		'.xltm',
+		'.ods',
+		'.ots',
+		'.fods',
+		'.csv',
+		'application/vnd.ms-excel',
+		'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+		'application/vnd.oasis.opendocument.spreadsheet',
+		'text/csv',
+	],
 }
 
 export default {
@@ -229,12 +311,66 @@ export default {
 			maxFileSizeUnit: Object.keys(FILE_SIZE_UNITS)[0],
 			maxFileSizeValue: '',
 			allowedFileTypesDialogOpened: false,
+			// Counts nested enter/leave pairs, which fire for every child the file crosses.
+			dragDepth: 0,
 		}
 	},
 
 	computed: {
 		availableUnits() {
 			return Object.keys(FILE_SIZE_UNITS)
+		},
+
+		dragging() {
+			return this.dragDepth > 0
+		},
+
+		/** @return {string[]} what the picker may offer, with the office aliases spelled out */
+		acceptTokens() {
+			return this.accept.flatMap((token) => OFFICE_ACCEPT[token] ?? [token])
+		},
+
+		/**
+		 * What a respondent needs to know before choosing: how many, what kind, how large.
+		 * Nothing when the question sets none of those.
+		 *
+		 * @return {string}
+		 */
+		limitsHint() {
+			const parts = []
+			if (this.maxAllowedFilesCount > 1) {
+				parts.push(
+					n(
+						'forms',
+						'Up to %n file',
+						'Up to %n files',
+						this.maxAllowedFilesCount,
+					),
+				)
+			}
+
+			const kinds = [
+				...(this.extraSettings?.allowedFileTypes ?? [])
+					.map((type) => fileTypes[type]?.label)
+					.filter(Boolean),
+				...this.allowedFileExtensions.map((extension) =>
+					extension.toUpperCase(),
+				),
+			]
+			if (kinds.length) {
+				parts.push(kinds.join(', '))
+			}
+
+			if (this.extraSettings?.maxFileSize > 0) {
+				const size = formatFileSize(this.extraSettings.maxFileSize)
+				parts.push(
+					this.maxAllowedFilesCount > 1
+						? t('forms', '{size} each at most', { size })
+						: t('forms', '{size} at most', { size }),
+				)
+			}
+
+			return parts.join(' · ')
 		},
 
 		maxAllowedFilesCount() {
@@ -272,7 +408,7 @@ export default {
 	mounted() {
 		if (this.extraSettings.maxFileSize) {
 			Object.keys(FILE_SIZE_UNITS).forEach((unit) => {
-				if (this.extraSettings.maxFileSize > FILE_SIZE_UNITS[unit]) {
+				if (this.extraSettings.maxFileSize >= FILE_SIZE_UNITS[unit]) {
 					this.maxFileSizeUnit = unit
 				}
 			})
@@ -288,13 +424,103 @@ export default {
 			this.$refs.fileInput.click()
 		},
 
+		onDragEnter(event) {
+			if (this.readOnly && event.dataTransfer?.types?.includes('Files')) {
+				this.dragDepth++
+			}
+		},
+
+		onDragOver(event) {
+			if (event.dataTransfer) {
+				event.dataTransfer.dropEffect = this.readOnly ? 'copy' : 'none'
+			}
+		},
+
+		onDragLeave() {
+			this.dragDepth = Math.max(0, this.dragDepth - 1)
+		},
+
+		onDrop(event) {
+			this.dragDepth = 0
+			if (!this.readOnly || this.fileLoading) {
+				return
+			}
+			const files = [...(event.dataTransfer?.files ?? [])]
+			if (files.length) {
+				this.uploadFiles(files)
+			}
+		},
+
+		/**
+		 * Whether a file matches the picker's list. The picker enforces it only as a
+		 * suggestion, and a dropped file skips the picker entirely; the server has the
+		 * final say either way, this only saves an upload that would be refused.
+		 *
+		 * @param {File} file the file to check
+		 * @return {boolean}
+		 */
+		isAcceptedType(file) {
+			if (this.acceptTokens.length === 0) {
+				return true
+			}
+			const name = file.name.toLowerCase()
+			const type = (file.type || '').toLowerCase()
+			return this.acceptTokens.some((token) => {
+				token = token.toLowerCase()
+				if (token.startsWith('.')) {
+					return name.endsWith(token)
+				}
+				if (token.endsWith('/*')) {
+					return type.startsWith(token.slice(0, -1))
+				}
+				return type === token
+			})
+		},
+
 		async onFileInput() {
 			const fileInput = this.$refs.fileInput
+			const files = [...fileInput.files]
+			// Cleared now, so choosing the same file again after a refusal still fires.
+			fileInput.value = null
+			await this.uploadFiles(files)
+		},
+
+		/**
+		 * @param {File[]} files the files to upload as this question's answer
+		 */
+		async uploadFiles(files) {
+			const remaining = this.maxAllowedFilesCount - this.values.length
+			if (files.length > remaining) {
+				showError(
+					n(
+						'forms',
+						'Only %n more file can be added to this question.',
+						'Only %n more files can be added to this question.',
+						remaining,
+					),
+				)
+				return
+			}
+
 			const formData = new FormData()
 			let fileInvalid = false
 
-			;[...fileInput.files].forEach((file) => {
+			files.forEach((file) => {
 				formData.append('files[]', file)
+
+				if (!this.isAcceptedType(file)) {
+					showError(
+						t(
+							'forms',
+							'The file {fileName} is not a type this question accepts.',
+							{
+								fileName: file.name,
+							},
+						),
+					)
+					fileInvalid = true
+					return
+				}
 
 				if (
 					this.extraSettings.maxFileSize > 0
@@ -343,14 +569,17 @@ export default {
 					t(
 						'forms',
 						'There was an error during submitting the file: {message}.',
-						{ message: error.response.data.ocs.meta.message },
+						{
+							message:
+								error.response?.data?.ocs?.meta?.message
+								?? error.message,
+						},
 					),
 				)
 
 				return
 			} finally {
 				this.fileLoading = false
-				fileInput.value = null
 			}
 
 			this.$emit('update:values', [
@@ -462,6 +691,12 @@ export default {
 		width: 300px;
 	}
 
+	&__file-hint {
+		color: var(--color-text-maxcontrast);
+		font-size: 0.9em;
+		margin-block: 6px 0;
+	}
+
 	&__input-wrapper {
 		--focus-offset: calc(
 			(var(--border-width-input-focused, 2px) - var(--border-width-input, 2px))
@@ -487,7 +722,8 @@ export default {
 		}
 
 		&:hover,
-		&:focus-within {
+		&:focus-within,
+		&--dragging {
 			border-color: var(--color-main-text);
 			border-width: var(--border-width-input-focused, 2px);
 			padding-block: 0;
@@ -495,6 +731,13 @@ export default {
 					3 * var(--default-grid-baseline) - var(--focus-offset)
 				)
 				0;
+		}
+
+		// A file held over the box: the same edge as focus, in the accent, on a tint.
+		&--dragging {
+			background-color: var(--color-primary-element-light);
+			border-color: var(--color-primary-element);
+			border-style: dashed;
 		}
 	}
 }

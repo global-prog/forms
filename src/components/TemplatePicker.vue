@@ -18,6 +18,9 @@
 			<li v-for="template in templates" :key="template.id">
 				<button
 					class="template-picker__item"
+					:class="{
+						'template-picker__item--building': building === template.id,
+					}"
 					:disabled="building !== null"
 					@click="choose(template)">
 					<span class="template-picker__name">
@@ -145,8 +148,16 @@ export default {
 			border-color: var(--color-primary-element);
 		}
 
+		// While one is being built the rest step back, and the chosen one keeps its
+		// highlight so it is plain which was picked.
 		&:disabled {
 			cursor: progress;
+			opacity: 0.5;
+		}
+
+		&--building:disabled {
+			border-color: var(--color-primary-element);
+			opacity: 1;
 		}
 	}
 
