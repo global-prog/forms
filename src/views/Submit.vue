@@ -1464,13 +1464,27 @@ export default {
 		 * through everything to reach the new content.
 		 */
 		focusPageStart() {
-			this.scrollToTop()
 			this.$nextTick(() => {
 				const first = (this.$refs.questions ?? []).find(
 					(component) =>
 						this.questionPages[component.id] === this.currentPage
 						&& this.visibleQuestions[component.id],
 				)
+				// Bring the first question of the new page into view rather than
+				// resetting a scroll position: which element scrolls is the surrounding
+				// layout's business and differs between the app and the public page, so
+				// asking the element itself to come into view is the reliable way.
+				if (first?.$el?.scrollIntoView) {
+					const gently = !window.matchMedia?.(
+						'(prefers-reduced-motion: reduce)',
+					)?.matches
+					first.$el.scrollIntoView({
+						block: 'start',
+						behavior: gently ? 'smooth' : 'auto',
+					})
+				} else {
+					this.scrollToTop()
+				}
 				this.focusHeadingOf(first)
 			})
 		},
