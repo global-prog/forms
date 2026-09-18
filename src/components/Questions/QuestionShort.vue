@@ -85,6 +85,7 @@
 					type="number"
 					:label="t('forms', 'Minimum value')"
 					:modelValue="boundInputValue('numberMin')"
+					:showTrailingButton="false"
 					@update:modelValue="onChangeNumberBound('numberMin', $event)">
 					<template #icon>
 						<NcIconSvgWrapper :svg="IconNumeric" />
@@ -96,6 +97,7 @@
 					type="number"
 					:label="t('forms', 'Maximum value')"
 					:modelValue="boundInputValue('numberMax')"
+					:showTrailingButton="false"
 					@update:modelValue="onChangeNumberBound('numberMax', $event)">
 					<template #icon>
 						<NcIconSvgWrapper :svg="IconNumeric" />

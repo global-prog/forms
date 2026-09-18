@@ -1478,16 +1478,29 @@ export default {
 		/**
 		 * Scroll the view back to its top.
 		 *
-		 * Inside the app the page does not scroll the window: the view's own root element
-		 * is the scroller, so that is the one reset. The window is reset as well for
-		 * layouts where the document itself scrolls. Scrolling the root into view would
-		 * not do: that moves only its ancestors, never its own scroll position.
+		 * Inside the app the page does not scroll the window, and it is not this view's
+		 * root that scrolls either: the scroller is an ancestor the surrounding layout
+		 * owns, and it differs between the app and the public page. So the nearest
+		 * ancestor that actually scrolls is the one reset, and the window with it for
+		 * layouts where the document itself scrolls.
 		 */
 		scrollToTop() {
 			const gently = !window.matchMedia?.('(prefers-reduced-motion: reduce)')
 				?.matches
 			const behavior = gently ? 'smooth' : 'auto'
-			this.$el?.scrollTo?.({ top: 0, behavior })
+			for (
+				let element = this.$el;
+				element && element !== document.body;
+				element = element.parentElement
+			) {
+				const style = window.getComputedStyle(element)
+				const scrolls =
+					/(auto|scroll|overlay)/.test(style.overflowY)
+					&& element.scrollHeight > element.clientHeight
+				if (scrolls || element.scrollTop > 0) {
+					element.scrollTo?.({ top: 0, behavior })
+				}
+			}
 			window.scrollTo({ top: 0, behavior })
 		},
 

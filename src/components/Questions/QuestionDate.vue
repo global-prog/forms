@@ -25,6 +25,7 @@
 				hideLabel
 				:formatter="extraSettingsFormatter"
 				:max="dateMax"
+				:showTrailingButton="false"
 				@update:modelValue="onDateMinChange">
 				<template #icon>
 					<NcIconSvgWrapper
@@ -40,6 +41,7 @@
 				hideLabel
 				:formatter="extraSettingsFormatter"
 				:min="dateMin"
+				:showTrailingButton="false"
 				@update:modelValue="onDateMaxChange">
 				<template #icon>
 					<NcIconSvgWrapper
@@ -61,6 +63,7 @@
 				:label="t('forms', 'Earliest time')"
 				hideLabel
 				:max="timeMax"
+				:showTrailingButton="false"
 				@update:modelValue="onTimeMinChange">
 				<template #icon>
 					<NcIconSvgWrapper
@@ -75,6 +78,7 @@
 				:label="t('forms', 'Latest time')"
 				hideLabel
 				:min="timeMin"
+				:showTrailingButton="false"
 				@update:modelValue="onTimeMaxChange">
 				<template #icon>
 					<NcIconSvgWrapper
