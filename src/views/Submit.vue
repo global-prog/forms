@@ -700,10 +700,13 @@ export default defineComponent({
 			if (question.type === 'linearscale') {
 				const lowest = Number(question.extraSettings?.optionsLowest ?? 1)
 				const highest = Number(question.extraSettings?.optionsHighest ?? 5)
-				return value.filter(
-					(choice) =>
-						Number(choice) >= lowest && Number(choice) <= highest,
-				)
+				return value
+					.filter((choice) => /^\d+$/.test(String(choice)))
+					.map((choice) => String(Number(choice)))
+					.filter(
+						(choice) =>
+							Number(choice) >= lowest && Number(choice) <= highest,
+					)
 			}
 			if (!answerTypes[question.type]?.predefined) {
 				return value
