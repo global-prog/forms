@@ -15,6 +15,7 @@ import IconGrid from '@material-symbols/svg-400/outlined/grid_view.svg?raw'
 import IconLinearScale from '@material-symbols/svg-400/outlined/linear_scale.svg?raw'
 import IconPalette from '@material-symbols/svg-400/outlined/palette.svg?raw'
 import IconRadioboxMarked from '@material-symbols/svg-400/outlined/radio_button_checked.svg?raw'
+import IconRecommend from '@material-symbols/svg-400/outlined/recommend.svg?raw'
 import IconClockOutline from '@material-symbols/svg-400/outlined/schedule.svg?raw'
 import IconTextShort from '@material-symbols/svg-400/outlined/short_text.svg?raw'
 import IconStar from '@material-symbols/svg-400/outlined/star.svg?raw'
@@ -277,6 +278,13 @@ const answerTypes: Record<string, AnswerTypeConfig> = {
 					questionType: LinearScaleType.Rating,
 				},
 			},
+			promoter: {
+				icon: IconRecommend,
+				label: t('forms', 'Promoter score'),
+				extraSettings: {
+					questionType: LinearScaleType.Promoter,
+				},
+			},
 		},
 
 		titlePlaceholder: t('forms', 'Linear scale question title'),
@@ -312,6 +320,27 @@ const answerTypes: Record<string, AnswerTypeConfig> = {
 			'This question needs a title and at least one answer!',
 		),
 	},
+}
+
+/**
+ * Default labels of the lowest and the highest value of a linear scale
+ *
+ * @param questionType the sub type of the linear scale, if any
+ */
+export function getLinearScaleDefaultLabels(questionType?: string): {
+	lowest: string
+	highest: string
+} {
+	if (questionType === LinearScaleType.Promoter) {
+		return {
+			lowest: t('forms', 'Not at all likely'),
+			highest: t('forms', 'Extremely likely'),
+		}
+	}
+	return {
+		lowest: t('forms', 'Strongly disagree'),
+		highest: t('forms', 'Strongly agree'),
+	}
 }
 
 export default answerTypes

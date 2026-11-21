@@ -577,6 +577,9 @@ class ApiController extends OCSController {
 			}
 
 			$extraSettings = $subtype ? ['questionType' => $subtype] : [];
+			if ($type === Constants::ANSWER_TYPE_LINEARSCALE && $subtype === Constants::ANSWER_LINEARSCALE_TYPE_PROMOTER) {
+				$extraSettings += ['optionsLowest' => 0, 'optionsHighest' => 10];
+			}
 			if (!$this->formsService->areExtraSettingsValid($extraSettings, $type)) {
 				throw new OCSBadRequestException('Invalid subtype');
 			}

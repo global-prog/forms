@@ -46,4 +46,5 @@ export enum GridCellType {
 
 export enum LinearScaleType {
 	Rating = 'rating',
+	Promoter = 'promoter',
 }

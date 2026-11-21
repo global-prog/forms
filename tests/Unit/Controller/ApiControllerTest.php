@@ -1680,6 +1680,38 @@ class ApiControllerTest extends TestCase {
 		$this->assertSame($expectedSettings, $response->getData()['extraSettings']);
 	}
 
+	public function testNewQuestionPromoterSubtypeStoresFixedRange(): void {
+		$form = new Form();
+		$form->setId(1);
+		$form->setOwnerId('currentUser');
+
+		$expectedSettings = ['questionType' => 'promoter', 'optionsLowest' => 0, 'optionsHighest' => 10];
+		$this->formsService->method('getFormIfAllowed')->with(1, Constants::PERMISSION_EDIT)->willReturn($form);
+		$this->formsService->method('isFormArchived')->with($form)->willReturn(false);
+		$this->formsService->expects($this->once())
+			->method('areExtraSettingsValid')
+			->with($expectedSettings, Constants::ANSWER_TYPE_LINEARSCALE)
+			->willReturn(true);
+		$this->questionMapper->method('findByForm')->with(1)->willReturn([]);
+
+		$stored = null;
+		$this->questionMapper->expects($this->once())
+			->method('insert')
+			->willReturnCallback(function (Question $question) use (&$stored) {
+				$question->setId(5);
+				$stored = $question;
+				return $question;
+			});
+		$this->formsService->method('getQuestion')->with(5)->willReturnCallback(function () use (&$stored) {
+			return $stored->read();
+		});
+
+		$response = $this->apiController->newQuestion(1, Constants::ANSWER_TYPE_LINEARSCALE, 'promoter');
+
+		$this->assertSame($expectedSettings, $stored->getExtraSettings());
+		$this->assertSame($expectedSettings, $response->getData()['extraSettings']);
+	}
+
 	public function testNewQuestionRejectsInvalidSubtype(): void {
 		$form = new Form();
 		$form->setId(1);
