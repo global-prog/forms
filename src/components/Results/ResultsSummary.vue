@@ -15,6 +15,29 @@
 			{{ averageRating }}
 		</p>
 
+		<dl v-if="numericStats" class="question-summary__figures">
+			<div>
+				<dt>{{ t('forms', 'Answers') }}</dt>
+				<dd>{{ formatCount(numericStats.count) }}</dd>
+			</div>
+			<div>
+				<dt>{{ t('forms', 'Average') }}</dt>
+				<dd>{{ formatCount(numericStats.mean) }}</dd>
+			</div>
+			<div>
+				<dt>{{ t('forms', 'Median') }}</dt>
+				<dd>{{ formatCount(numericStats.median) }}</dd>
+			</div>
+			<div>
+				<dt>{{ t('forms', 'Minimum') }}</dt>
+				<dd>{{ formatCount(numericStats.min) }}</dd>
+			</div>
+			<div>
+				<dt>{{ t('forms', 'Maximum') }}</dt>
+				<dd>{{ formatCount(numericStats.max) }}</dd>
+			</div>
+		</dl>
+
 		<!-- Ranking questions: Borda count with average rank -->
 		<div v-if="question.type === 'ranking'" class="question-summary__statistic">
 			<p class="question-summary__ranking-description">
@@ -695,9 +718,58 @@ export default defineComponent({
 			return answersModels
 		})
 
+		/**
+		 * The numeric answers given to a linear scale question in ascending order, taken from
+		 * the answer counts of the bars; empty for other question types.
+		 */
+		const numericValues = computed<number[]>(() => {
+			if (props.question.type !== 'linearscale') {
+				return []
+			}
+			return questionOptions.value
+				.filter((option) => option.id !== -2)
+				.map((option) => ({
+					value: parseFloat(option.text),
+					count: option.count,
+				}))
+				.filter(({ value }) => !isNaN(value))
+				.sort((a, b) => a.value - b.value)
+				.flatMap(({ value, count }) => Array<number>(count).fill(value))
+		})
+
+		/**
+		 * Answer count, average, median, minimum and maximum of a linear scale question;
+		 * null without answers and for a rating.
+		 */
+		const numericStats = computed(() => {
+			const values = numericValues.value
+			if (
+				values.length === 0
+				|| props.question.extraSettings?.questionType
+					=== LinearScaleType.Rating
+			) {
+				return null
+			}
+			const middle = Math.floor(values.length / 2)
+			const median =
+				values.length % 2
+					? values[middle]
+					: (values[middle - 1] + values[middle]) / 2
+			const sum = values.reduce((a, b) => a + b, 0)
+
+			return {
+				count: values.length,
+				mean: Math.round((sum * 100) / values.length) / 100,
+				median,
+				min: values[0],
+				max: values[values.length - 1],
+			}
+		})
+
 		return {
 			IconFile,
 			answerTypes,
+			numericStats,
 			questionTypeLabel,
 			averageRating,
 			questionOptions,
@@ -855,6 +927,34 @@ export default defineComponent({
 			position: sticky;
 			inset-inline-start: 0;
 		}
+	}
+}
+
+.question-summary__figures {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 16px;
+	margin: 0 0 8px;
+	padding: 0;
+
+	dt,
+	dd {
+		display: block;
+		width: auto;
+		margin: 0;
+		padding: 0;
+		white-space: normal;
+		text-align: start;
+	}
+
+	dt {
+		color: var(--color-text-maxcontrast);
+		font-size: 0.9em;
+	}
+
+	dd {
+		font-size: 1.2em;
+		font-weight: bold;
 	}
 }
 </style>
